@@ -1,34 +1,135 @@
 # Lecture Companion
 
-Lecture Companion turns your lecture slides into a per-course, plain-language textbook.
+Turns a course's lecture slides into a plain-language textbook you can read
+straight through.
 
-You upload the slides for a course, pick that course, and read each slide alongside a short explanation written in ordinary language, with a concrete example where it fits and the occasional small diagram. The explanation is grounded in what the slide actually shows and builds on the material the course covered earlier, so reading slide after slide feels like following one coherent textbook rather than a pile of disconnected screenshots.
+You upload a course's slides, and for every slide you get the rendered page on
+the left and, on the right, an explanation in ordinary language: what the slide
+means, a concrete example where one fits, and a small diagram when the material
+is worth drawing. Each explanation is written knowing the course overview and
+what the earlier slides already covered, so the sequence reads as one continuous
+text rather than a pile of disconnected answers.
 
-## What it does
+Everything runs locally except the explanation generation itself.
 
-- **Reads your slides.** Works from PDF exports and .pptx decks. Each slide is extracted as an image (and its text) so the model can actually see it.
-- **Explains each slide in plain language.** Rather than restating the slide, it tells you what it means in the context of the course and the lectures before it.
-- **Remembers what you covered.** Explanations are stored per course and retrieved when a later slide needs an earlier concept, so the tool recalls the last lecture instead of starting each slide from scratch.
-- **Keeps courses separate.** Everything is scoped to the course you selected, so the memory and context for one course never leak into another.
-- **Knows the course requirements.** A syllabus or program breakdown you upload becomes the course overview that every explanation is tailored against.
+<p align="center">
+  <img src=".github/viewer-light.png" alt="The two-pane viewer: rendered slide on the left, plain-language explanation on the right" width="820">
+</p>
 
-## How it works (high level)
+## Running it
 
-The app is a small local web server (Python FastAPI) with a browser frontend. Your slides, memory store, and retrieval index all stay on your machine; only the explanation generation reaches out to a model API.
+```bash
+./run.sh
+```
 
-1. **Import.** You drop slide files and any reference documents into a course. The app files them by course and by type (slides vs. a syllabus or program overview) and distills a course overview you upload as context.
-2. **Extract.** For each slide, the app renders it to an image and pulls out its text.
-3. **Assemble context.** To explain a slide, the app builds a short context: the course overview, a running plain-language summary of everything covered so far, and the most relevant earlier explanations pulled by vector search, scoped strictly to this course.
-4. **Generate.** That slide image plus the context goes to a vision model, which returns the explanation (plain restatement, example, and a small diagram only where one helps).
-5. **Remember.** The explanation is stored, embedded, and indexed, and the running summary is updated, so the next slide reasons from it in turn.
+First run creates `.venv` and installs dependencies; then it serves on
+<http://127.0.0.1:8765>. Override with `LC_PORT`.
 
-The flow is deliberately sequential. Each slide is processed one at a time, but always in the light of the course so far, which is what makes the result read like a textbook rather than a series of one-off answers.
+To try the whole thing with no API key and no spend:
+
+```bash
+LC_FAKE_MODEL=1 ./run.sh
+```
+
+That swaps in a stub model that produces a deterministic explanation for every
+slide from the slide's own extracted text. It exercises import, extraction,
+retrieval, the running summary, resume, and the viewer, including mermaid
+diagrams. The explanations read mechanically, because the point is to verify the
+machinery for free, not to write good prose.
+
+Tests need no key and make no network calls:
+
+```bash
+.venv/bin/python -m pytest
+```
+
+## What it actually does
+
+**Connect.** One field for a DeepSeek API key. The key is tested with a cheap
+call before it is accepted, and then stored in the **OS keyring** — never in a
+file, never in the repo, never in a log line, never in an HTTP response. The
+header shows a masked hint (`sk-ab…9f2c`); reopen it any time to change the key.
+
+**Import.** Create a course, then upload its PDFs and `.pptx` files. Each file
+is filed automatically as either **slides** or a **reference document** (a
+syllabus or programme breakdown) using local heuristics only — filename cues,
+words-per-page density, and structural signals like "learning outcomes" or
+"office hours". There is no review step, and the app tells you why it decided
+what it did ("dense prose (322 words/page) and mentions learning outcomes and
+grading"). Reference documents are distilled into a course overview that every
+explanation is written against.
+
+If you have a pile of files and no course yet, drop them all in. The app groups
+them into proposed courses by course code and filename prefix and shows you the
+grouping before anything is written.
+
+**Read.** The course list opens into a two-pane viewer: the rendered slide, and
+the explanation with its heading, body, a set-off example, and a mermaid diagram
+where one helps. Arrow keys move between slides. Light and dark themes.
+
+**Every course is sealed.** A course's slides, reference documents, overview,
+retrieval index and running summary all live in its own directory, and nothing
+outside that directory is read while serving it. Explaining a slide in one
+course cannot pull material or memory from another.
+
+**Pause and resume.** Processing checkpoints after every single slide. If you
+stop it, close the app, or hit a rate limit, it records where it got to and
+resumes from the first unfinished slide — it never re-calls the model for a
+slide that already has an explanation. A 429 from the API surfaces as a *paused*
+state with a Resume button, not an error that loses your place. The running
+summary is rebuilt purely from stored explanations, so a resumed course reads
+the same as one that ran straight through.
+
+## How a slide gets explained
+
+1. **Extract** — the page is rendered to an image and its text pulled out.
+2. **Assemble context** — the course overview, a running plain-language summary
+   of everything covered so far, and the most relevant earlier explanations
+   found by vector search. All three are scoped to this course alone.
+3. **Generate** — the slide image and that context go to a vision model, which
+   returns a heading, body, example, and optionally a mermaid diagram. The
+   prompt tells it to describe only what the slide supports.
+4. **Remember** — the explanation is stored, embedded, indexed, and folded into
+   the running summary, so the next slide reasons from it.
 
 ## Models
 
-- **Explanation generation:** DeepSeek `deepseek-v4-flash-vision-exp` (remote, vision-capable, key required).
-- **Search embeddings:** a small local model, so retrieval runs offline and free.
+| Job | Model | Where |
+|---|---|---|
+| Explanation | DeepSeek `deepseek-v4-flash-vision-exp` | remote, key required, paid |
+| Retrieval embeddings | `intfloat/multilingual-e5-small` (384-dim) | local, free |
 
-## Status
+Embeddings fall back to a deterministic hashing embedder when
+`sentence-transformers` is not installed, so nothing forces a torch download.
+Install it with `pip install -e ".[embed]"`.
 
-Early prototype. The core loop is being built out: course import, the two-pane viewer, per-slide explanation, and per-course retrieval memory.
+## File handling
+
+| Input | Rendering | Text |
+|---|---|---|
+| PDF | `pypdfium2` | `pypdf` |
+| `.pptx` | headless LibreOffice → PDF | `python-pptx`, including speaker notes |
+
+Without LibreOffice installed, `.pptx` still imports: slides are painted from
+their text and marked `[no renderer: text-only extraction]` so you can tell.
+
+## Where your data lives
+
+Everything is under `Courses/<course-id>/` in this directory — slides,
+extracted text, explanations, the retrieval index, and the progress checkpoint.
+It is gitignored and never leaves your machine. The only thing that goes over
+the network is a slide image plus its context, to DeepSeek, when you ask for an
+explanation.
+
+## Status, honestly
+
+Verified end to end with the stub model: import, filing, extraction, retrieval,
+per-course isolation, checkpointing, pause and resume, and the viewer in both
+themes. `pytest` is green, and `scripts/gate_g2.py` drives a real headless
+browser to prove the viewer does not overflow at 1440px.
+
+**Not yet verified against the live DeepSeek API.** No key has been configured
+on the development machine, so the request shape is built from the published
+documentation and covered by tests against a mocked transport, but no real
+response has ever been parsed. Explanation *quality* and grounding under the
+real model are therefore unmeasured. Treat that as the open question.

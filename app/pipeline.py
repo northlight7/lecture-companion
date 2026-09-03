@@ -44,6 +44,8 @@ from app.embed import tokenize
 from app.overview import fallback_overview
 from app.vectors import VectorIndex, chunk_id_for
 
+from app.llm import CONTENT_MARKER
+
 log = logging.getLogger(__name__)
 
 # --------------------------------------------------------------------------
@@ -390,7 +392,9 @@ def render_summary(gists: Sequence[str], client) -> str:
                 "These are one-line notes on the slides a student has already "
                 "worked through, in order. Compress them into a single "
                 "paragraph of at most 200 words that says what the course has "
-                "covered so far. Use only what the notes say.\n\n" + older_text
+                "covered so far. Use only what the notes say."
+                + CONTENT_MARKER
+                + older_text
             )
             try:
                 compressed = (client.summarise(prompt) or "").strip()
