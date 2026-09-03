@@ -22,3 +22,6 @@ build/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Internal working files (agent scaffolding, not product)
+.internal/
