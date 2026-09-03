@@ -56,3 +56,21 @@ scaffolding, key handling, resume). It did not serve invariant 3 (boots end to
 end) or 6 (truthful repo), which is exactly what the biggest-gap line says.
 
 Round 1 done — paused, unjudged — the spine of the app exists and 134 tests pass, but it has never been booted and the README still lies.
+
+### Round 1 addendum — Builder D outcome (recorded after the pause)
+
+Builder D did not complete. The harness killed it as stalled: "no progress for
+600s (stream watchdog did not recover)". Its last reported line was "State is
+`done`, 6/6 explained. Now measuring gate G2 in a real browser."
+
+Read carefully, that line is a claim about the FAKE-model end-to-end run
+(6 slides of the `lecture_w1.pdf` fixture explained), reported by the builder
+about its own work, with no output pasted. It is therefore `modeled`, not
+`measured`, and it is exactly the kind of self-report the critic protocol says
+not to accept. It stands as a hint that `app/main.py` may work, nothing more.
+
+D died at the point of measuring G2, so G2 has no result at all.
+
+Nothing changes about the pause state: D's five files stay uncommitted and
+unverified, and the resume cursor in STATE.md already covers re-checking them
+from scratch.

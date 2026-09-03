@@ -67,9 +67,13 @@ Done and independently verified by the orchestrator (not merely self-reported):
 In flight when the pause landed:
 
 - Builder D — `app/main.py`, `web/index.html`, `web/app.js`, `web/styles.css`,
-  `tests/test_api.py`. All five files exist on disk (written 17:49-17:55) but
-  the agent had not yet reported, so they are UNVERIFIED and deliberately left
-  UNCOMMITTED. Treat them as a draft until re-checked.
+  `tests/test_api.py`. **FAILED.** The harness killed it as stalled ("no
+  progress for 600s"). All five files exist on disk (written 17:49-17:55) but
+  they are UNVERIFIED and deliberately left UNCOMMITTED. Its final line claimed
+  a fake-model run reached "done, 6/6 explained" and that it was about to
+  measure G2 — that is a self-report with no pasted output, so it is `modeled`,
+  not `measured`, and the critic protocol says not to accept it. It died before
+  producing any G2 result. Treat all five files as an unreviewed draft.
 
 ## RESUME CURSOR
 
