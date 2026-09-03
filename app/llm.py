@@ -46,6 +46,13 @@ TEMPERATURE = 0.3
 MAX_TOKENS = 1600
 SUMMARY_MAX_TOKENS = 900
 
+
+#: Separates instructions from the source material inside a `summarise` prompt.
+#: A real model reads the whole prompt; a stub uses this to echo only the
+#: source text, so offline mode never surfaces the instructions as if they
+#: were course content.
+CONTENT_MARKER = "\n--- SOURCE MATERIAL ---\n"
+
 #: Anything that looks like a DeepSeek key, scrubbed from every message we
 #: construct even if the key itself is unknown to us at that point.
 _KEY_PATTERN = re.compile(r"sk-[A-Za-z0-9]{8,}")
@@ -565,6 +572,12 @@ def _terms(text: str, limit: int = 8) -> list[str]:
     return ordered[:limit]
 
 
+def _mermaid_label(term: str) -> str:
+    """A mermaid-safe node label: quotes and brackets break the parser."""
+    cleaned = re.sub(r'[^\w \-]', "", str(term)).strip()
+    return (cleaned[:28] or "term")
+
+
 class FakeClient:
     """A deterministic stand-in for DeepSeek. No network, no spend.
 
@@ -673,12 +686,26 @@ class FakeClient:
             if terms
             else ""
         )
+        # Emit a diagram on roughly every third slide, so the offline path
+        # actually exercises mermaid rendering (and its light/dark theming)
+        # instead of leaving that code permanently untested. A real model
+        # decides for itself; the stub just has to reach the same code path.
+        mermaid = ""
+        if len(terms) >= 3 and ctx.slide_index % 3 == 2:
+            a, b, c = (_mermaid_label(t) for t in terms[:3])
+            mermaid = (
+                "graph TD\n"
+                f'  A["{a}"] --> B["{b}"]\n'
+                f'  B --> C["{c}"]\n'
+                f'  A --> C'
+            )
+
         return Explanation(
             deck_id="",
             slide_index=ctx.slide_index,
             body=body,
             example=example,
-            mermaid="",
+            mermaid=mermaid,
             heading=heading[:120],
             model=self.name,
             context_used=[row.chunk_id for row in ctx.retrieved],
@@ -686,10 +713,19 @@ class FakeClient:
 
     def summarise(self, prompt: str) -> str:
         self.summarise_calls.append(prompt)
-        # Echo the input in compressed form: deterministic, and traceable.
-        lines = [ln.strip() for ln in (prompt or "").splitlines() if ln.strip()]
-        body = " ".join(lines)
-        return _words(body, 220)
+        # Echo the SOURCE MATERIAL in compressed form: deterministic, and
+        # traceable. Everything before CONTENT_MARKER is instructions addressed
+        # to the model, not course content, so echoing it would put prompt
+        # boilerplate on screen as though it were the course overview.
+        text = prompt or ""
+        if CONTENT_MARKER in text:
+            text = text.rsplit(CONTENT_MARKER, 1)[1]
+        lines = [
+            ln.strip()
+            for ln in text.splitlines()
+            if ln.strip() and not ln.lstrip().startswith("###")
+        ]
+        return _words(" ".join(lines), 220)
 
     def test_connection(self) -> tuple[bool, str]:
         return True, "Fake model (LC_FAKE_MODEL): no network, no spend."
@@ -725,6 +761,7 @@ __all__ = [
     "build_messages",
     "parse_explanation_json",
     "register_secret",
+    "CONTENT_MARKER",
     "SYSTEM_PROMPT",
     "TEMPERATURE",
     "MAX_TOKENS",

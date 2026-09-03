@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Lecture Companion</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="#/">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-name">Lecture Companion</span>
+    </a>
+    <nav class="topnav" aria-label="Main">
+      <a class="navlink" href="#/">Courses</a>
+      <button class="conn" id="conn-badge" type="button" aria-haspopup="dialog">
+        <span class="dot" aria-hidden="true"></span>
+        <span id="conn-label">Checking</span>
+      </button>
+    </nav>
+  </div>
+</header>
+
+<main id="main" tabindex="-1">
+
+  <!-- ------------------------------------------------ courses -->
+  <section class="screen" id="screen-courses" hidden>
+    <div class="wrap">
+      <div class="page-head">
+        <h1>Your courses</h1>
+        <p class="lede">Each course is a sealed container. Slides, reference
+          documents and everything the model remembers stay inside it.</p>
+      </div>
+
+      <form class="newcourse" id="new-course-form">
+        <label for="new-course-title">New course</label>
+        <div class="newcourse-row">
+          <input id="new-course-title" name="title" type="text" autocomplete="off"
+                 placeholder="Statistical Learning" required>
+          <button class="btn btn-primary" type="submit">Create</button>
+        </div>
+        <p class="field-error" id="new-course-error" role="alert" hidden></p>
+      </form>
+
+      <div id="course-list" class="courses" aria-live="polite"></div>
+
+      <section class="bulk">
+        <h2>Have a pile of files and no course yet?</h2>
+        <p class="lede">Drop everything here. The app proposes a grouping into
+          courses, and nothing is written until you accept it.</p>
+        <div class="drop" id="bulk-drop" tabindex="0" role="button"
+             aria-label="Drop a mixed pile of files to preview a grouping">
+          <p class="drop-main">Drop PDFs and .pptx files</p>
+          <p class="drop-sub">or <span class="linky">choose files</span></p>
+          <input type="file" id="bulk-input" multiple accept=".pdf,.pptx" hidden>
+        </div>
+        <div id="bulk-preview" class="preview" hidden></div>
+      </section>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------ course detail -->
+  <section class="screen" id="screen-course" hidden>
+    <div class="wrap">
+      <a class="back" href="#/">All courses</a>
+      <div class="page-head">
+        <h1 id="course-title">Course</h1>
+        <p class="lede" id="course-overview"></p>
+      </div>
+
+      <div class="runbar" id="course-runbar"></div>
+
+      <div class="cols2">
+        <section>
+          <h2>Decks</h2>
+          <div id="deck-list" class="decks"></div>
+        </section>
+        <section>
+          <h2>Add files to this course</h2>
+          <div class="drop" id="course-drop" tabindex="0" role="button"
+               aria-label="Drop slides or a syllabus into this course">
+            <p class="drop-main">Drop slides or a syllabus</p>
+            <p class="drop-sub">or <span class="linky">choose files</span></p>
+            <input type="file" id="course-input" multiple accept=".pdf,.pptx" hidden>
+          </div>
+          <div id="filed-report" class="filed" hidden></div>
+          <h2 class="mt">Files</h2>
+          <div id="file-list" class="files"></div>
+        </section>
+      </div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------ viewer -->
+  <section class="screen screen-viewer" id="screen-viewer" hidden>
+    <div class="viewer-bar">
+      <a class="back" id="viewer-back" href="#/">Course</a>
+      <div class="viewer-title" id="viewer-title"></div>
+      <div class="pager">
+        <button class="btn btn-quiet" id="prev-slide" type="button" aria-label="Previous slide">Prev</button>
+        <span class="counter" id="slide-counter" aria-live="polite">-</span>
+        <button class="btn btn-quiet" id="next-slide" type="button" aria-label="Next slide">Next</button>
+      </div>
+    </div>
+
+    <div class="runbar runbar-viewer" id="viewer-runbar"></div>
+
+    <nav class="strip" id="slide-strip" aria-label="Slides"></nav>
+
+    <div class="panes">
+      <div class="pane pane-slide">
+        <div class="slide-frame" id="slide-frame">
+          <img id="slide-img" alt="" hidden>
+          <p class="muted" id="slide-empty">No slide loaded.</p>
+        </div>
+        <details class="rawtext" id="slide-text-wrap">
+          <summary>Text extracted from this slide</summary>
+          <pre id="slide-text"></pre>
+        </details>
+      </div>
+
+      <div class="pane pane-read">
+        <article class="reading" id="reading"></article>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ------------------------------------------------ connect dialog -->
+<dialog id="connect-dialog" class="sheet" aria-labelledby="connect-title">
+  <form method="dialog" class="sheet-close-form">
+    <button class="sheet-close" value="cancel" aria-label="Close">Close</button>
+  </form>
+  <h2 id="connect-title">Connect to DeepSeek</h2>
+  <p class="lede" id="connect-state"></p>
+  <form id="connect-form">
+    <label for="api-key">API key</label>
+    <input id="api-key" name="api_key" type="password" autocomplete="off"
+           spellcheck="false" placeholder="sk-...">
+    <p class="help">The key is tested once, then stored in your operating
+      system keyring. It is never written into this project and never sent
+      anywhere but DeepSeek.</p>
+    <p class="field-error" id="connect-error" role="alert" hidden></p>
+    <div class="sheet-actions">
+      <button class="btn btn-primary" id="connect-submit" type="submit">Test and save</button>
+      <button class="btn btn-quiet" id="connect-forget" type="button">Forget key</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>

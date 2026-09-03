@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 
 from app.contracts import LectureCompanionError
+from app.llm import CONTENT_MARKER
 
 log = logging.getLogger(__name__)
 
@@ -74,7 +75,7 @@ def build_overview(store, course_id: str, client) -> str:
     if not blocks:
         return fallback_overview(store, course_id)
 
-    prompt = OVERVIEW_INSTRUCTIONS + "\n\n" + "\n\n".join(blocks)
+    prompt = OVERVIEW_INSTRUCTIONS + CONTENT_MARKER + "\n\n".join(blocks)
     try:
         summary = (client.summarise(prompt) or "").strip()
     except LectureCompanionError as exc:
