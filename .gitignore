@@ -1,0 +1,24 @@
+# Course content and per-course memory (user data, not source)
+Courses/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Local storage / secrets
+.env
+*.local
+.DS_Store
+
+# Build artifacts
+dist/
+build/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
