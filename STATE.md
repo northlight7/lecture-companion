@@ -45,16 +45,53 @@ _(none yet)_
 
 ## CURRENT STATE
 
-Round 1, first build. Four builders fanned out in parallel against the frozen
-`app/contracts.py`, with disjoint file ownership:
+**PAUSED by the human at round 1, mid-round, awaiting Builder D.**
 
-- A: `app/config.py`, `app/keystore.py`, `app/course.py`, `run.sh`, `tests/conftest.py`, `tests/test_course_store.py`
-- B: `app/extract/*`, `app/importer.py`, `scripts/make_fixtures.py`, `tests/test_extract.py`, `tests/test_import_filing.py`
-- C: `app/embed.py`, `app/vectors.py`, `app/llm.py`, `app/overview.py`, `app/pipeline.py`, `tests/test_pipeline.py`, `tests/test_isolation.py`, `tests/test_resume.py`, `tests/test_llm_client.py`
-- D: `app/main.py`, `web/*`, `tests/test_api.py`
+Committed and safe: `ccbf533` on local `main`. NOT yet pushed to origin.
 
-Next after they land: run the full suite, smoke-test the real app in a browser
-at 1440px, then hand the artifact to a fresh blind critic.
+Done and independently verified by the orchestrator (not merely self-reported):
 
-Resume cursor: round 1, item "collect builder output and run the full gate
-suite". No product course is mid-processing.
+- Builder A — `app/config.py`, `app/keystore.py`, `app/course.py`, `run.sh`,
+  `tests/conftest.py`, `tests/test_course_store.py`. Path traversal blocked on
+  all five hostile ids; keystore has zero file writes; slug collision handled.
+- Builder B — `app/extract/*`, `app/importer.py`, `scripts/make_fixtures.py`,
+  `tests/test_extract.py`, `tests/test_import_filing.py`. G3 measured: 6-page
+  fixture -> 6 images, all text non-empty, max side 1684px. G4 measured:
+  lecture -> slides deck of 6, syllabus -> reference with no deck.
+- Builder C — `app/embed.py`, `app/vectors.py`, `app/llm.py`, `app/overview.py`,
+  `app/pipeline.py` and four test files. G7 probed directly: 429 on slide 3
+  pauses with done=[0,1,2], the resumed run calls only 3,4,5. G6 probed
+  directly: course B's literal assembled prompts contain none of course A's
+  vocabulary.
+
+In flight when the pause landed:
+
+- Builder D — `app/main.py`, `web/index.html`, `web/app.js`, `web/styles.css`,
+  `tests/test_api.py`. All five files exist on disk (written 17:49-17:55) but
+  the agent had not yet reported, so they are UNVERIFIED and deliberately left
+  UNCOMMITTED. Treat them as a draft until re-checked.
+
+## RESUME CURSOR
+
+Round 1, item: "collect Builder D's output and run the full gate suite".
+
+On resume, in this order:
+1. Read this file, then `git log`, then run
+   `.venv/bin/python -m pytest -q -p no:warnings` and confirm it is still green
+   (it was 134 passed before D's files were counted).
+2. Re-check Builder D's five uncommitted files against its brief. Do not trust
+   them; D never reported. Run `tests/test_api.py` and boot the server for G1:
+   `LC_FAKE_MODEL=1 .venv/bin/python -m uvicorn app.main:app --port 8799` then
+   `curl -s localhost:8799/api/health` must return `{"ok": true}`.
+3. Gate G2 is still unmeasured: load the viewer at 1440px and evaluate
+   `document.documentElement.scrollWidth <= document.documentElement.clientWidth`.
+4. Gate G11 is still unmet: `README.md` currently ends with a "Status: Early
+   prototype ... being built out" section that predates the code. Rewrite it to
+   describe what actually exists before any critic pass.
+5. Then, and only then, hand the artifact to a fresh blind critic using
+   `.internal/critic-prompt.md`. No critic has run yet.
+6. Commit D's work at the round boundary and push `main` to
+   `northlight7/lecture-companion`. G10 is unmet: nothing is pushed yet.
+
+No product course is mid-processing; there is no user data to resume. The pause
+is a loop-level pause only.
