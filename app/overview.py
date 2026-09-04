@@ -56,9 +56,19 @@ def build_overview(store, course_id: str, client) -> str:
     Returns `fallback_overview(...)` when there are no reference docs, or when
     the model gives back nothing usable. Never returns an empty string.
     """
+    return _build_overview(store, course_id, client)[0]
+
+
+def _build_overview(store, course_id: str, client) -> tuple[str, bool]:
+    """As `build_overview`, but also reports whether it fell back.
+
+    The caller needs to know: a fallback caused by a transient model failure
+    must stay retryable, or one bad response would leave a course that HAS a
+    syllabus permanently claiming it has none.
+    """
     refs = store.load_ref_texts(course_id)
     if not refs:
-        return fallback_overview(store, course_id)
+        return fallback_overview(store, course_id), True
 
     blocks: list[str] = []
     spent = 0
@@ -73,17 +83,22 @@ def build_overview(store, course_id: str, client) -> str:
         blocks.append(f"### Reference document {file_id}\n{chunk}")
 
     if not blocks:
-        return fallback_overview(store, course_id)
+        return fallback_overview(store, course_id), True
 
     prompt = OVERVIEW_INSTRUCTIONS + CONTENT_MARKER + "\n\n".join(blocks)
     try:
         summary = (client.summarise(prompt) or "").strip()
     except LectureCompanionError as exc:
         log.warning("overview generation failed for %s: %s", course_id, exc)
-        return fallback_overview(store, course_id)
+        return fallback_overview(store, course_id), True
     if not summary:
-        return fallback_overview(store, course_id)
-    return summary
+        log.warning(
+            "overview model returned nothing usable for %s; using the "
+            "fallback and leaving it retryable",
+            course_id,
+        )
+        return fallback_overview(store, course_id), True
+    return summary, False
 
 
 def refresh_overview_if_needed(store, course_id: str, client) -> bool:
@@ -99,8 +114,13 @@ def refresh_overview_if_needed(store, course_id: str, client) -> bool:
     if ref_ids == current and (course.overview or "").strip():
         return False
 
-    course.overview = build_overview(store, course_id, client)
-    course.overview_source_ids = ref_ids
+    overview, fell_back = _build_overview(store, course_id, client)
+    course.overview = overview
+    # Only claim these refs as "consumed" when the model actually distilled
+    # them. On a fallback we leave the ids unrecorded so the next import, or
+    # the next explicit refresh, tries again instead of leaving the course
+    # permanently describing itself as having no syllabus.
+    course.overview_source_ids = [] if fell_back else ref_ids
     store.save_course(course)
     return True
 

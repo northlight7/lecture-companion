@@ -665,8 +665,9 @@ class FakeClient:
             )
         else:
             parts.append(
-                "The slide carries no extracted text, so this is a reading of "
-                "the image alone."
+                "The slide carries no extracted text. The offline stub cannot "
+                "see the image, so it has nothing to describe here; the real "
+                "model reads the image and would."
             )
         if overview_echo:
             parts.append(
@@ -692,13 +693,16 @@ class FakeClient:
         # decides for itself; the stub just has to reach the same code path.
         mermaid = ""
         if len(terms) >= 3 and ctx.slide_index % 3 == 2:
-            a, b, c = (_mermaid_label(t) for t in terms[:3])
-            mermaid = (
-                "graph TD\n"
-                f'  A["{a}"] --> B["{b}"]\n'
-                f'  B --> C["{c}"]\n'
-                f'  A --> C'
-            )
+            # Only claim what is actually true: these terms appear on this
+            # slide. An earlier version drew A --> B --> C, which asserted
+            # relationships the slide never states — a fabrication sitting in
+            # the field the viewer renders as content. A real model is asked
+            # to draw real structure; the stub has no business inventing any.
+            root = _mermaid_label(heading or f"Slide {ctx.slide_index + 1}")
+            lines = [f'graph TD\n  S["{root}"]']
+            for n, term in enumerate(terms[:3]):
+                lines.append(f'  S --> T{n}["{_mermaid_label(term)}"]')
+            mermaid = "\n".join(lines)
 
         return Explanation(
             deck_id="",
