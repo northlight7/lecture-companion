@@ -22,6 +22,7 @@ Two properties this module is responsible for:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -335,8 +336,15 @@ class CourseStore:
     # -- ingest -----------------------------------------------------------
 
     def add_raw_file(self, course_id: str, filename: str, data: bytes) -> tuple[str, Path]:
-        """Store an upload byte for byte. Does not register it on the Course."""
-        file_id = _new_id()
+        """Store an upload byte for byte. Does not register it on the Course.
+
+        The id is derived from the CONTENT, not randomly, so dropping the same
+        deck in twice yields the same file_id, the same deck_id, and therefore
+        the same deck — `register_file` and `add_deck` both replace by id. A
+        student who drags a PDF in a second time re-files it rather than paying
+        to explain a duplicate copy of every slide.
+        """
+        file_id = hashlib.sha256(data).hexdigest()[:12]
         name = safe_filename(filename)
         path = self._within(course_id, "raw", f"{file_id}__{name}")
         atomic_write_bytes(path, data)

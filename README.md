@@ -97,11 +97,23 @@ the same as one that ran straight through.
 | Job | Model | Where |
 |---|---|---|
 | Explanation | DeepSeek `deepseek-v4-flash-vision-exp` | remote, key required, paid |
-| Retrieval embeddings | `intfloat/multilingual-e5-small` (384-dim) | local, free |
+| Retrieval embeddings, default | a deterministic hashing embedder (384-dim) | local, free, no download |
+| Retrieval embeddings, opt-in | `intfloat/multilingual-e5-small` (384-dim) | local, free, ~470 MB |
 
-Embeddings fall back to a deterministic hashing embedder when
-`sentence-transformers` is not installed, so nothing forces a torch download.
-Install it with `pip install -e ".[embed]"`.
+**The default install uses the hashing embedder**, not e5, so nothing forces a
+torch download and the tests run offline. It is a real bag-of-features
+embedder — word unigrams and bigrams, signed hashing, sublinear term
+frequency, L2-normalised — good enough that retrieval returns sensible
+neighbours, but weaker than a trained model and not multilingual in any
+meaningful sense. To use e5 instead:
+
+```bash
+.venv/bin/pip install -e ".[embed]"
+```
+
+Both produce 384 dimensions, so an index built with one is the wrong shape for
+the other in spirit even though it loads; rebuild a course's index after
+switching.
 
 ## File handling
 
@@ -123,13 +135,33 @@ explanation.
 
 ## Status, honestly
 
-Verified end to end with the stub model: import, filing, extraction, retrieval,
-per-course isolation, checkpointing, pause and resume, and the viewer in both
-themes. `pytest` is green, and `scripts/gate_g2.py` drives a real headless
-browser to prove the viewer does not overflow at 1440px.
+Verified against the **live DeepSeek API**, not only the stub:
 
-**Not yet verified against the live DeepSeek API.** No key has been configured
-on the development machine, so the request shape is built from the published
-documentation and covered by tests against a mocked transport, but no real
-response has ever been parsed. Explanation *quality* and grounding under the
-real model are therefore unmeasured. Treat that as the open question.
+- A 6-slide deck was explained end to end by `deepseek-v4-flash-vision-exp`.
+  Spot-checking three explanations against the slides' own extracted text found
+  no invented claims, and the back-references were correct — the explanation of
+  the "Keys and Constraints" slide cites "a relation is a set of tuples" and
+  "NULL means unknown, not zero", both of which really are on the two earlier
+  slides it names.
+- The title slide was correctly read as an agenda rather than padded out:
+  *"It does not teach any content yet; it sets out what will be covered."*
+- **Resume was proven against the live API by accident**, which is the best
+  kind of proof. The server was killed with five of six slides done; on
+  restart it generated exactly one more. The timestamps in the stored
+  explanations show slides 1-5 within the first 106 seconds and slide 6 at
+  347 seconds, across the restart. Nothing was paid for twice.
+
+Also verified with the stub, free and offline: import, filing, extraction,
+retrieval, per-course isolation, checkpointing, pause on a 429, and the viewer
+in both themes. `pytest` is green, and `scripts/gate_g2.py` drives a real
+headless browser to prove the viewer does not overflow at 1440px.
+
+Known limits:
+
+- The retrieval quality claim rests on the hashing embedder. The e5 path is
+  implemented but has not been measured.
+- `.pptx` rendering has been exercised on a small deck; complex decks with
+  animations, embedded video or unusual fonts are untested.
+- The offline stub writes deliberately mechanical prose. It exists to verify
+  the machinery for free, not to demonstrate explanation quality — judge that
+  with a real key.

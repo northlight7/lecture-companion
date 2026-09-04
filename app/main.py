@@ -85,8 +85,29 @@ def _course_row(store, course: Course) -> dict[str, Any]:
         "n_decks": len(course.decks),
         "n_slides": n_slides,
         "n_explained": n_explained,
-        "state": store.load_progress(course.id).state,
+        "state": _display_state(store, course, n_slides, n_explained),
     }
+
+
+def _display_state(store, course: Course, n_slides: int, n_explained: int) -> str:
+    """The state to SHOW, which is not always the stored one.
+
+    `progress.state` records how the last run ended. Importing another deck
+    afterwards adds unexplained slides without touching it, so a course that
+    genuinely has work left would still show "done". Derive it from the counts
+    instead, and only trust the stored value where the counts cannot tell
+    (paused vs merely stopped, and errors).
+    """
+    stored = store.load_progress(course.id).state
+    if course.id in _running_ids():
+        return "running"
+    if stored in ("paused", "error"):
+        return stored
+    if n_slides and n_explained >= n_slides:
+        return "done"
+    if n_explained:
+        return "partial"
+    return "idle"
 
 
 def _progress_dict(store, course: Course) -> dict[str, Any]:
