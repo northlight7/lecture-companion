@@ -281,6 +281,10 @@ class CourseStore:
         legacy = self.slides_dir(course_id, f"deck-{artifact.content_hash[:12]}") / f"page-{number:04d}.png"
         return legacy
 
+    def knowledge_index_path(self, course_id: str) -> Path:
+        """Course-local derived search and concept index."""
+        return self._within(course_id, "objects", "knowledge.sqlite3")
+
     def index_path(self, course_id: str) -> Path:
         return self._within(course_id, "index.jsonl")
 

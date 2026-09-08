@@ -598,6 +598,51 @@ def ask_selected_question(cid: str, payload: dict = Body(default={})):
     return answer_selected(question, objects, get_client())
 
 
+@app.get("/api/courses/{cid}/knowledge/status")
+def knowledge_status(cid: str):
+    from app.knowledge import index_status
+
+    store, course = _course_or_404(cid)
+    if course is None:
+        return _err(404, f"No course {cid!r}.")
+    return index_status(store, cid)
+
+
+@app.post("/api/courses/{cid}/knowledge/rebuild")
+def rebuild_course_knowledge(cid: str):
+    from app.knowledge import build_index
+
+    store, course = _course_or_404(cid)
+    if course is None:
+        return _err(404, f"No course {cid!r}.")
+    return build_index(store, cid)
+
+
+@app.get("/api/courses/{cid}/search")
+def search_course(cid: str, q: str = Query("", max_length=500), limit: int = Query(20, ge=1, le=50)):
+    from app.knowledge import search
+
+    store, course = _course_or_404(cid)
+    if course is None:
+        return _err(404, f"No course {cid!r}.")
+    try:
+        return search(store, cid, q, limit)
+    except ValueError as exc:
+        return _err(400, str(exc))
+
+
+@app.get("/api/courses/{cid}/concepts")
+def course_concepts(
+    cid: str, q: str = Query("", max_length=200), limit: int = Query(18, ge=1, le=40),
+):
+    from app.knowledge import concept_graph
+
+    store, course = _course_or_404(cid)
+    if course is None:
+        return _err(404, f"No course {cid!r}.")
+    return concept_graph(store, cid, q, limit)
+
+
 @app.post("/api/import/preview")
 async def import_preview(files: list[UploadFile] = File(default=[])):
     from app.importer import sort_bulk

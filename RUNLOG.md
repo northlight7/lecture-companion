@@ -199,3 +199,27 @@ Capability Round 1 done: FAIL, six-format import and measured structural fidelit
 **Drift check:** course isolation covers artifact data, questions, citations, and media. Exact grounding covers every observed typed object and selected evidence. Original bytes remain untouched. Import idempotence and the slide resume system remain green. Credential handling was unchanged and scanned. Parser degradation, uncertainty, and remote transmission remain explicit. The new views passed both required viewport sizes.
 
 Capability Round 2 done: FAIL, the native six-format viewer and selected-context question increment passed independently. Cross-artifact search and concept relationships remain.
+
+## Capability Round 3: 2026-09-09T03:57:37+0800
+
+**Goal and invariants:** build a five-course companion that lets a student import, inspect, search, understand, question, practise, and verify mixed material. Preserve structural course isolation, exact grounding, byte-preserved originals, resumable idempotent processing, credential secrecy, and honest uncertainty.
+
+**Frozen bar:** both required hashes matched before work and in the fresh critic run. The capability assessment was `2c51dd51651b8b0467986f85836f4377dde66bb0f039e91ef5f0cff6413a9587`. `SPEC.md` was `7641e3135ce5eb7b5369393f72ad875eb70af8bc51178af3e0165b45e7b9e875`.
+
+**Item chosen and why:** course-local cross-artifact search and concept relationships were the highest-value failure after typed viewers became usable. The frozen milestone requires a course graph that links lecture, practice, code, outputs, and data without crossing course boundaries.
+
+**Attempt:** added an atomic course-local SQLite FTS5 index over current typed objects, source fingerprints, schema invalidation, automatic stale rebuild, explicit concept aliases, diversified results, exact typed links, measured concept-to-file edges, explicit filename references, and visibly uncertain prerequisite candidates. Added a browser search and relationship view. Added a five-course gate for search quality, exact resolution, isolation, performance, and responsive layout.
+
+**Measured results:** `.venv/bin/python -m pytest -q` passed 153 tests. The five-course gate returned results and graph edges for every real course. Business Data Analytics search for shrinkage expanded through regularization and found PDF, notebook, output, and explicitly linked CSV evidence. Initial search was at most 1.831 seconds and warm search was at most 0.136 seconds across the gate. Both browser sizes passed without console errors or horizontal overflow. The critic measured 20 warm searches at p50 3.87 ms, p95 4.33 ms, and maximum 4.41 ms. Replacing a source marked the index stale, rebuilt it automatically, returned the current marker, and removed obsolete evidence. No paid model call was made.
+
+**Critic verdict:** full frozen product bar FAIL. Round 3 increment PASS from a fresh independent critic. Its non-LLM holdout was authored before implementation inspection. True permission-enforced isolation remains unavailable because agents share the filesystem, so that protocol gate remains failed.
+
+**Largest remaining gap:** resumable artifact-specific teaching across non-slide material. Controlled notebook execution, spreadsheet diagnosis, ER validation, ethics scaffolding, and finance checks remain absent.
+
+**Shipped work:** course-local typed search, explicit alias expansion, exact search links, cross-artifact relationships, concept and prerequisite views, staleness detection, automatic atomic rebuilding, adversarial isolation tests, five-course performance measurements, responsive browser coverage, and truthful documentation.
+
+**Rejected work and do-not-repeat notes:** opaque semantic claims were rejected in favor of named lexical aliases. Concept evidence dominated by one artifact was rejected and replaced with per-artifact sampling. Dataset relationship results showing only a filename were rejected and now expose structured facts. Unlabeled prerequisite inference as fact was rejected. Superseded objects are excluded. Index algorithm changes require a schema bump.
+
+**Drift check:** retrieval remains structurally isolated by one database per course. Every result and relationship carries exact current object identity. Source changes invalidate derived knowledge. Search and graph work entirely offline. Original bytes, slide resume, credential storage, media validation, and uncertainty display remain unchanged and green.
+
+Capability Round 3 done: FAIL, local cross-artifact search and the course concept graph passed independently. Resumable artifact-specific teaching remains.

@@ -76,6 +76,24 @@
 
       <div class="runbar" id="course-runbar"></div>
 
+      <section class="knowledge-panel" aria-labelledby="knowledge-title">
+        <div class="knowledge-head">
+          <div>
+            <h2 id="knowledge-title">Search across this course</h2>
+            <p class="help">Local-only search across slides, notes, documents, formulas, code, outputs, and dataset fields. Every result opens its exact source.</p>
+          </div>
+          <button class="btn btn-quiet" id="show-relationships" type="button">Show relationships</button>
+        </div>
+        <form class="course-search" id="course-search" role="search">
+          <label class="sr-only" for="course-search-query">Search this course</label>
+          <input id="course-search-query" type="search" maxlength="500" placeholder="Try regression, ridge, cardinality, or look-ahead bias" required>
+          <button class="btn" type="submit">Search</button>
+        </form>
+        <p class="index-status help" id="knowledge-status" aria-live="polite"></p>
+        <div id="search-results" class="search-results" aria-live="polite"></div>
+        <div id="concept-graph" class="concept-graph" hidden aria-live="polite"></div>
+      </section>
+
       <div class="cols2">
         <section>
           <h2>Decks</h2>
