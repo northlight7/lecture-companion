@@ -268,6 +268,19 @@ class CourseStore:
     def artifacts_path(self, course_id: str) -> Path:
         return self._within(course_id, "artifacts.json")
 
+    def artifact_renders_dir(self, course_id: str, artifact_id: str) -> Path:
+        _check_id(artifact_id, "artifact_id")
+        return self._within(course_id, "objects", "renders", artifact_id)
+
+    def artifact_render_path(self, course_id: str, artifact: Artifact, number: int) -> Path:
+        if number < 1:
+            raise ValueError("render number must be positive")
+        preserved = self.artifact_renders_dir(course_id, artifact.id) / f"page-{number:04d}.png"
+        if preserved.is_file():
+            return preserved
+        legacy = self.slides_dir(course_id, f"deck-{artifact.content_hash[:12]}") / f"page-{number:04d}.png"
+        return legacy
+
     def index_path(self, course_id: str) -> Path:
         return self._within(course_id, "index.jsonl")
 

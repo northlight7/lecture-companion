@@ -16,6 +16,7 @@ const els = {
     courses: $("screen-courses"),
     course: $("screen-course"),
     viewer: $("screen-viewer"),
+    artifact: $("screen-artifact"),
   },
   connBadge: $("conn-badge"),
   connLabel: $("conn-label"),
@@ -30,6 +31,11 @@ const state = {
   slides: [],            // [{index, has_explanation, heading}]
   index: 0,
   poll: null,
+  artifact: null,
+  artifactObjects: [],
+  artifactOffset: 0,
+  artifactSheet: "",
+  selectedObjects: new Map(),
 };
 
 // ---------------------------------------------------------------- utilities
@@ -409,7 +415,7 @@ async function renderCourses() {
 
   if (!courses.length) {
     list.innerHTML =
-      `<p class="empty">No courses yet. Create one above, then drop its slides in.
+      `<p class="empty">No courses yet. Create one above, then drop its course files in.
        Or drop a whole pile below and let the app propose the split.</p>`;
     return;
   }
@@ -538,7 +544,7 @@ wireDrop("course-drop", "course-input", async (files) => {
       `<h3>Filed</h3><ul>${result.filed.map((f) => {
         const what = f.role === "slides"
           ? `${plural(f.n_slides, "slide", "slides")}`
-          : "reference document";
+          : `${String(f.kind || f.role || "course").toUpperCase()} artifact`;
         return `<li><strong>${esc(f.filename)}</strong> as ${esc(what)}. ${esc(f.reason)}</li>`;
       }).join("")}</ul>` +
       (result.errors.length
@@ -582,12 +588,14 @@ async function renderCourse(cid) {
       </a>`).join("")
     : `<p class="empty">No slide deck in this course yet. Other imported artifacts remain available in the file list.</p>`;
 
-  $("file-list").innerHTML = course.files.length
-    ? course.files.map((f) => `<div class="file-row">
-        <span class="name">${esc(f.filename)}</span>
-        <span class="meta">${esc(f.role)}</span>
-        <span class="why">${esc(f.reason)}</span>
-      </div>`).join("")
+  const artifacts = course.artifacts || [];
+  $("file-list").innerHTML = artifacts.length
+    ? artifacts.map((a) => `<a class="file-row"
+        href="#/c/${encodeURIComponent(cid)}/a/${encodeURIComponent(a.id)}">
+        <span class="name">${esc(a.source_path || a.filename)}</span>
+        <span class="meta">${esc(a.kind.toUpperCase())} · ${esc(a.purpose.replaceAll("_", " "))}</span>
+        <span class="why">${plural(a.object_count, "source object", "source objects")}${a.extraction_warnings.length ? " · extraction warning" : ""}</span>
+      </a>`).join("")
     : `<p class="empty">Nothing uploaded yet.</p>`;
 
   if (course.progress.running || course.progress.state === "running") startPolling(cid);
@@ -759,11 +767,231 @@ async function renderViewer() {
   }
 }
 
+// ------------------------------------------------------- artifact viewer
+
+function locatorText(obj) {
+  const loc = obj?.locator || {};
+  const parts = [];
+  if (loc.page != null) parts.push(`page ${loc.page}`);
+  if (loc.slide != null) parts.push(`slide ${loc.slide}`);
+  if (loc.note != null) parts.push(`note ${loc.note}`);
+  if (loc.block != null) parts.push(`block ${Number(loc.block) + 1}`);
+  if (loc.sheet) parts.push(`sheet ${loc.sheet}`);
+  if (loc.cell_range) parts.push(loc.cell_range);
+  if (loc.chart) parts.push(`chart ${loc.chart}`);
+  if (loc.notebook_cell != null) parts.push(`notebook cell ${Number(loc.notebook_cell) + 1}`);
+  if (loc.output != null) parts.push(`output ${Number(loc.output) + 1}`);
+  if (loc.dataset_field) parts.push(`field ${loc.dataset_field}`);
+  return parts.join(", ") || obj?.object_type?.replaceAll("_", " ") || "source";
+}
+
+function sourceHash(cid, aid, oid = "") {
+  const base = `#/c/${encodeURIComponent(cid)}/a/${encodeURIComponent(aid)}`;
+  return oid ? `${base}/${encodeURIComponent(oid)}` : base;
+}
+
+function tableHtml(rows) {
+  if (!rows?.length) return "";
+  return `<div class="native-table-wrap"><table class="native-table"><tbody>${rows.map((row) =>
+    `<tr>${row.map((cell) => `<td>${esc(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+}
+
+function objectCard(obj, artifact, cid, currentOid) {
+  const link = sourceHash(cid, artifact.id, obj.id);
+  const checked = state.selectedObjects.has(obj.id) ? " checked" : "";
+  const current = obj.id === currentOid ? " current" : "";
+  let body = "";
+  if ((obj.object_type === "page" || obj.object_type === "slide") &&
+      (obj.locator.page || obj.locator.slide)) {
+    const number = obj.locator.page || obj.locator.slide;
+    body = `<img class="native-page" loading="lazy" src="/api/courses/${encodeURIComponent(cid)}/artifacts/${encodeURIComponent(artifact.id)}/render/${number}" alt="${esc(locatorText(obj))}">
+      <details><summary>Extracted text</summary><pre>${esc(obj.text)}</pre></details>`;
+  } else if (obj.object_type === "table") {
+    body = tableHtml(obj.data.rows || []) || `<pre>${esc(obj.text)}</pre>`;
+  } else if (obj.object_type === "notebook_cell") {
+    const tag = obj.data.cell_type === "code" ? "pre" : "div";
+    body = `<${tag}>${esc(obj.text)}</${tag}>`;
+  } else if (obj.object_type === "notebook_output") {
+    const hasImage = (obj.data.mime_types || []).some((type) => ["image/png", "image/jpeg", "image/gif", "image/webp"].includes(type));
+    const visual = hasImage
+      ? `<img class="native-embedded" loading="lazy" src="/api/courses/${encodeURIComponent(cid)}/artifacts/${encodeURIComponent(artifact.id)}/objects/${encodeURIComponent(obj.id)}/media" alt="Saved output from ${esc(locatorText(obj))}">`
+      : "";
+    const outputText = obj.text || obj.data.evalue || (!hasImage ? JSON.stringify(obj.data.data || {}) : "");
+    body = visual + (outputText ? `<pre>${esc(outputText)}</pre>` : "");
+  } else if (obj.object_type === "image") {
+    body = `<img class="native-embedded" loading="lazy" src="/api/courses/${encodeURIComponent(cid)}/artifacts/${encodeURIComponent(artifact.id)}/objects/${encodeURIComponent(obj.id)}/media" alt="Embedded image at ${esc(locatorText(obj))}">
+      <p class="muted">${esc(obj.data.part_name || "Embedded document image")}</p>`;
+  } else if (obj.object_type === "dataset") {
+    const fields = obj.data.fields || [];
+    const rows = [fields, ...(obj.data.sample_rows || []).map((row) => fields.map((field) => row[field] ?? ""))];
+    body = `<p>${obj.data.row_count} rows, ${obj.data.column_count} columns. Bounded local preview.</p>${tableHtml(rows)}`;
+  } else if (obj.object_type === "sheet") {
+    body = `<dl class="sheet-metadata">
+      <dt>Dimensions</dt><dd>${esc(obj.data.dimensions || obj.locator.cell_range || "unknown")}</dd>
+      <dt>State</dt><dd>${esc(obj.data.state || "visible")}</dd>
+      <dt>Freeze panes</dt><dd>${esc(obj.data.freeze_panes || "none")}</dd>
+      <dt>Filter</dt><dd>${esc(obj.data.auto_filter || "none")}</dd>
+      <dt>Merged ranges</dt><dd>${esc((obj.data.merged_ranges || []).join(", ") || "none")}</dd>
+      <dt>Hidden rows</dt><dd>${esc((obj.data.hidden_rows || []).join(", ") || "none")}</dd>
+      <dt>Hidden columns</dt><dd>${esc((obj.data.hidden_columns || []).join(", ") || "none")}</dd>
+      <dt>Conditional formatting rules</dt><dd>${esc(obj.data.conditional_formatting_rules ?? 0)}</dd>
+      <dt>Validation ranges</dt><dd>${esc((obj.data.data_validations || []).join(", ") || "none")}</dd>
+    </dl>`;
+  } else if (obj.object_type === "dataset_field") {
+    body = `<p>Type: ${esc(obj.data.inferred_type || "unknown")}. Missing: ${esc(obj.data.missing_count ?? 0)} of ${esc(obj.data.row_count ?? "unknown")}. Unique values: ${esc(obj.data.unique_count ?? "unknown")}.</p>
+      <p>Samples: ${esc((obj.data.samples || []).join(", ") || "none")}</p>`;
+  } else {
+    body = obj.text ? `<pre>${esc(obj.text)}</pre>` : `<pre>${esc(JSON.stringify(obj.data, null, 2))}</pre>`;
+  }
+  return `<article class="native-object${current}" id="source-${esc(obj.id)}" data-object-id="${esc(obj.id)}">
+    <div class="native-object-head">
+      <input type="checkbox" class="source-select" data-object-id="${esc(obj.id)}" aria-label="Select ${esc(locatorText(obj))}"${checked}>
+      <span class="native-object-type">${esc(obj.object_type.replaceAll("_", " "))}</span>
+      <a class="source-location" href="${link}">${esc(locatorText(obj))}</a>
+    </div>${body}</article>`;
+}
+
+function spreadsheetHtml(objects, artifact, cid, currentOid) {
+  const cells = objects.filter((obj) => obj.object_type === "cell");
+  const sheets = objects.filter((obj) => obj.object_type === "sheet");
+  const others = objects.filter((obj) => obj.object_type !== "cell" && obj.object_type !== "sheet");
+  const sheetCards = sheets.map((obj) => objectCard(obj, artifact, cid, currentOid)).join("");
+  if (!cells.length) return sheetCards + others.map((obj) => objectCard(obj, artifact, cid, currentOid)).join("");
+  const rows = new Map();
+  for (const obj of cells) {
+    const match = String(obj.locator.cell_range || "").match(/^([A-Z]+)(\d+)$/);
+    if (!match) continue;
+    const row = Number(match[2]);
+    if (!rows.has(row)) rows.set(row, []);
+    rows.get(row).push(obj);
+  }
+  const grid = `<div class="native-table-wrap"><table class="native-table"><tbody>${[...rows.entries()].sort((a,b) => a[0]-b[0]).map(([row, items]) =>
+    `<tr><th scope="row">${row}</th>${items.map((obj) => `<td data-object-id="${esc(obj.id)}" class="${obj.id === currentOid ? "current" : ""}">
+      <label><input type="checkbox" class="source-select" data-object-id="${esc(obj.id)}"${state.selectedObjects.has(obj.id) ? " checked" : ""}>
+      <a href="${sourceHash(cid, artifact.id, obj.id)}">${esc(obj.locator.cell_range)}</a></label><br>${esc(obj.text)}
+      ${obj.data.formula ? `<small>Formula: ${esc(obj.data.formula)} · Cached: ${esc(obj.data.cached_value)}</small>` : ""}</td>`).join("")}</tr>`
+  ).join("")}</tbody></table></div>`;
+  return sheetCards + grid + others.map((obj) => objectCard(obj, artifact, cid, currentOid)).join("");
+}
+
+function paintSelected() {
+  const values = [...state.selectedObjects.values()];
+  $("selected-context").textContent = values.length
+    ? `${plural(values.length, "source", "sources")} selected: ${values.map(locatorText).join("; ")}`
+    : "Nothing selected.";
+}
+
+async function loadArtifactPage({ append = false } = {}) {
+  const { cid, aid, oid } = state.route;
+  const params = new URLSearchParams({ offset: String(append ? state.artifactOffset : 0), limit: "300" });
+  let exact = null;
+  if (oid) {
+    exact = await getJSON(`/api/courses/${encodeURIComponent(cid)}/artifacts/${encodeURIComponent(aid)}/objects/${encodeURIComponent(oid)}`);
+  }
+  const requestedSheet = exact?.locator?.sheet || state.artifactSheet;
+  if (requestedSheet) params.set("sheet", requestedSheet);
+  const payload = await getJSON(`/api/courses/${encodeURIComponent(cid)}/artifacts/${encodeURIComponent(aid)}/view?${params}`);
+  state.artifact = payload.artifact;
+  state.artifactSheet = payload.selected_sheet || "";
+  state.artifactOffset = payload.offset + payload.objects.length;
+  state.artifactObjects = append ? [...state.artifactObjects, ...payload.objects] : payload.objects;
+  if (exact && !state.artifactObjects.some((obj) => obj.id === oid)) {
+    state.artifactObjects.unshift(exact);
+  }
+  const artifact = payload.artifact;
+  $("artifact-title").textContent = artifact.filename;
+  $("artifact-original").href = `/api/courses/${encodeURIComponent(cid)}/artifacts/${encodeURIComponent(aid)}/original`;
+  $("source-location").textContent = oid
+    ? `${artifact.source_path} · ${locatorText(state.artifactObjects.find((obj) => obj.id === oid))}`
+    : artifact.source_path;
+  const warning = $("artifact-warning");
+  warning.hidden = !artifact.extraction_warnings.length;
+  warning.textContent = artifact.extraction_warnings.join(" ");
+  const sheet = $("artifact-sheet");
+  $("sheet-label").hidden = !payload.sheets.length;
+  sheet.hidden = !payload.sheets.length;
+  sheet.innerHTML = payload.sheets.map((name) => `<option${name === payload.selected_sheet ? " selected" : ""}>${esc(name)}</option>`).join("");
+  const content = artifact.kind === "xlsx"
+    ? spreadsheetHtml(state.artifactObjects, artifact, cid, oid)
+    : state.artifactObjects.map((obj) => objectCard(obj, artifact, cid, oid)).join("");
+  $("native-viewer").innerHTML = content || `<p class="empty">No extracted source objects.</p>`;
+  $("native-viewer").dataset.artifactId = artifact.id;
+  $("artifact-more").hidden = !payload.has_more;
+  paintSelected();
+  if (oid) requestAnimationFrame(() => document.getElementById(`source-${oid}`)?.scrollIntoView({ block: "center" }));
+}
+
+async function renderArtifact() {
+  const { cid, aid } = state.route;
+  if (!state.course || state.course.id !== cid) {
+    try { state.course = await getJSON(`/api/courses/${encodeURIComponent(cid)}`); }
+    catch (err) { handle(err); location.hash = "#/"; return; }
+  }
+  if (!state.artifact || state.artifact.id !== aid) {
+    state.artifactSheet = "";
+    state.artifactOffset = 0;
+    state.artifactObjects = [];
+    state.selectedObjects.clear();
+  }
+  $("artifact-back").href = `#/c/${encodeURIComponent(cid)}`;
+  $("artifact-back").textContent = state.course.title;
+  try { await loadArtifactPage(); }
+  catch (err) { handle(err); location.hash = `#/c/${encodeURIComponent(cid)}`; }
+}
+
+$("native-viewer").addEventListener("change", (event) => {
+  const input = event.target.closest(".source-select");
+  if (!input) return;
+  const obj = state.artifactObjects.find((item) => item.id === input.dataset.objectId);
+  if (!obj) return;
+  if (input.checked) state.selectedObjects.set(obj.id, obj);
+  else state.selectedObjects.delete(obj.id);
+  paintSelected();
+});
+
+$("artifact-sheet").addEventListener("change", async (event) => {
+  state.artifactSheet = event.target.value;
+  state.artifactOffset = 0;
+  state.selectedObjects.clear();
+  try { await loadArtifactPage(); } catch (err) { handle(err); }
+});
+
+$("load-more-objects").addEventListener("click", async () => {
+  try { await loadArtifactPage({ append: true }); } catch (err) { handle(err); }
+});
+
+$("copy-source-link").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(location.href);
+    toast("Exact source link copied.");
+  } catch (_err) { toast("Copy the current address to share this source location."); }
+});
+
+$("ask-selected-context").addEventListener("click", async () => {
+  const question = $("context-question").value.trim();
+  const answer = $("question-answer");
+  if (!question || !state.selectedObjects.size) {
+    answer.innerHTML = `<p class="field-error">Write a question and select at least one source.</p>`;
+    return;
+  }
+  answer.innerHTML = SKELETON;
+  const selections = [...state.selectedObjects.values()].map((obj) => ({ artifact_id: obj.artifact_id, object_id: obj.id }));
+  try {
+    const result = await postJSON(`/api/courses/${encodeURIComponent(state.route.cid)}/questions`, { question, selections });
+    const citations = result.citations.map((citation) => `<li><a href="${sourceHash(state.route.cid, citation.artifact_id, citation.object_id)}">${esc(citation.label)}</a>: ${esc(citation.quote)}</li>`).join("");
+    answer.innerHTML = `<div class="answer">${renderMarkdown(result.answer)}</div>
+      <p class="help">${esc(result.uncertainty)}</p><ol class="citations">${citations}</ol>`;
+  } catch (err) { answer.innerHTML = `<p class="field-error">${esc(err.message)}</p>`; }
+});
+
 // ---------------------------------------------------------------- routing
 
 function parseHash() {
   const raw = (location.hash || "#/").replace(/^#\/?/, "");
   const parts = raw.split("/").filter(Boolean).map(decodeURIComponent);
+  if (parts[0] === "c" && parts[2] === "a" && parts.length >= 4) {
+    return { name: "artifact", cid: parts[1], aid: parts[3], oid: parts[4] || "" };
+  }
   if (parts[0] === "c" && parts.length >= 4) {
     return { name: "viewer", cid: parts[1], did: parts[2], index: Number(parts[3]) || 0 };
   }
@@ -795,9 +1023,12 @@ async function route() {
   } else if (sameDeck) {
     // Only the slide index moved: do not refetch the whole deck.
     await showSlide(next.index);
-  } else {
+  } else if (next.name === "viewer") {
     stopPolling();
     await renderViewer();
+  } else {
+    stopPolling();
+    await renderArtifact();
   }
 }
 

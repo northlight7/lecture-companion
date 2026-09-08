@@ -12,13 +12,18 @@ are never logged, and `/api/connection` is excluded from path logging entirely.
 
 from __future__ import annotations
 
+import base64
+import binascii
+from io import BytesIO
 import logging
 import threading
+import zipfile
 from typing import Any, Callable
 
-from fastapi import FastAPI, Request, UploadFile, File, Body
+from fastapi import FastAPI, Request, UploadFile, File, Body, Query
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+from PIL import Image as PILImage, UnidentifiedImageError
 
 from app import config
 from app.contracts import (
@@ -418,13 +423,47 @@ def list_artifacts(cid: str):
 
 
 @app.get("/api/courses/{cid}/artifacts/{aid}/objects")
-def list_artifact_objects(cid: str, aid: str):
+def list_artifact_objects(
+    cid: str, aid: str, offset: int = Query(0, ge=0), limit: int | None = Query(None, ge=1, le=1000)
+):
     store, course = _course_or_404(cid)
     if course is None:
         return _err(404, f"No course {cid!r}.")
     if aid not in {artifact.id for artifact in store.load_artifacts(cid)}:
         return _err(404, f"No artifact {aid!r} in {cid!r}.")
-    return [obj.to_dict() for obj in store.load_learning_objects(cid, aid)]
+    objects = store.load_learning_objects(cid, aid)
+    selected = objects[offset:] if limit is None else objects[offset:offset + limit]
+    return [obj.to_dict() for obj in selected]
+
+
+@app.get("/api/courses/{cid}/artifacts/{aid}/view")
+def artifact_view(
+    cid: str, aid: str, sheet: str = "", offset: int = Query(0, ge=0),
+    limit: int = Query(300, ge=1, le=500),
+):
+    store, course = _course_or_404(cid)
+    if course is None:
+        return _err(404, f"No course {cid!r}.")
+    artifact = next((a for a in store.load_artifacts(cid) if a.id == aid), None)
+    if artifact is None:
+        return _err(404, f"No artifact {aid!r} in {cid!r}.")
+    all_objects = store.load_learning_objects(cid, aid)
+    sheets = [obj.locator.sheet for obj in all_objects if obj.object_type == "sheet"]
+    chosen_sheet = sheet if sheet in sheets else (sheets[0] if sheets else "")
+    visible = all_objects
+    if artifact.kind == "xlsx" and chosen_sheet:
+        visible = [
+            obj for obj in all_objects
+            if obj.locator.sheet == chosen_sheet or obj.object_type == "package_part"
+        ]
+    effective_limit = min(limit, 20) if artifact.kind in ("pdf", "pptx") else limit
+    page = visible[offset:offset + effective_limit]
+    return {
+        "artifact": artifact.to_dict(), "sheets": sheets, "selected_sheet": chosen_sheet,
+        "objects": [obj.to_dict() for obj in page], "total_objects": len(visible),
+        "offset": offset, "limit": effective_limit,
+        "has_more": offset + effective_limit < len(visible),
+    }
 
 
 @app.get("/api/courses/{cid}/artifacts/{aid}/objects/{oid}")
@@ -440,6 +479,81 @@ def get_artifact_object(cid: str, aid: str, oid: str):
     return _err(404, f"No learning object {oid!r} in {aid!r}.")
 
 
+@app.get("/api/courses/{cid}/artifacts/{aid}/render/{number}")
+def artifact_render(cid: str, aid: str, number: int):
+    store, course = _course_or_404(cid)
+    if course is None:
+        return _err(404, f"No course {cid!r}.")
+    artifact = next((a for a in store.load_artifacts(cid) if a.id == aid), None)
+    if artifact is None:
+        return _err(404, f"No artifact {aid!r} in {cid!r}.")
+    try:
+        path = store.artifact_render_path(cid, artifact, number)
+    except ValueError:
+        return _err(404, "No such rendered page.")
+    if not path.is_file():
+        return _err(404, "No such rendered page.")
+    return FileResponse(path, media_type="image/png", headers={"Cache-Control": "private, max-age=3600"})
+
+
+@app.get("/api/courses/{cid}/artifacts/{aid}/objects/{oid}/media")
+def artifact_object_media(cid: str, aid: str, oid: str):
+    """Serve a preserved embedded raster without copying it outside its course."""
+    store, course = _course_or_404(cid)
+    if course is None:
+        return _err(404, f"No course {cid!r}.")
+    artifact = next((a for a in store.load_artifacts(cid) if a.id == aid), None)
+    if artifact is None:
+        return _err(404, f"No artifact {aid!r} in {cid!r}.")
+    obj = next((item for item in store.load_learning_objects(cid, aid) if item.id == oid), None)
+    if obj is None:
+        return _err(404, f"No learning object {oid!r} in {aid!r}.")
+    allowed = {"image/png", "image/jpeg", "image/gif", "image/webp"}
+    data: bytes | None = None
+    media_type = ""
+    if artifact.kind == "docx" and obj.object_type == "image":
+        media_type = str(obj.data.get("content_type", ""))
+        member = str(obj.data.get("part_name", "")).lstrip("/")
+        source = (store.course_dir(cid) / artifact.stored_path).resolve()
+        if media_type in allowed and member.startswith("word/media/") and store.course_dir(cid) in source.parents:
+            try:
+                with zipfile.ZipFile(source) as package:
+                    info = package.getinfo(member)
+                    data = package.read(info) if info.file_size <= 32 * 1024 * 1024 else None
+            except (OSError, KeyError, zipfile.BadZipFile):
+                data = None
+    elif artifact.kind == "ipynb" and obj.object_type == "notebook_output":
+        bundle = obj.data.get("data", {})
+        if isinstance(bundle, dict):
+            for candidate in ("image/png", "image/jpeg", "image/gif", "image/webp"):
+                encoded = bundle.get(candidate)
+                if isinstance(encoded, list):
+                    encoded = "".join(str(part) for part in encoded)
+                if isinstance(encoded, str) and len(encoded) <= 45 * 1024 * 1024:
+                    try:
+                        data = base64.b64decode(encoded, validate=True)
+                        media_type = candidate
+                    except (ValueError, binascii.Error):
+                        data = None
+                    break
+    if not data or len(data) > 32 * 1024 * 1024 or media_type not in allowed:
+        return _err(404, "No supported embedded image for this object.")
+    expected_formats = {
+        "image/png": "PNG", "image/jpeg": "JPEG", "image/gif": "GIF", "image/webp": "WEBP",
+    }
+    try:
+        with PILImage.open(BytesIO(data)) as image:
+            image.verify()
+            if image.format != expected_formats[media_type]:
+                return _err(404, "Embedded image type does not match its content.")
+    except (OSError, ValueError, UnidentifiedImageError):
+        return _err(404, "Embedded image content is invalid.")
+    return Response(
+        content=data, media_type=media_type,
+        headers={"Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff"},
+    )
+
+
 @app.get("/api/courses/{cid}/artifacts/{aid}/original")
 def artifact_original(cid: str, aid: str):
     store, course = _course_or_404(cid)
@@ -452,6 +566,36 @@ def artifact_original(cid: str, aid: str):
     if not path.is_file() or store.course_dir(cid) not in path.resolve().parents:
         return _err(404, "Original file is unavailable.")
     return FileResponse(path, filename=artifact.filename)
+
+
+@app.post("/api/courses/{cid}/questions")
+def ask_selected_question(cid: str, payload: dict = Body(default={})):
+    from app.llm import get_client
+    from app.questions import MAX_SELECTIONS, answer_selected
+
+    store, course = _course_or_404(cid)
+    if course is None:
+        return _err(404, f"No course {cid!r}.")
+    question = payload.get("question", "") if isinstance(payload, dict) else ""
+    selections = payload.get("selections", []) if isinstance(payload, dict) else []
+    if not isinstance(question, str) or not question.strip():
+        return _err(400, "A question is required.")
+    if not isinstance(selections, list) or not 1 <= len(selections) <= MAX_SELECTIONS:
+        return _err(400, f"Select between 1 and {MAX_SELECTIONS} source objects.")
+    artifact_ids = {artifact.id for artifact in store.load_artifacts(cid)}
+    objects = []
+    for selection in selections:
+        if not isinstance(selection, dict):
+            return _err(400, "Every selection needs an artifact and object id.")
+        aid = str(selection.get("artifact_id", ""))
+        oid = str(selection.get("object_id", ""))
+        if aid not in artifact_ids:
+            return _err(404, "A selected source does not belong to this course.")
+        obj = next((item for item in store.load_learning_objects(cid, aid) if item.id == oid), None)
+        if obj is None:
+            return _err(404, "A selected source object was not found in this course.")
+        objects.append(obj)
+    return answer_selected(question, objects, get_client())
 
 
 @app.post("/api/import/preview")

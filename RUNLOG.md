@@ -175,3 +175,27 @@ Round 2 done — pass — the app was booted for the first time, verified agains
 **Drift check:** course isolation gained adversarial typed-object API coverage. Grounding gained exact locators and versioned source identity. Originals are byte-verified. Unchanged imports avoid duplicate processing. Failed artifacts quarantine and retry. Credential handling was not changed. Warnings and unsupported structures are visible. The legacy slide pipeline and viewer remained green.
 
 Capability Round 1 done: FAIL, six-format import and measured structural fidelity shipped. Native mixed viewers and selected-context questions remain.
+
+## Capability Round 2: 2026-09-09T00:06:47+0800
+
+**Goal and invariants:** build a five-course companion that lets a student import, inspect, search, understand, question, practise, and verify mixed material. Preserve structural course isolation, exact grounding, byte-preserved originals, resumable idempotent processing, credential secrecy, and honest uncertainty.
+
+**Frozen bar:** both required hashes matched before work and in every critic run. The capability assessment was `2c51dd51651b8b0467986f85836f4377dde66bb0f039e91ef5f0cff6413a9587`. `SPEC.md` was `7641e3135ce5eb7b5369393f72ad875eb70af8bc51178af3e0165b45e7b9e875`.
+
+**Item chosen and why:** native viewers and selected-context questions were the largest failure left by Capability Round 1. Without them, typed extraction was not usable by a student and exact provenance could not be operated in the product.
+
+**Attempt:** added read-only artifact routes and browser views for PDF, PPTX, DOCX, XLSX, CSV, and IPYNB. Added paginated object loading, sheet selection, exact course-artifact-object URLs, current-source focus, copyable source links, source selection, bounded grounded questions, citations, uncertainty, and explicit remote disclosure. Preserved reference page renders. Added structured workbook and dataset displays, real DOCX image rendering, saved notebook plot rendering, course-scoped media routes, 32 MiB media limits, byte and MIME validation, and a rerunnable real browser gate.
+
+**Measured results:** `.venv/bin/python -m pytest -q` passed 148 tests. `.venv/bin/python scripts/verify_real_corpus.py` imported all 29 files, produced 32,757 typed objects, reported four explicit degradations, and found zero failures. The Chromium gate passed PDF, PPTX, DOCX, XLSX, CSV, and IPYNB at 1280x720 and 1440x900. It verified exact citation and deep-link round trips, structured XLSX and CSV evidence, sheet metadata, real Word images, saved notebook plots, no horizontal overflow, and no console errors. Production paths contained no key-like strings. No paid model call was made.
+
+**Critic verdict:** full frozen product bar FAIL. Round 2 increment PASS from the final fresh critic. True permission-enforced holdout separation remains unavailable because all agents share readable filesystem access, so that protocol gate remains failed.
+
+**Largest remaining gap:** course-scoped cross-artifact search and a concept relationship view are absent. Broader computational notebook execution, workbook verification, and subject-aware workflows also remain.
+
+**Shipped work:** six native viewers, typed exact URLs, selected-context grounded questions, structured evidence serialization, remote disclosure, saved embedded visual rendering, media hardening, 148-test coverage, a real-corpus verifier, a two-viewport browser gate, and truthful documentation.
+
+**Rejected work and do-not-repeat notes:** a stale hash-navigation selector was rejected and replaced with artifact-load synchronization. Text-only question evidence was rejected because it hid formulas and dataset statistics. Filtering sheet objects was rejected because it broke exact sheet links. Metadata-only treatment of saved visuals was rejected. MIME declarations without byte validation were rejected. An occupied critic port produced missing browser evidence, so the critic reran on a known-free port rather than disturbing the listener.
+
+**Drift check:** course isolation covers artifact data, questions, citations, and media. Exact grounding covers every observed typed object and selected evidence. Original bytes remain untouched. Import idempotence and the slide resume system remain green. Credential handling was unchanged and scanned. Parser degradation, uncertainty, and remote transmission remain explicit. The new views passed both required viewport sizes.
+
+Capability Round 2 done: FAIL, the native six-format viewer and selected-context question increment passed independently. Cross-artifact search and concept relationships remain.

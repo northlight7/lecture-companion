@@ -69,8 +69,9 @@ Word blocks and tables, workbook sheets and cells, CSV fields, and notebook
 cells and outputs are extracted into typed learning objects. Each object has a
 stable locator that resolves to its exact page, slide, speaker note, document
 block, sheet and cell, chart, notebook cell and output, or dataset field. The
-current browser viewer still presents slide decks only. Native viewers for the
-other formats are not implemented yet.
+browser provides native read-only views for every format, including rendered
+pages, ordered Word blocks, workbook sheets and cells, bounded dataset previews,
+and notebook cells and outputs. Every source object has a copyable deep link.
 
 If you have a pile of files and no course yet, drop them all in. The app groups
 them into proposed courses by course code and filename prefix and shows you the
@@ -79,6 +80,13 @@ grouping before anything is written.
 **Read.** The course list opens into a two-pane viewer: the rendered slide, and
 the explanation with its heading, body, a set-off example, and a mermaid diagram
 where one helps. Arrow keys move between slides. Light and dark themes.
+
+**Ask selected context.** In any artifact viewer, select up to twelve source
+objects and ask a question. The answer is restricted to those objects and cites
+their exact deep links. The UI states what is sent remotely. Only the question
+and bounded selected excerpts go to DeepSeek. Original files, unselected
+objects, and other courses are excluded. Offline demo mode returns a local,
+deterministic evidence-only answer.
 
 **Every course is sealed.** A course's slides, reference documents, overview,
 retrieval index and running summary all live in its own directory, and nothing
@@ -146,9 +154,11 @@ their text and marked `[no renderer: text-only extraction]` so you can tell.
 
 Everything is under `Courses/<course-id>/` in this directory — slides,
 extracted text, explanations, the retrieval index, and the progress checkpoint.
-It is gitignored and never leaves your machine. The only thing that goes over
-the network is a slide image plus its context, to DeepSeek, when you ask for an
-explanation.
+It is gitignored and never leaves your machine by default. A slide image with
+its bounded context goes to DeepSeek when you request an explanation. A question
+and the bounded source objects you explicitly selected go to DeepSeek when you
+ask selected context. Original files, unselected objects, and other courses are
+not sent by the question workflow.
 
 ## Status, honestly
 
@@ -187,9 +197,9 @@ Known limits:
   implemented but has not been measured.
 - `.pptx` rendering has been exercised on a small deck; complex decks with
   animations, embedded video or unusual fonts are untested.
-- DOCX, XLSX, CSV, and IPYNB have deterministic structure-preserving import and
-  API access, but do not yet have native browser viewers, search, explanation,
-  question answering, or resumable model processing.
+- DOCX, XLSX, CSV, and IPYNB have native read-only viewers and cited
+  selected-context questions. They do not yet have cross-artifact search,
+  generated explanations, or resumable model processing.
 - The offline stub writes deliberately mechanical prose. It exists to verify
   the machinery for free, not to demonstrate explanation quality — judge that
   with a real key.
