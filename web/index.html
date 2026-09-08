@@ -84,8 +84,8 @@
         <section>
           <h2>Add files to this course</h2>
           <div class="drop" id="course-drop" tabindex="0" role="button"
-               aria-label="Drop slides or a syllabus into this course">
-            <p class="drop-main">Drop slides or a syllabus</p>
+               aria-label="Drop course files into this course">
+            <p class="drop-main">Drop course files</p>
             <p class="drop-sub">or <span class="linky">choose files</span></p>
             <input type="file" id="course-input" multiple accept=".pdf,.pptx,.docx,.xlsx,.csv,.ipynb" hidden>
           </div>
@@ -128,6 +128,40 @@
       <div class="pane pane-read">
         <article class="reading" id="reading"></article>
       </div>
+    </div>
+  </section>
+
+  <!-- --------------------------------------------- native artifact viewer -->
+  <section class="screen artifact-viewer" id="screen-artifact" data-native-viewer hidden>
+    <div class="viewer-bar">
+      <a class="back" id="artifact-back" href="#/">Course</a>
+      <div class="viewer-title" id="artifact-title">Artifact</div>
+      <a class="btn btn-quiet" id="artifact-original" href="#">Original</a>
+    </div>
+    <div class="artifact-controls">
+      <label id="sheet-label" for="artifact-sheet" hidden>Sheet</label>
+      <select id="artifact-sheet" hidden></select>
+      <span class="source-location" id="source-location" aria-live="polite"></span>
+      <button class="btn btn-quiet copy-source-link" id="copy-source-link" type="button">Copy source link</button>
+    </div>
+    <div class="artifact-meta quality-warning" id="artifact-warning" role="status" hidden></div>
+    <div class="artifact-panes">
+      <section class="native-source" aria-labelledby="native-source-title">
+        <h1 id="native-source-title">Source</h1>
+        <div class="native-viewer" id="native-viewer"></div>
+        <div class="object-pager" id="artifact-more" hidden>
+          <button class="btn btn-quiet" id="load-more-objects" type="button">Load more</button>
+        </div>
+      </section>
+      <aside class="question-panel" aria-labelledby="question-title">
+        <h2 id="question-title">Ask about selected context</h2>
+        <p class="help">Select source blocks, cells, fields, or notebook cells. When connected, only your question and those bounded excerpts are sent to DeepSeek. Original files, unselected material, and other courses are not sent. Offline demo answers stay local.</p>
+        <div id="selected-context" class="selected-summary" aria-live="polite">Nothing selected.</div>
+        <label for="context-question">Question</label>
+        <textarea id="context-question" rows="4" placeholder="What does this selected evidence mean?"></textarea>
+        <button class="btn btn-primary ask-selected-context" id="ask-selected-context" type="button">Ask selected context</button>
+        <div id="question-answer" class="question-answer" aria-live="polite"></div>
+      </aside>
     </div>
   </section>
 

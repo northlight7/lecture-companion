@@ -328,8 +328,11 @@ def extract_csv(path: Path, artifact_id: str) -> list[LearningObject]:
     fields = [str(f) for f in (reader.fieldnames or [])]
     stats = {field: {"missing": 0, "types": Counter(), "samples": [], "unique": set()} for field in fields}
     row_count = 0
+    sample_rows: list[dict[str, str]] = []
     for row in reader:
         row_count += 1
+        if len(sample_rows) < 20:
+            sample_rows.append({field: str(row.get(field) or "") for field in fields})
         for field in fields:
             value = str(row.get(field) or "")
             stat = stats[field]
@@ -343,7 +346,10 @@ def extract_csv(path: Path, artifact_id: str) -> list[LearningObject]:
                 stat["unique"].add(value)
     objects = [_obj(
         artifact_id, "csv", "dataset", text=path.name,
-        data={"row_count": row_count, "column_count": len(fields), "encoding": encoding, "delimiter": dialect.delimiter},
+        data={
+            "row_count": row_count, "column_count": len(fields), "encoding": encoding,
+            "delimiter": dialect.delimiter, "fields": fields, "sample_rows": sample_rows,
+        },
         fragment="dataset",
     )]
     for field in fields:

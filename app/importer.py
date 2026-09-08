@@ -229,6 +229,8 @@ def import_files(
                 ))
             else:
                 store.save_ref_text(course_id, file_id, sample if sample.strip() else "")
+                if pages:
+                    _preserve_reference_renders(store, course_id, artifact_id, out_dir)
                 _discard_dir(out_dir)
                 result.filed.append(FiledItem(
                     filename=base, file_id=file_id, role="reference",
@@ -269,6 +271,16 @@ def _discard_dir(path: Path) -> None:
         shutil.rmtree(path)
     except Exception:  # noqa: BLE001
         pass
+
+
+def _preserve_reference_renders(store, course_id: str, artifact_id: str, source: Path) -> None:
+    """Keep native page images without creating a legacy slide deck."""
+    import shutil
+
+    destination = store.artifact_renders_dir(course_id, artifact_id)
+    destination.mkdir(parents=True, exist_ok=True)
+    for image in source.glob("page-*.png"):
+        shutil.copy2(image, destination / image.name)
 
 
 # --------------------------------------------------------------------------

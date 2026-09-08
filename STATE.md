@@ -6,7 +6,7 @@ Overwritten each round. History lives in `RUNLOG.md`.
 
 Build a robust companion across the five real courses so a student can import, inspect, search, understand, question, practise, and verify mixed material. Preserve structural course isolation, exact grounding, byte-preserved originals, resumable idempotent processing, credential secrecy, and honest uncertainty.
 
-Frozen inputs verified at Capability Round 1:
+Frozen inputs verified at Capability Round 2:
 
 - `.internal/course-material-capability-assessment.md`: `2c51dd51651b8b0467986f85836f4377dde66bb0f039e91ef5f0cff6413a9587`
 - `SPEC.md`: `7641e3135ce5eb7b5369393f72ad875eb70af8bc51178af3e0165b45e7b9e875`
@@ -16,53 +16,58 @@ Frozen inputs verified at Capability Round 1:
 | Area | Current measured evidence | Status |
 |---|---|---|
 | Six-format import | 29 of 29 real files, exact distribution, zero failures | done |
-| Typed evidence | 32,757 objects with page, slide, note, block, sheet, cell, range, chart, notebook, output, and field locators | done foundation |
+| Typed evidence | 32,757 objects with exact artifact-native locators | done foundation |
 | Original preservation | SHA-256 round trip checked for every real artifact | done |
-| Hierarchy and deduplication | Relative paths retained, repeated bytes keep occurrences and share one stored original | done |
-| Incremental and failed imports | Unchanged imports no-op, changed paths version, failed artifacts quarantine and retry | done |
-| Extraction fidelity | Per-format source-versus-object counts and workbook feature inventory pass | done for measured structures |
-| Legacy slide system | 143 tests and eight-screen G2 pass | done, no regression measured |
-| Native mixed viewers | Slide viewer only | fail |
-| Selected-context questions | Not implemented | fail |
+| Native mixed viewers | Six formats pass at 1280x720 and 1440x900 | done |
+| Exact source links | Direct typed-object focus passes, including non-first XLSX sheets | done |
+| Selected-context questions | Structured evidence, citations, disclosure, and isolation pass | done foundation |
+| Embedded visuals | Real DOCX images and saved IPYNB plots render with byte validation | done |
+| Offline regression | 148 tests pass | done for current scope |
 | Cross-artifact search and graph | Not implemented | fail |
-| Subject-aware workflows | Benchmark exists, product workflows not implemented | fail |
+| Resumable mixed-artifact model work | Slide workflow only | fail |
+| Computational and subject-aware workflows | Benchmark exists, product workflows not implemented | fail |
 
 ## Decisions
 
-- The orchestrator extended `app/contracts.py` with `Artifact`, `LearningObject`, and `SourceLocator`. The slide types remain backward compatible. This was necessary because the frozen slide-only contract cannot represent the frozen six-format capability bar.
-- Artifact identity separates a byte content hash from a path occurrence id. This deduplicates storage while retaining intentional week-level references.
-- Parser degradation is never hidden. Warnings lower extraction quality and unsupported workbook package parts are retained with byte hashes for exact recovery.
-- Rich notebook output data stays local in typed objects. CSV ingestion profiles complete local data without sending entire datasets to a model.
-- True permission-enforced holdout separation is unavailable because all agents share the filesystem. Every round must continue to report that protocol gate as failed.
+- Native viewers remain local and read-only. Originals are downloaded separately and never rewritten.
+- Exact object URLs carry course, artifact, and object identity. XLSX links select the locator's sheet before rendering.
+- Selected-question evidence always includes object type, exact locator, structured data, and extracted text within fixed object and request budgets.
+- Only explicit selected excerpts can reach DeepSeek. Offline fake answers remain local and the UI states both cases before submission.
+- Embedded DOCX and notebook raster images are served only through course-scoped object routes. Decoded media is limited to 32 MiB and validated by image format before response.
+- True permission-enforced holdout separation is unavailable because all agents share the filesystem. Every round continues to report that protocol gate as failed.
 
 ## Work queue
 
-1. Build native read-only viewers for DOCX, XLSX, CSV, and IPYNB plus exact deep links and selected-context questions at 1280x720 and 1440x900.
-2. Index typed objects and add course-scoped search, evidence citations, version staleness, and a cross-artifact concept graph.
-3. Extend resumable model processing and schema validation to every artifact type with interruption and duplicate-billing tests.
-4. Add safe notebook execution, workbook inspection, and deterministic calculation verification.
-5. Implement the five subject-aware workflows and golden tasks.
-6. Run the two-pass live DeepSeek sample within the remaining $5 cap, then clean-checkout, security, accessibility, and smoke gates.
+1. Index typed objects and add course-scoped cross-artifact search, evidence citations, version staleness, and a concept relationship view.
+2. Extend resumable model processing and schema validation to every artifact type with interruption and duplicate-billing tests.
+3. Add safe notebook execution, workbook inspection, and deterministic calculation verification.
+4. Implement the five subject-aware workflows and golden tasks for spreadsheets, notebook diagnostics, ER notation, ethics balance, and finance leakage.
+5. Run the two-pass live DeepSeek sample within the remaining $5 cap, then clean-checkout, security, accessibility, and smoke gates.
 
 ## Rejected attempts and do-not-repeat notes
 
-- Treating any non-empty learning-object set as proof of extraction fidelity was rejected. Compare source structure against extracted structure by format.
-- Letting parser warnings print while reporting perfect extraction was rejected. Capture them, lower quality, and preserve unsupported package parts.
-- `uv sync --extra dev` was rejected for environment setup because `dev` is declared as an optional dependency. Use `uv pip install --python .venv/bin/python -e '.[dev]'` as `run.sh` does.
-- Diagnostic snippets must use the function-based `process_course` API. There is no `Pipeline` class.
-- Ports 8799 and 8801 were already occupied during this round. Use a verified free port.
+- A browser gate that selected the previous artifact's object during hash navigation was rejected. Wait for `data-artifact-id` before interacting.
+- Relying on the browser's default `[hidden]` rule was rejected because author CSS overrode it. Keep the explicit global hidden rule.
+- Sending `obj.text` alone was rejected. Dataset filenames, field names, and formula text omit the structured facts a student selected.
+- Omitting XLSX sheet objects from the grid was rejected because exact sheet links and sheet-level metadata then disappear.
+- Treating metadata-only image objects as a native viewer was rejected. Render preserved DOCX images and saved notebook raster outputs.
+- Trusting a declared image MIME type was rejected. Validate byte content and enforce size limits before serving it.
+- Port 45679 was occupied during critic verification. Use a verified free port and do not disturb unknown listeners.
+- True blind holdout isolation cannot be claimed in this shared filesystem.
 
 ## CURRENT STATE
 
-Capability Round 1 is complete. The independent critic passed the six-format fidelity increment and returned full-bar FAIL. Its single largest remaining product gap is the native six-format viewer and selected-context question workflow. Holdout source was independently authored, but isolation was procedural rather than permission-enforced.
+Capability Round 2 is complete. The full frozen product bar remains FAIL. The final independent critic passed the Round 2 increment after earlier critics exposed missing XLSX sheet links, lossy structured question evidence, unrendered embedded visuals, and unvalidated media bytes. Each largest gap was fixed and remeasured before the round closed.
 
 Measured rerunnable commands:
 
 ```bash
 .venv/bin/python -m pytest -q
 .venv/bin/python scripts/verify_real_corpus.py
-LC_COURSES_ROOT=.internal/g2-round1-run LC_FAKE_MODEL=1 LC_PORT=45678 ./run.sh
-.venv/bin/python scripts/gate_g2.py --base http://127.0.0.1:45678 --course round-1-g2 --deck deck-8b13a0e40cdc --last 5 --shots .internal/round1-shots
+LC_COURSES_ROOT=.internal/native-viewer-courses LC_FAKE_MODEL=1 LC_PORT=45701 ./run.sh
+.venv/bin/python scripts/gate_native_viewers.py --base http://127.0.0.1:45701 --courses-root .internal/native-viewer-courses --shots .internal/native-viewer-shots
 ```
+
+Measured results: 148 tests passed. The real corpus gate imported 29 artifacts and produced 32,757 objects with zero structural failures and four explicit degradations. The browser gate passed all six formats at both required viewports with exact link and citation round trips, structured XLSX and CSV evidence, real DOCX images, saved notebook plots, no console errors, and no horizontal overflow.
 
 No paid model call was made in this round.

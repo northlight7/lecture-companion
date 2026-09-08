@@ -4,14 +4,18 @@ from __future__ import annotations
 
 import csv
 import json
+import zipfile
 from io import BytesIO, StringIO
+from pathlib import Path
 
 from docx import Document
 from fastapi.testclient import TestClient
 from openpyxl import Workbook
 from openpyxl.chart import BarChart, Reference
+from PIL import Image
 
 from app.importer import import_files
+from app.questions import evidence_text
 
 
 def _docx() -> bytes:
@@ -19,6 +23,10 @@ def _docx() -> bytes:
     doc = Document()
     doc.add_heading("ER modelling tutorial", 1)
     doc.add_paragraph("Draw an entity relationship diagram?")
+    picture = BytesIO()
+    Image.new("RGB", (12, 8), "blue").save(picture, format="PNG")
+    picture.seek(0)
+    doc.add_picture(picture)
     table = doc.add_table(rows=2, cols=2)
     table.cell(0, 0).text = "Entity"
     table.cell(0, 1).text = "Identifier"
@@ -55,6 +63,9 @@ def _ipynb() -> bytes:
              "source": ["print('rmse')"], "outputs": [
                  {"output_type": "stream", "name": "stdout", "text": ["rmse\n"]},
                  {"output_type": "error", "ename": "ValueError", "evalue": "bad metric", "traceback": ["trace"]},
+                 {"output_type": "display_data", "data": {
+                     "image/png": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+                 }, "metadata": {}},
              ]},
         ],
         "metadata": {"kernelspec": {"name": "python3"}}, "nbformat": 4, "nbformat_minor": 5,
@@ -86,10 +97,16 @@ def test_all_new_formats_import_with_typed_exact_locators(store):
     formula = next(obj for obj in objects if obj.object_type == "cell" and obj.locator.cell_range == "C2")
     assert formula.data["formula"] == "=B2*2"
     assert formula.locator.sheet == "Returns"
+    assert '"formula": "=B2*2"' in evidence_text(formula)
+    sheet = next(obj for obj in objects if obj.object_type == "sheet")
+    assert '"auto_filter": "A1:C3"' in evidence_text(sheet)
     output = next(obj for obj in objects if obj.object_type == "notebook_output" and obj.data["output_type"] == "error")
     assert output.locator.notebook_cell == 1 and output.locator.output == 1
     field = next(obj for obj in objects if obj.object_type == "dataset_field" and obj.text == "return")
     assert field.data["missing_count"] == 1 and field.locator.dataset_field == "return"
+    assert '"missing_count": 1' in evidence_text(field)
+    dataset = next(obj for obj in objects if obj.object_type == "dataset")
+    assert '"column_count": 3' in evidence_text(dataset) and '"row_count": 2' in evidence_text(dataset)
 
 
 def test_incremental_unchanged_import_does_not_duplicate_objects(store):
@@ -186,3 +203,110 @@ def test_failed_artifact_can_be_retried_without_duplicate_manifest_rows(store):
     assert good.errors == []
     assert len(store.load_artifacts(course.id)) == 1
     assert store.load_artifacts(course.id)[0].version == 2
+
+
+def test_native_view_api_paginates_sheets_and_serves_reference_pdf_render(store):
+    course = store.create_course("Native views")
+    syllabus = (Path(__file__).parent / "fixtures" / "syllabus.pdf").read_bytes()
+    result = import_files(store, course.id, [
+        ("L1/syllabus.pdf", syllabus), ("L2/book.xlsx", _xlsx()),
+    ])
+    by_kind = {item.kind: item for item in result.filed}
+    from app.main import app
+
+    with TestClient(app) as client:
+        workbook = client.get(
+            f"/api/courses/{course.id}/artifacts/{by_kind['xlsx'].artifact_id}/view",
+            params={"sheet": "Returns", "limit": 2},
+        )
+        assert workbook.status_code == 200
+        body = workbook.json()
+        assert body["selected_sheet"] == "Returns" and body["limit"] == 2
+        assert body["total_objects"] > 2 and body["has_more"] is True
+        pdf_objects = client.get(
+            f"/api/courses/{course.id}/artifacts/{by_kind['pdf'].artifact_id}/objects"
+        ).json()
+        page = next(obj for obj in pdf_objects if obj["object_type"] == "page")
+        render = client.get(
+            f"/api/courses/{course.id}/artifacts/{by_kind['pdf'].artifact_id}/render/{page['locator']['page']}"
+        )
+        assert render.status_code == 200 and render.content.startswith(b"\x89PNG")
+
+
+def test_embedded_docx_and_notebook_images_render_from_course_scoped_objects(store):
+    course = store.create_course("Embedded visuals")
+    result = import_files(store, course.id, [("visual.docx", _docx()), ("plot.ipynb", _ipynb())])
+    by_kind = {item.kind: item for item in result.filed}
+    objects = store.load_learning_objects(course.id)
+    doc_image = next(obj for obj in objects if obj.artifact_id == by_kind["docx"].artifact_id and obj.object_type == "image")
+    plot = next(obj for obj in objects if obj.artifact_id == by_kind["ipynb"].artifact_id and "image/png" in obj.data.get("mime_types", []))
+    from app.main import app
+
+    with TestClient(app) as client:
+        for artifact_id, object_id in ((doc_image.artifact_id, doc_image.id), (plot.artifact_id, plot.id)):
+            response = client.get(f"/api/courses/{course.id}/artifacts/{artifact_id}/objects/{object_id}/media")
+            assert response.status_code == 200
+            assert response.headers["content-type"] == "image/png"
+            assert response.content.startswith(b"\x89PNG")
+        foreign = store.create_course("Foreign visuals")
+        rejected = client.get(f"/api/courses/{foreign.id}/artifacts/{plot.artifact_id}/objects/{plot.id}/media")
+        assert rejected.status_code == 404
+
+
+def test_malformed_embedded_docx_image_is_not_served_as_trusted_media(store):
+    original = BytesIO(_docx())
+    damaged = BytesIO()
+    with zipfile.ZipFile(original) as source, zipfile.ZipFile(damaged, "w", zipfile.ZIP_DEFLATED) as target:
+        for info in source.infolist():
+            content = source.read(info.filename)
+            if info.filename.startswith("word/media/"):
+                content = b"not an image"
+            target.writestr(info, content)
+    course = store.create_course("Damaged media")
+    imported = import_files(store, course.id, [("damaged.docx", damaged.getvalue())])
+    artifact_id = imported.filed[0].artifact_id
+    image = next(obj for obj in store.load_learning_objects(course.id, artifact_id) if obj.object_type == "image")
+    from app.main import app
+
+    with TestClient(app) as client:
+        response = client.get(f"/api/courses/{course.id}/artifacts/{artifact_id}/objects/{image.id}/media")
+    assert response.status_code == 404 and "invalid" in response.json()["error"].lower()
+
+
+def test_selected_context_question_is_grounded_cited_and_course_scoped(store, monkeypatch):
+    monkeypatch.setenv("LC_FAKE_MODEL", "1")
+    course_a = store.create_course("Question A")
+    course_b = store.create_course("Question B")
+    imported_a = import_files(store, course_a.id, [("facts.csv", b"term,value\nalpha,42\n")])
+    imported_b = import_files(store, course_b.id, [("facts.csv", b"term,value\nbeta,7\n")])
+    aid = imported_a.filed[0].artifact_id
+    obj = next(item for item in store.load_learning_objects(course_a.id, aid) if item.text == "value")
+    foreign = imported_b.filed[0].artifact_id
+    from app.main import app
+
+    with TestClient(app) as client:
+        response = client.post(f"/api/courses/{course_a.id}/questions", json={
+            "question": "What does the selected field show?",
+            "selections": [{"artifact_id": aid, "object_id": obj.id}],
+        })
+        assert response.status_code == 200
+        body = response.json()
+        assert "[S1]" in body["answer"]
+        assert '"missing_count": 0' in body["answer"] and '"row_count": 1' in body["answer"]
+        assert body["citations"][0]["object_id"] == obj.id
+        assert body["citations"][0]["locator"]["dataset_field"] == "value"
+        assert body["remote_disclosure"]["sent_remote"] is False
+        rejected = client.post(f"/api/courses/{course_a.id}/questions", json={
+            "question": "Leak?",
+            "selections": [{"artifact_id": foreign, "object_id": "anything"}],
+        })
+        assert rejected.status_code == 404
+
+
+def test_frontend_exposes_native_view_and_selected_question_controls():
+    html = (Path(__file__).parents[1] / "web" / "index.html").read_text("utf-8")
+    script = (Path(__file__).parents[1] / "web" / "app.js").read_text("utf-8")
+    for marker in ("data-native-viewer", "source-location", "copy-source-link", "ask-selected-context"):
+        assert marker in html
+    assert "/questions" in script and "/artifacts/" in script
+    assert "sheet-metadata" in script and "native-embedded" in script

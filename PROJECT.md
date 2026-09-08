@@ -6,7 +6,7 @@ A local web app that turns mixed course material into a grounded, plain-language
 
 ## Status
 
-The slide pipeline remains green. Capability Round 1 added measured six-format ingestion and typed exact-locator evidence for all 29 real course files. The expanded product bar still fails because native mixed-artifact viewers and selected-context questions are not implemented.
+The slide pipeline remains green. Capability Round 2 added native six-format viewers, exact object links, and grounded selected-context questions. Its final independent critic passed the increment. The expanded product bar still fails because cross-artifact search, concept relationships, computational tools, and subject-aware learning workflows are not implemented.
 
 ## Current progress
 
@@ -16,7 +16,10 @@ The slide pipeline remains green. Capability Round 1 added measured six-format i
 - Done: converted the findings into a detailed capability assessment at `.internal/course-material-capability-assessment.md`.
 - Done: ran 24 live DeepSeek requests across eight representative course tasks. The initial token budget produced 6 of 8 usable structured responses. The corrected configuration produced 16 of 16 across two passes.
 - Done: objectives O1 to O7 for the original slide pipeline are verified. This includes boot, structural course isolation, grounding, key protection, resumability without repeat model calls, truthful documentation, and responsive layout.
-- Next: build native read-only viewers and exact deep links for every artifact type, then add selected-context questions at 1280x720 and 1440x900.
+- Done: native read-only viewers operate PDF, PPTX, DOCX, XLSX, CSV, and IPYNB at 1280x720 and 1440x900 without measured console errors or horizontal overflow.
+- Done: exact object links and selected-context questions preserve typed locators, structured evidence, citations, uncertainty, remote disclosure, and course isolation.
+- Done: real Word images and saved notebook plots render from byte-validated course-local media endpoints.
+- Next: index typed objects for course-scoped cross-artifact search, version staleness, and a concept relationship view.
 
 ## Decisions
 
@@ -32,6 +35,8 @@ The slide pipeline remains green. Capability Round 1 added measured six-format i
 - PDF pages use pypdfium2 for rendering and pypdf for text. PowerPoint files use headless soffice for rendering and python-pptx for text and speaker notes.
 - Retrieval uses one index per course. The signed hashing embedder is the offline default and `intfloat/multilingual-e5-small` is optional. Switching embedders requires rebuilding that course's index.
 - File identifiers are content-addressed with SHA-256 so identical bytes are not processed or billed twice. Intentional week-level references to repeated material must still be retained.
+- Selected questions send only the question and bounded selected evidence when connected. Structured metadata precedes extracted prose so formulas, cached values, dataset profiles, and sheet state remain answerable.
+- Embedded DOCX and notebook raster visuals are capped at 32 MiB and verified against their declared image type before serving.
 
 ## Notes
 
@@ -41,4 +46,4 @@ The slide pipeline remains green. Capability Round 1 added measured six-format i
 - Public repository: `northlight7/lecture-companion`.
 - Detailed backend research and test evidence lives at `.internal/model-backend-evaluation.md`.
 - `.venv/bin/python scripts/verify_real_corpus.py` reruns the read-only 29-file import and structural fidelity gate.
-- The current browser UI remains slide-native. DOCX, XLSX, CSV, and IPYNB are available through typed APIs but do not yet have native viewers or question workflows.
+- `.venv/bin/python scripts/gate_native_viewers.py --courses-root <project-internal-course-root>` reruns the six-format viewer, exact-link, selected-question, embedded-media, viewport, overflow, and console gate against a running fake-model server.
