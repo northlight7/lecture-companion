@@ -1,5 +1,8 @@
 # Lecture Companion — durable decisions
 
+Project state lives in `PROJECT.md` (the shared record any tool reads cold). This file is the
+tool-specific durable decisions.
+
 Read `SPEC.md` for the bar (frozen). Read `STATE.md` for where the loop is.
 `RUNLOG.md` is append-only history. `app/contracts.py` is the frozen interface
 contract: every module imports its shared types from there.
