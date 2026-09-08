@@ -2,53 +2,33 @@
 
 ## What this is
 
-A local web app (FastAPI backend, one-command start, no-build browser frontend) that turns a
-course's lecture slides into a plain-language textbook, for a new MSc student. A DeepSeek vision
-model writes the explanations; everything else runs locally.
+A local web app that turns mixed course material into a grounded, plain-language learning companion for a new MSc student. The current build is a FastAPI backend with a no-build browser frontend. A DeepSeek vision model writes explanations while storage, retrieval, and processing run locally.
 
 ## Status
 
-Round 2 complete in substance. One critic pass banked (PASS). The only thing between here and
-the exit condition is a second independent critic pass.
+The slide-based foundation is working and its first independent critic pass passed. An audit of all currently released material from five courses is complete. The actual source set expands the product beyond slides into documents, spreadsheets, notebooks, datasets, exercises, diagrams, equations, code, and argument-based learning.
 
 ## Current progress
 
-- Next: run critic pass 2 (fresh window, blind authorship, reads SPEC.md first) on a clean,
-  pushed tree. Do not edit the repo while it judges — pass 1 was weakened by a concurrent
-  mutation.
-- Done: objectives O1–O7 (boot, structural course isolation, grounding, no key leak, resumable
-  without re-calling the model, truthful README, no-viewport-overflow) all verified live and
-  stubbed. Critic pass 1 passed at `636c8de`; all six of its non-gate findings are fixed.
+- Done: audited 29 course files across PDF, PowerPoint, Word, Excel, CSV, and Jupyter Notebook formats. Parsed their structure and visually reviewed all PDFs, PowerPoint decks, and Word tutorials.
+- Done: converted the findings into a detailed capability assessment at `.internal/course-material-capability-assessment.md`.
+- Done: objectives O1 to O7 for the original slide pipeline are verified. This includes boot, structural course isolation, grounding, key protection, resumability without repeat model calls, truthful documentation, and responsive layout.
+- Next: plan the typed learning-object architecture and phased build against the assessment, beginning with universal ingestion, exact citations, native artifact views, cross-artifact course links, and subject-aware validation.
 
 ## Decisions
 
-- DeepSeek `deepseek-v4-flash-vision-exp`, base `https://api.deepseek.com`, OpenAI-compatible
-  chat/completions, image sent as a base64 `data:` URL. HTTP 429 is the pause signal.
-- pypdfium2 (render) + pypdf (text), not PyMuPDF — permissive license vs AGPL, macOS arm64 wheels.
-- `.pptx` -> PDF via headless soffice; python-pptx supplies the text layer and speaker notes and
-  is the text-only fallback when soffice is absent.
-- Retrieval: a signed hashing embedder is the default (no forced torch download, tests stay
-  offline); `intfloat/multilingual-e5-small` is opt-in. Both 384-dim, so an index built with one
-  is the wrong shape for the other — rebuild a course's index after switching.
-- One `index.jsonl` per course dir + numpy cosine, not a vector DB — a course is hundreds of
-  slides, and one jsonl per course makes isolation structural.
-- `file_id` is content-addressed (sha256 of bytes) so re-importing the same deck does not
-  duplicate it or bill every slide again.
-- Course-list state is derived from counts, not stored, so a course cannot read "done" while
-  some slides are still unexplained.
+- Preserve the proven structural course isolation and resumability mechanisms.
+- Replace the slide-only content model with typed learning objects. A learning object can be a slide, note, document block, exercise, spreadsheet range, chart, notebook cell, output, dataset field, equation, diagram, or argument.
+- Exact source locators and inspectable evidence are required across every artifact type.
+- The shared architecture must be domain-neutral, with subject-aware teaching and validation for spreadsheets, analytics code, database diagrams, ethical reasoning, and finance.
+- DeepSeek `deepseek-v4-flash-vision-exp` uses the OpenAI-compatible chat completions endpoint at `https://api.deepseek.com`. Images are sent as base64 data URLs and HTTP 429 pauses processing.
+- PDF pages use pypdfium2 for rendering and pypdf for text. PowerPoint files use headless soffice for rendering and python-pptx for text and speaker notes.
+- Retrieval uses one index per course. The signed hashing embedder is the offline default and `intfloat/multilingual-e5-small` is optional. Switching embedders requires rebuilding that course's index.
+- File identifiers are content-addressed with SHA-256 so identical bytes are not processed or billed twice. Intentional week-level references to repeated material must still be retained.
 
 ## Notes
 
-- Build loop: `SPEC.md` (frozen bar) -> `STATE.md` (current round state, overwritten each round)
-  -> `RUNLOG.md` (append-only history) -> git. STATE.md is the live "where is the loop" file.
-- Durable project rules (deliberate, stated up front): the DeepSeek API key lives only in the OS
-  keyring (service `lecture-companion`, account `deepseek-api-key`); `Courses/` is gitignored
-  user data; course isolation is structural; `app/contracts.py` is the frozen interface contract
-  (builder changes are an orchestrator decision, recorded in RUNLOG.md).
-- Run `./run.sh` (serves on :8765). `LC_FAKE_MODEL=1 ./run.sh` exercises the whole pipeline,
-  retrieval and frontend with no key and no spend. `.venv/bin/python -m pytest` runs offline and
-  free.
-- Public repo `northlight7/lecture-companion`; push at every round boundary. Never commit a key,
-  credential, or the `Courses/` data.
-- Known limits: the e5 path is implemented but unmeasured; complex `.pptx` (animations, embedded
-  video, unusual fonts) is untested; the offline stub writes deliberately mechanical prose.
+- Run `./run.sh` to serve on port 8765. `LC_FAKE_MODEL=1 ./run.sh` exercises the existing slide pipeline without an API key or model spend.
+- `.venv/bin/python -m pytest` runs the current offline suite.
+- Durable project rules remain unchanged. The DeepSeek key lives only in the OS keyring under service `lecture-companion` and account `deepseek-api-key`. `Courses/` is gitignored user data. Course isolation is structural.
+- Public repository: `northlight7/lecture-companion`.
