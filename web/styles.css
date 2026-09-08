@@ -312,6 +312,32 @@ label {
 }
 
 .help { font-size: .8125rem; color: var(--ink-3); margin: .5rem 0 0; max-width: 52ch; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+.knowledge-panel { margin: 1.5rem 0 2rem; padding: clamp(1rem, 2.5vw, 1.5rem); border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface-2); }
+.knowledge-head { display: flex; align-items: start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.knowledge-head h2 { margin-bottom: .25rem; }
+.course-search { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .6rem; margin-top: 1rem; }
+.course-search input { min-width: 0; }
+.index-status[data-state="stale"] { color: var(--warn); }
+.search-results { display: grid; gap: .65rem; margin-top: 1rem; min-width: 0; }
+.search-result { min-width: 0; padding: .85rem 1rem; border: 1px solid var(--line-soft); border-radius: var(--r-md); background: var(--surface); }
+.search-result-head { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.search-result-link { display: block; margin-top: .35rem; color: var(--accent); overflow-wrap: anywhere; }
+.search-result p { margin: .4rem 0 0; overflow-wrap: anywhere; }
+.match-reason { color: var(--ink-3); font-size: .75rem; }
+.concept-graph { margin-top: 1.25rem; border-top: 1px solid var(--line); padding-top: 1.25rem; min-width: 0; }
+.concept-network { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); gap: .75rem; }
+.concept-node { min-width: 0; padding: .85rem; border: 1px solid var(--line-soft); border-radius: var(--r-md); background: var(--surface); }
+.concept-search { appearance: none; border: 0; padding: 0; background: transparent; color: var(--accent); font: 700 1rem/1.2 var(--sans); cursor: pointer; text-align: left; }
+.concept-node ul, .prerequisite-list { margin: .65rem 0 0; padding-left: 1.15rem; }
+.concept-node li, .prerequisite-list li { margin: .45rem 0; overflow-wrap: anywhere; }
+.concept-node li span, .prerequisite-list span { display: block; color: var(--ink-3); font-size: .75rem; }
+.prerequisite-list { max-width: 58rem; }
+
+@media (max-width: 520px) {
+  .course-search { grid-template-columns: 1fr; }
+}
 
 .field-error {
   font-size: .8125rem;

@@ -598,8 +598,128 @@ async function renderCourse(cid) {
       </a>`).join("")
     : `<p class="empty">Nothing uploaded yet.</p>`;
 
+  $("search-results").innerHTML = "";
+  $("concept-graph").hidden = true;
+  $("concept-graph").innerHTML = "";
+  try {
+    const knowledge = await getJSON(`/api/courses/${encodeURIComponent(cid)}/knowledge/status`);
+    paintKnowledgeStatus(knowledge, false);
+  } catch (err) {
+    $("knowledge-status").textContent = "Search status is unavailable.";
+  }
+
   if (course.progress.running || course.progress.state === "running") startPolling(cid);
 }
+
+function paintKnowledgeStatus(index, rebuilt) {
+  const status = $("knowledge-status");
+  if (rebuilt) {
+    status.textContent = `Search refreshed from ${index.artifact_count} current source files and ${index.object_count} exact source objects.`;
+    status.dataset.state = "ready";
+  } else if (index.stale) {
+    status.textContent = `Search needs refresh: ${index.reasons.join(", ")}. It will rebuild locally when you search or open relationships.`;
+    status.dataset.state = "stale";
+  } else {
+    status.textContent = `Local search is current for ${index.artifact_count} source files and ${index.object_count} source objects.`;
+    status.dataset.state = "ready";
+  }
+}
+
+function searchResultHtml(row, cid) {
+  return `<article class="search-result">
+    <div class="search-result-head">
+      <span class="native-object-type">${esc(row.artifact_kind)} · ${esc(row.object_type)}</span>
+      <span class="match-reason">${esc(row.matched_by)}</span>
+    </div>
+    <a class="search-result-link" href="${sourceHash(cid, row.artifact_id, row.object_id)}">
+      <strong>${esc(row.artifact_filename)}</strong> · ${esc(row.location)}
+    </a>
+    <p>${esc(row.snippet || "Structured source object")}</p>
+    ${row.relationship_reason ? `<p class="relationship-reason">Why related: ${esc(row.relationship_reason)}</p>` : ""}
+    <p class="help">Version ${esc(row.artifact_version)} · ${esc(row.artifact_purpose.replaceAll("_", " "))}</p>
+  </article>`;
+}
+
+$("course-search").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const cid = state.route.cid;
+  const query = $("course-search-query").value.trim();
+  if (!cid || !query) return;
+  const results = $("search-results");
+  results.innerHTML = SKELETON;
+  try {
+    const found = await getJSON(`/api/courses/${encodeURIComponent(cid)}/search?q=${encodeURIComponent(query)}&limit=20`);
+    paintKnowledgeStatus(found.index, found.rebuilt);
+    const expansion = found.expanded_concepts?.length
+      ? `<p class="help">Expanded through: ${found.expanded_concepts.map(esc).join(", ")}. ${esc(found.method)}</p>`
+      : `<p class="help">${esc(found.method)}</p>`;
+    results.innerHTML = expansion + (found.results.length
+      ? found.results.map((row) => searchResultHtml(row, cid)).join("")
+      : `<p class="empty">No matching source objects in this course.</p>`);
+  } catch (err) {
+    results.innerHTML = `<p class="field-error">${esc(err.message)}</p>`;
+  }
+});
+
+function graphHtml(graph, cid) {
+  const nodes = new Map(graph.nodes.map((node) => [node.id, node]));
+  const concepts = graph.nodes.filter((node) => node.node_type === "concept");
+  const evidence = graph.edges.filter((edge) => edge.relation === "appears_in");
+  const prerequisites = graph.edges.filter((edge) => edge.relation === "prerequisite_candidate");
+  const artifactLinks = graph.edges.filter((edge) => edge.relation === "explicit_reference");
+  const conceptCards = concepts.map((concept) => {
+    const links = evidence.filter((edge) => edge.from === concept.id).map((edge) => {
+      const artifact = nodes.get(edge.to);
+      const oid = edge.object_ids[0];
+      return `<li><a href="${sourceHash(cid, artifact.artifact_id, oid)}">${esc(artifact.label)}</a>
+        <span>${esc(artifact.kind)} · ${esc(edge.reason)}</span></li>`;
+    }).join("");
+    return `<article class="concept-node">
+      <button class="concept-search" type="button" data-concept="${esc(concept.label)}">${esc(concept.label)}</button>
+      <p class="help">${concept.artifact_count} files · ${concept.evidence_count} evidence links · ${esc(concept.kind.replaceAll("_", " "))}</p>
+      <ul>${links || "<li>No current artifact link.</li>"}</ul>
+    </article>`;
+  }).join("");
+  const prerequisiteRows = prerequisites.map((edge) => {
+    const from = nodes.get(edge.from);
+    const to = nodes.get(edge.to);
+    return `<li><strong>${esc(from.label)}</strong> → <strong>${esc(to.label)}</strong><br><span>${esc(edge.reason)}</span></li>`;
+  }).join("");
+  const artifactRows = artifactLinks.map((edge) => {
+    const from = nodes.get(edge.from);
+    const to = nodes.get(edge.to);
+    return `<li><a href="${sourceHash(cid, from.artifact_id, edge.source_object_id)}">${esc(from.label)}</a> →
+      <a href="${sourceHash(cid, to.artifact_id, edge.target_object_id)}">${esc(to.label)}</a>
+      <span>${esc(edge.reason)} ${esc(edge.certainty)}.</span></li>`;
+  }).join("");
+  return `<div class="graph-heading"><div><h3>Course concept graph</h3><p class="help">Concept-to-file lines use measured source matches. Arrows below are visibly labeled candidates.</p></div></div>
+    <div class="concept-network">${conceptCards || `<p class="empty">No cross-file concepts were found.</p>`}</div>
+    ${artifactRows ? `<h3>Explicit file relationships</h3><ul class="prerequisite-list">${artifactRows}</ul>` : ""}
+    ${prerequisiteRows ? `<h3>Prerequisite candidates</h3><ul class="prerequisite-list">${prerequisiteRows}</ul>` : ""}
+    <p class="quality-warning">${esc(graph.warning)}</p>`;
+}
+
+$("show-relationships").addEventListener("click", async () => {
+  const cid = state.route.cid;
+  if (!cid) return;
+  const graph = $("concept-graph");
+  graph.hidden = false;
+  graph.innerHTML = SKELETON;
+  try {
+    const payload = await getJSON(`/api/courses/${encodeURIComponent(cid)}/concepts?limit=24`);
+    paintKnowledgeStatus(payload.index, payload.rebuilt);
+    graph.innerHTML = graphHtml(payload, cid);
+  } catch (err) {
+    graph.innerHTML = `<p class="field-error">${esc(err.message)}</p>`;
+  }
+});
+
+$("concept-graph").addEventListener("click", (event) => {
+  const button = event.target.closest(".concept-search");
+  if (!button) return;
+  $("course-search-query").value = button.dataset.concept;
+  $("course-search").requestSubmit();
+});
 
 // ---------------------------------------------------------------- viewer
 

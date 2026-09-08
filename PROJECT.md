@@ -6,7 +6,7 @@ A local web app that turns mixed course material into a grounded, plain-language
 
 ## Status
 
-The slide pipeline remains green. Capability Round 2 added native six-format viewers, exact object links, and grounded selected-context questions. Its final independent critic passed the increment. The expanded product bar still fails because cross-artifact search, concept relationships, computational tools, and subject-aware learning workflows are not implemented.
+The slide pipeline remains green. Capability Round 3 added course-local typed search, exact cross-artifact relationships, a concept graph, and source-version invalidation. Its fresh critic passed the increment. The expanded product bar still fails because computational tools and resumable subject-aware learning workflows are not implemented.
 
 ## Current progress
 
@@ -19,7 +19,9 @@ The slide pipeline remains green. Capability Round 2 added native six-format vie
 - Done: native read-only viewers operate PDF, PPTX, DOCX, XLSX, CSV, and IPYNB at 1280x720 and 1440x900 without measured console errors or horizontal overflow.
 - Done: exact object links and selected-context questions preserve typed locators, structured evidence, citations, uncertainty, remote disclosure, and course isolation.
 - Done: real Word images and saved notebook plots render from byte-validated course-local media endpoints.
-- Next: index typed objects for course-scoped cross-artifact search, version staleness, and a concept relationship view.
+- Done: all five real courses pass local typed search, exact result links, concept-to-file evidence, explicit notebook-to-dataset references, and responsive relationship views.
+- Done: source changes mark the course knowledge index stale. The next search rebuilds it atomically and removes superseded evidence.
+- Next: add resumable artifact-specific teaching workflows, starting with controlled notebook execution and deterministic spreadsheet inspection.
 
 ## Decisions
 
@@ -37,6 +39,8 @@ The slide pipeline remains green. Capability Round 2 added native six-format vie
 - File identifiers are content-addressed with SHA-256 so identical bytes are not processed or billed twice. Intentional week-level references to repeated material must still be retained.
 - Selected questions send only the question and bounded selected evidence when connected. Structured metadata precedes extracted prose so formulas, cached values, dataset profiles, and sheet state remain answerable.
 - Embedded DOCX and notebook raster visuals are capped at 32 MiB and verified against their declared image type before serving.
+- Cross-artifact search uses a course-local SQLite FTS5 index and an explicit, inspectable alias catalog. It does not claim that lexical matching is a semantic model.
+- Concept-to-artifact edges are measured source matches. Filename references are measured links. Prerequisite arrows remain visibly labeled candidates unless the source states the dependency.
 
 ## Notes
 
@@ -47,3 +51,4 @@ The slide pipeline remains green. Capability Round 2 added native six-format vie
 - Detailed backend research and test evidence lives at `.internal/model-backend-evaluation.md`.
 - `.venv/bin/python scripts/verify_real_corpus.py` reruns the read-only 29-file import and structural fidelity gate.
 - `.venv/bin/python scripts/gate_native_viewers.py --courses-root <project-internal-course-root>` reruns the six-format viewer, exact-link, selected-question, embedded-media, viewport, overflow, and console gate against a running fake-model server.
+- `.venv/bin/python scripts/gate_course_knowledge.py --courses-root <project-internal-course-root>` reruns five-course search, relationship, isolation, staleness, performance, and responsive-browser checks.

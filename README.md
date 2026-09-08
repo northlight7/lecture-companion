@@ -10,7 +10,7 @@ is worth drawing. Each explanation is written knowing the course overview and
 what the earlier slides already covered, so the sequence reads as one continuous
 text rather than a pile of disconnected answers.
 
-Everything runs locally except the explanation generation itself.
+Everything runs locally except requested explanation generation and connected selected-context questions.
 
 <p align="center">
   <img src=".github/viewer-light.png" alt="The two-pane viewer: rendered slide on the left, plain-language explanation on the right" width="820">
@@ -88,8 +88,16 @@ and bounded selected excerpts go to DeepSeek. Original files, unselected
 objects, and other courses are excluded. Offline demo mode returns a local,
 deterministic evidence-only answer.
 
+**Search and relationships.** Each course has a local typed-object search over
+slides, notes, document blocks, formulas, code, outputs, and dataset fields.
+Results open the exact source object. An inspectable alias catalog connects
+nearby terms such as shrinkage and ridge without presenting the local lexical
+index as a semantic model. The course graph shows measured concept-to-file
+matches, explicit notebook-to-dataset references, and visibly labeled
+prerequisite candidates. It rebuilds automatically when source versions change.
+
 **Every course is sealed.** A course's slides, reference documents, overview,
-retrieval index and running summary all live in its own directory, and nothing
+retrieval indexes, concept graph and running summary all live in its own directory, and nothing
 outside that directory is read while serving it. Explaining a slide in one
 course cannot pull material or memory from another.
 
@@ -153,7 +161,7 @@ their text and marked `[no renderer: text-only extraction]` so you can tell.
 ## Where your data lives
 
 Everything is under `Courses/<course-id>/` in this directory — slides,
-extracted text, explanations, the retrieval index, and the progress checkpoint.
+extracted text, explanations, the search indexes, concept relationships, and the progress checkpoint.
 It is gitignored and never leaves your machine by default. A slide image with
 its bounded context goes to DeepSeek when you request an explanation. A question
 and the bounded source objects you explicitly selected go to DeepSeek when you
@@ -191,15 +199,25 @@ that every artifact has typed objects with matching source locators:
 .venv/bin/python scripts/verify_real_corpus.py
 ```
 
+With a fake-model server running against a project-internal course root, this
+gate measures all five courses, exact search links, concept relationships,
+course isolation, warm-search latency, and the browser UI at both target sizes:
+
+```bash
+.venv/bin/python scripts/gate_course_knowledge.py --base http://127.0.0.1:45711 --courses-root .internal/knowledge-courses
+```
+
 Known limits:
 
 - The retrieval quality claim rests on the hashing embedder. The e5 path is
   implemented but has not been measured.
 - `.pptx` rendering has been exercised on a small deck; complex decks with
   animations, embedded video or unusual fonts are untested.
-- DOCX, XLSX, CSV, and IPYNB have native read-only viewers and cited
-  selected-context questions. They do not yet have cross-artifact search,
-  generated explanations, or resumable model processing.
+- DOCX, XLSX, CSV, and IPYNB have native read-only viewers, cited
+  selected-context questions, and cross-artifact local search. They do not yet
+  have artifact-specific generated explanations or resumable model processing.
+- Prerequisite arrows are transparent catalog candidates. They are not promoted
+  to source facts unless linked course evidence states the dependency.
 - The offline stub writes deliberately mechanical prose. It exists to verify
   the machinery for free, not to demonstrate explanation quality — judge that
   with a real key.
