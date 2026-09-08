@@ -1,7 +1,7 @@
 # Lecture Companion
 
-Turns a course's lecture slides into a plain-language textbook you can read
-straight through.
+Imports mixed course material into a structurally isolated evidence library and
+turns lecture slides into a plain-language textbook you can read straight through.
 
 You upload a course's slides, and for every slide you get the rendered page on
 the left and, on the right, an explanation in ordinary language: what the slide
@@ -50,14 +50,27 @@ call before it is accepted, and then stored in the **OS keyring** — never in a
 file, never in the repo, never in a log line, never in an HTTP response. The
 header shows a masked hint (`sk-ab…9f2c`); reopen it any time to change the key.
 
-**Import.** Create a course, then upload its PDFs and `.pptx` files. Each file
-is filed automatically as either **slides** or a **reference document** (a
+**Import.** Create a course, then upload PDF, PPTX, DOCX, XLSX, CSV, or IPYNB
+files. Every original is preserved byte for byte. Each file records its original
+relative path, content hash, format, purpose, extraction quality, and version.
+Unchanged files are not extracted twice. Identical bytes keep distinct hierarchy
+references while sharing one stored original. A changed file supersedes its
+earlier version without erasing the previous source version.
+
+PDF and PowerPoint files are also filed automatically as either **slides** or a **reference document** (a
 syllabus or programme breakdown) using local heuristics only — filename cues,
 words-per-page density, and structural signals like "learning outcomes" or
 "office hours". There is no review step, and the app tells you why it decided
 what it did ("dense prose (322 words/page) and mentions learning outcomes and
 grading"). Reference documents are distilled into a course overview that every
 explanation is written against.
+
+Word blocks and tables, workbook sheets and cells, CSV fields, and notebook
+cells and outputs are extracted into typed learning objects. Each object has a
+stable locator that resolves to its exact page, slide, speaker note, document
+block, sheet and cell, chart, notebook cell and output, or dataset field. The
+current browser viewer still presents slide decks only. Native viewers for the
+other formats are not implemented yet.
 
 If you have a pile of files and no course yet, drop them all in. The app groups
 them into proposed courses by course code and filename prefix and shows you the
@@ -121,6 +134,10 @@ switching.
 |---|---|---|
 | PDF | `pypdfium2` | `pypdf` |
 | `.pptx` | headless LibreOffice → PDF | `python-pptx`, including speaker notes |
+| `.docx` | original download | `python-docx`, including ordered blocks, tables, images, and links |
+| `.xlsx` | original download | `openpyxl`, including formulas, cached values, sheets, charts, tables, filters, hidden state, formatting metadata, merged cells, and validation |
+| `.csv` | dataset profile | local streaming profile of schema, types, missingness, counts, and bounded samples |
+| `.ipynb` | notebook structure | local JSON extraction of Markdown, code, outputs, errors, execution counts, rich output data, and kernel metadata |
 
 Without LibreOffice installed, `.pptx` still imports: slides are painted from
 their text and marked `[no renderer: text-only extraction]` so you can tell.
@@ -156,12 +173,23 @@ retrieval, per-course isolation, checkpointing, pause on a 429, and the viewer
 in both themes. `pytest` is green, and `scripts/gate_g2.py` drives a real
 headless browser to prove the viewer does not overflow at 1440px.
 
+The six-format corpus gate imports all 29 current course files without writing
+to the source folders, checks every preserved original by SHA-256, and verifies
+that every artifact has typed objects with matching source locators:
+
+```bash
+.venv/bin/python scripts/verify_real_corpus.py
+```
+
 Known limits:
 
 - The retrieval quality claim rests on the hashing embedder. The e5 path is
   implemented but has not been measured.
 - `.pptx` rendering has been exercised on a small deck; complex decks with
   animations, embedded video or unusual fonts are untested.
+- DOCX, XLSX, CSV, and IPYNB have deterministic structure-preserving import and
+  API access, but do not yet have native browser viewers, search, explanation,
+  question answering, or resumable model processing.
 - The offline stub writes deliberately mechanical prose. It exists to verify
   the machinery for free, not to demonstrate explanation quality — judge that
   with a real key.

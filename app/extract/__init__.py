@@ -8,20 +8,22 @@ from app.contracts import ExtractionError
 from app.extract.classify import Classification, classify_file
 from app.extract.pdf import extract_pdf, page_count, page_stem, normalise_text
 from app.extract.pptx import extract_pptx, rendering_available, soffice_path
+from app.extract.structured import extract_structured, objects_from_pages
 
 __all__ = [
     "Classification", "classify_file",
     "extract_pdf", "page_count", "page_stem", "normalise_text",
     "extract_pptx", "rendering_available", "soffice_path",
-    "extract_any", "supported_suffix",
+    "extract_any", "supported_suffix", "extract_structured", "objects_from_pages",
 ]
 
 _PDF = {".pdf"}
 _PPTX = {".pptx", ".ppt", ".potx"}
+_STRUCTURED = {".docx", ".xlsx", ".csv", ".ipynb"}
 
 
 def supported_suffix(filename: str) -> bool:
-    return Path(filename).suffix.lower() in (_PDF | _PPTX)
+    return Path(filename).suffix.lower() in (_PDF | _PPTX | _STRUCTURED)
 
 
 def extract_any(path: str | Path, out_dir: Path, **kw) -> list[tuple[int, Path, str]]:

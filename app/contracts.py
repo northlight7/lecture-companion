@@ -50,6 +50,15 @@ IMAGE_DETAIL = "high"
 
 FileRole = Literal["slides", "reference"]
 PipelineState = Literal["idle", "running", "paused", "done", "error"]
+ArtifactKind = Literal["pdf", "pptx", "docx", "xlsx", "csv", "ipynb"]
+ArtifactPurpose = Literal[
+    "lecture", "tutorial", "assignment", "dataset", "worked_result", "reference", "unknown"
+]
+LearningObjectKind = Literal[
+    "page", "slide", "speaker_note", "document_block", "table", "image", "equation",
+    "sheet", "cell", "range", "chart", "dataset", "dataset_field", "notebook_cell",
+    "notebook_output", "hyperlink", "prompt", "package_part",
+]
 
 # --------------------------------------------------------------------------
 # Value types
@@ -68,6 +77,70 @@ class SourceFile:
     role: FileRole
     stored_path: str              # relative to the course dir, e.g. "raw/ab12__w1.pdf"
     classified_by: str = ""       # short human-readable reason, for the UI
+    added_at: float = field(default_factory=_now)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class SourceLocator:
+    """Exact, serialisable location inside one byte-preserved artifact."""
+    artifact_id: str
+    kind: ArtifactKind
+    page: int | None = None
+    slide: int | None = None
+    note: int | None = None
+    block: int | None = None
+    sheet: str = ""
+    cell_range: str = ""
+    chart: str = ""
+    notebook_cell: int | None = None
+    output: int | None = None
+    dataset_field: str = ""
+    fragment: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {k: v for k, v in asdict(self).items() if v not in (None, "")}
+
+
+@dataclass
+class LearningObject:
+    """One typed unit of course evidence with a stable source locator."""
+    id: str
+    artifact_id: str
+    object_type: LearningObjectKind
+    locator: SourceLocator
+    text: str = ""
+    data: dict[str, Any] = field(default_factory=dict)
+    source_version: str = ""
+    quality: float = 1.0
+    warnings: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        row = asdict(self)
+        row["locator"] = self.locator.to_dict()
+        return row
+
+
+@dataclass
+class Artifact:
+    """A current occurrence of an original file inside a course hierarchy."""
+    id: str
+    content_hash: str
+    filename: str
+    source_path: str
+    kind: ArtifactKind
+    purpose: ArtifactPurpose
+    stored_path: str
+    order: int = 0
+    duplicate_of: str = ""
+    supersedes: str = ""
+    version: int = 1
+    extraction_status: str = "done"
+    extraction_quality: float = 1.0
+    extraction_warnings: list[str] = field(default_factory=list)
+    object_count: int = 0
     added_at: float = field(default_factory=_now)
 
     def to_dict(self) -> dict[str, Any]:

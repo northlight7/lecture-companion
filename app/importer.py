@@ -14,8 +14,11 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from app.contracts import Course, Deck, ExtractionError, FileRole, SourceFile
-from app.extract import classify_file, extract_any, page_count, supported_suffix
+from app.contracts import Artifact, Course, Deck, ExtractionError, FileRole, SourceFile
+from app.extract import (
+    classify_file, extract_any, extract_structured, objects_from_pages,
+    page_count, supported_suffix,
+)
 
 __all__ = [
     "FiledItem", "ImportResult", "BulkGroup",
@@ -32,6 +35,11 @@ class FiledItem:
     deck_id: str = ""       # "" for reference docs
     n_slides: int = 0
     confidence: float = 0.0
+    artifact_id: str = ""
+    kind: str = ""
+    source_path: str = ""
+    object_count: int = 0
+    status: str = "done"
 
 
 @dataclass
@@ -73,6 +81,40 @@ def _display_title(filename: str) -> str:
     return stem or "Untitled deck"
 
 
+def _source_path(filename: str) -> str:
+    """Preserve hierarchy while removing traversal and empty components."""
+    raw = str(filename).replace("\\", "/").lstrip("/")
+    parts = [p.strip() for p in raw.split("/") if p.strip() not in ("", ".", "..")]
+    return "/".join(parts) or "upload"
+
+
+def _kind(filename: str) -> str:
+    suffix = Path(filename).suffix.lower()
+    return {".pdf": "pdf", ".ppt": "pptx", ".pptx": "pptx", ".potx": "pptx",
+            ".docx": "docx", ".xlsx": "xlsx", ".csv": "csv", ".ipynb": "ipynb"}[suffix]
+
+
+def _purpose(source_path: str, kind: str, sample: str) -> str:
+    haystack = f"{source_path} {sample[:3000]}".lower()
+    if kind == "csv":
+        return "dataset"
+    if "assignment" in haystack or "homework" in haystack:
+        return "assignment"
+    if "tutorial" in haystack or "exercise" in haystack or "prompt" in haystack:
+        return "tutorial"
+    if "solution" in haystack or "worked" in haystack or "answer" in haystack:
+        return "worked_result"
+    if kind in ("pdf", "pptx") or "lecture" in haystack or re.search(r"(^|/)l\d+(/|$)", source_path.lower()):
+        return "lecture"
+    if "syllabus" in haystack or "reference" in haystack:
+        return "reference"
+    return "unknown"
+
+
+def _artifact_id(content_hash: str, source_path: str) -> str:
+    return hashlib.sha256(f"{content_hash}\0{source_path}".encode("utf-8")).hexdigest()[:24]
+
+
 # --------------------------------------------------------------------------
 # import
 # --------------------------------------------------------------------------
@@ -92,39 +134,83 @@ def import_files(
     result = ImportResult()
     course = store.get_course(course_id)
     order = len(getattr(course, "decks", []) or [])
+    artifacts = store.load_artifacts(course_id, include_superseded=True)
 
     for filename, data in files:
-        base = Path(str(filename).replace("\\", "/")).name or "upload"
+        source_path = _source_path(filename)
+        base = Path(source_path).name or "upload"
         try:
             if not supported_suffix(base):
                 result.errors.append(f"{base}: unsupported file type")
                 continue
 
-            file_id, raw_path = store.add_raw_file(course_id, base, data)
+            kind = _kind(base)
+            content_hash, raw_path = store.add_raw_artifact(course_id, base, data)
+            artifact_id = _artifact_id(content_hash, source_path)
+            current = store.load_artifacts(course_id)
+            unchanged = next((
+                a for a in current
+                if a.source_path == source_path and a.content_hash == content_hash
+                and a.extraction_status == "done"
+            ), None)
+            if unchanged is not None:
+                result.filed.append(FiledItem(
+                    filename=base, file_id=content_hash[:12], role="slides" if kind in ("pdf", "pptx") else "reference",
+                    reason="unchanged bytes were already extracted", confidence=1.0,
+                    artifact_id=unchanged.id, kind=kind, source_path=source_path,
+                    object_count=unchanged.object_count, status="unchanged",
+                ))
+                continue
+            prior = next((a for a in current if a.source_path == source_path), None)
+            duplicate = next((a for a in current if a.content_hash == content_hash), None)
+            same_attempt = prior is not None and prior.content_hash == content_hash
+            artifact = Artifact(
+                id=artifact_id, content_hash=content_hash, filename=base, source_path=source_path,
+                kind=kind, purpose="unknown", stored_path=_relative_to_course(store, course_id, raw_path),
+                order=len(current), duplicate_of=duplicate.id if duplicate else "",
+                supersedes=prior.id if prior and not same_attempt else "",
+                version=(prior.version if same_attempt else prior.version + 1) if prior else 1,
+                extraction_status="running",
+            )
+            artifacts = [a for a in artifacts if a.id != artifact_id]
+            artifacts.append(artifact)
+            store.save_artifacts(course_id, artifacts)
+            file_id = content_hash[:12]
             deck_id = deck_id_for(file_id)
 
             # Extract once, into the deck dir. A reference doc's images are
             # harmless (and cheap); we only keep its text.
             out_dir = store.slides_dir(course_id, deck_id)
-            try:
-                pages = extract_any(raw_path, out_dir)
-            except ExtractionError as exc:
-                result.errors.append(f"{base}: {exc}")
-                continue
+            pages: list[tuple[int, Path, str]] = []
+            warnings: list[str] = []
+            if kind in ("pdf", "pptx"):
+                pages = extract_any(raw_path, out_dir, diagnostics=warnings)
+                objects = objects_from_pages(artifact_id, kind, pages, raw_path)
+                sample = _sample_text(pages)
+                cls = classify_file(Path(base), page_count=len(pages), sample_text=sample)
+            else:
+                objects, warnings = extract_structured(raw_path, artifact_id, kind)
+                sample = "\n".join(obj.text for obj in objects if obj.text)[:20000]
+                cls = classify_file(Path(base), page_count=0, sample_text=sample)
 
-            sample = _sample_text(pages)
-            cls = classify_file(Path(base), page_count=len(pages), sample_text=sample)
+            artifact.purpose = _purpose(source_path, kind, sample)
+            artifact.extraction_status = "done"
+            artifact.extraction_warnings = warnings
+            artifact.extraction_quality = (0.9 if warnings else 1.0) if objects else 0.0
+            artifact.object_count = len(objects)
+            store.save_learning_objects(course_id, artifact_id, objects)
+            store.save_artifacts(course_id, artifacts)
 
             sf = SourceFile(
                 id=file_id,
                 filename=base,
-                role=cls.role,
+                role=cls.role if kind in ("pdf", "pptx") else "reference",
                 stored_path=_relative_to_course(store, course_id, raw_path),
                 classified_by=cls.reason,
             )
             store.register_file(course_id, sf)
 
-            if cls.role == "slides":
+            if cls.role == "slides" and kind in ("pdf", "pptx"):
                 deck = Deck(
                     id=deck_id,
                     source_file_id=file_id,
@@ -138,6 +224,8 @@ def import_files(
                     filename=base, file_id=file_id, role="slides",
                     reason=cls.reason, deck_id=deck_id, n_slides=len(pages),
                     confidence=cls.confidence,
+                    artifact_id=artifact_id, kind=kind, source_path=source_path,
+                    object_count=len(objects), status="done",
                 ))
             else:
                 store.save_ref_text(course_id, file_id, sample if sample.strip() else "")
@@ -146,9 +234,23 @@ def import_files(
                     filename=base, file_id=file_id, role="reference",
                     reason=cls.reason, deck_id="", n_slides=0,
                     confidence=cls.confidence,
+                    artifact_id=artifact_id, kind=kind, source_path=source_path,
+                    object_count=len(objects), status="done",
                 ))
+        except ExtractionError as exc:
+            if "artifact" in locals() and artifact.id == locals().get("artifact_id"):
+                artifact.extraction_status = "failed"
+                artifact.extraction_quality = 0.0
+                artifact.extraction_warnings = [str(exc)]
+                store.save_artifacts(course_id, artifacts)
+            result.errors.append(f"{source_path}: extraction failed: {exc}")
         except Exception as exc:  # noqa: BLE001 - one bad file must not kill the batch
-            result.errors.append(f"{base}: {exc}")
+            if "artifact" in locals() and artifact.id == locals().get("artifact_id"):
+                artifact.extraction_status = "failed"
+                artifact.extraction_quality = 0.0
+                artifact.extraction_warnings = [f"{type(exc).__name__}: {exc}"]
+                store.save_artifacts(course_id, artifacts)
+            result.errors.append(f"{source_path}: extraction failed: {type(exc).__name__}: {exc}")
 
     return result
 
