@@ -6,14 +6,15 @@ A local web app that turns mixed course material into a grounded, plain-language
 
 ## Status
 
-The slide-based foundation is working and its first independent critic pass passed. An audit of all currently released material from five courses is complete. The actual source set expands the product beyond slides into documents, spreadsheets, notebooks, datasets, exercises, diagrams, equations, code, and argument-based learning.
+The slide-based foundation is working and its first independent critic pass passed. The five-course capability audit and a live DeepSeek backend evaluation are complete. Planning for the expanded architecture is next.
 
 ## Current progress
 
 - Done: audited 29 course files across PDF, PowerPoint, Word, Excel, CSV, and Jupyter Notebook formats. Parsed their structure and visually reviewed all PDFs, PowerPoint decks, and Word tutorials.
 - Done: converted the findings into a detailed capability assessment at `.internal/course-material-capability-assessment.md`.
+- Done: ran 24 live DeepSeek requests across eight representative course tasks. The initial token budget produced 6 of 8 usable structured responses. The corrected configuration produced 16 of 16 across two passes.
 - Done: objectives O1 to O7 for the original slide pipeline are verified. This includes boot, structural course isolation, grounding, key protection, resumability without repeat model calls, truthful documentation, and responsive layout.
-- Next: plan the typed learning-object architecture and phased build against the assessment, beginning with universal ingestion, exact citations, native artifact views, cross-artifact course links, and subject-aware validation.
+- Next: plan the typed learning-object architecture and phased build. Include a provider-neutral model gateway, adaptive reasoning budgets, structured-output validation, universal ingestion, exact citations, native artifact views, and subject-aware checks.
 
 ## Decisions
 
@@ -21,7 +22,9 @@ The slide-based foundation is working and its first independent critic pass pass
 - Replace the slide-only content model with typed learning objects. A learning object can be a slide, note, document block, exercise, spreadsheet range, chart, notebook cell, output, dataset field, equation, diagram, or argument.
 - Exact source locators and inspectable evidence are required across every artifact type.
 - The shared architecture must be domain-neutral, with subject-aware teaching and validation for spreadsheets, analytics code, database diagrams, ethical reasoning, and finance.
-- DeepSeek `deepseek-v4-flash-vision-exp` uses the OpenAI-compatible chat completions endpoint at `https://api.deepseek.com`. Images are sent as base64 data URLs and HTTP 429 pauses processing.
+- Use a provider-neutral model interface. DeepSeek `deepseek-v4-flash-vision-exp` is the initial low-cost default based on the live course benchmark. Keep an optional separately billed OpenAI API provider for fallback and comparative evaluation.
+- Do not treat a ChatGPT subscription or the ChatGPT application as a production backend. ChatGPT subscriptions do not include OpenAI API usage.
+- Select reasoning effort and completion budget by task type. The current fixed 1,600-token ceiling is inadequate for complex ethics and notebook-diagnostic tasks.
 - PDF pages use pypdfium2 for rendering and pypdf for text. PowerPoint files use headless soffice for rendering and python-pptx for text and speaker notes.
 - Retrieval uses one index per course. The signed hashing embedder is the offline default and `intfloat/multilingual-e5-small` is optional. Switching embedders requires rebuilding that course's index.
 - File identifiers are content-addressed with SHA-256 so identical bytes are not processed or billed twice. Intentional week-level references to repeated material must still be retained.
@@ -32,3 +35,4 @@ The slide-based foundation is working and its first independent critic pass pass
 - `.venv/bin/python -m pytest` runs the current offline suite.
 - Durable project rules remain unchanged. The DeepSeek key lives only in the OS keyring under service `lecture-companion` and account `deepseek-api-key`. `Courses/` is gitignored user data. Course isolation is structural.
 - Public repository: `northlight7/lecture-companion`.
+- Detailed backend research and test evidence lives at `.internal/model-backend-evaluation.md`.
