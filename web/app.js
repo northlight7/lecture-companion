@@ -580,7 +580,7 @@ async function renderCourse(cid) {
         <span class="name">${esc(d.title)}</span>
         <span class="meta">${d.n_explained} / ${plural(d.n_slides, "slide", "slides")}</span>
       </a>`).join("")
-    : `<p class="empty">No slides in this course yet. Drop a PDF or a .pptx on the right.</p>`;
+    : `<p class="empty">No slide deck in this course yet. Other imported artifacts remain available in the file list.</p>`;
 
   $("file-list").innerHTML = course.files.length
     ? course.files.map((f) => `<div class="file-row">
@@ -656,7 +656,7 @@ async function showSlide(index) {
     img.hidden = true;
     emptyLine.hidden = false;
     emptyLine.textContent =
-      "This deck has no rendered slides. Upload a PDF or a .pptx to the course first.";
+      "This deck has no rendered slides. Open another artifact from the course file list.";
     $("slide-text-wrap").hidden = true;
     reading.innerHTML = `<div class="blank">
       <h3>Nothing to read yet</h3>

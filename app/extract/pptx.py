@@ -247,6 +247,7 @@ def extract_pptx(
     *,
     scale: float = SLIDE_RENDER_SCALE,
     max_px: int = SLIDE_MAX_PX,
+    diagnostics: list[str] | None = None,
     **_kw,
 ) -> list[tuple[int, Path, str]]:
     path = Path(path)
@@ -262,7 +263,7 @@ def extract_pptx(
         with tempfile.TemporaryDirectory(prefix="lc-pptx-") as td:
             tmp = Path(td)
             pdf = _convert_to_pdf(path, tmp)
-            rendered = extract_pdf(pdf, out_dir, scale=scale, max_px=max_px)
+            rendered = extract_pdf(pdf, out_dir, scale=scale, max_px=max_px, diagnostics=diagnostics)
         if len(rendered) != len(texts):
             # Trust the render for images, python-pptx for text, match by index.
             print(

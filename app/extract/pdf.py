@@ -11,6 +11,7 @@ reads the rendered PNG instead.
 from __future__ import annotations
 
 import re
+import logging
 from pathlib import Path
 
 import pypdfium2 as pdfium
@@ -59,9 +60,24 @@ def page_count(path: str | Path) -> int:
                 pass
 
 
-def _text_layer(path: Path, n_pages: int) -> list[str]:
+class _DiagnosticHandler(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__(logging.WARNING)
+        self.messages: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.messages.append(record.getMessage())
+
+
+def _text_layer(path: Path, n_pages: int, diagnostics: list[str] | None = None) -> list[str]:
     """Best-effort per-page text. Never raises; missing text is "" by design."""
     texts = [""] * n_pages
+    pdf_logger = logging.getLogger("pypdf")
+    handler = _DiagnosticHandler()
+    old_handlers, old_level, old_propagate = list(pdf_logger.handlers), pdf_logger.level, pdf_logger.propagate
+    pdf_logger.handlers = [handler]
+    pdf_logger.setLevel(logging.WARNING)
+    pdf_logger.propagate = False
     try:
         reader = PdfReader(str(path))
         if getattr(reader, "is_encrypted", False):
@@ -78,6 +94,15 @@ def _text_layer(path: Path, n_pages: int) -> list[str]:
                 texts[i] = ""
     except Exception:  # noqa: BLE001 - no text layer at all is acceptable
         return texts
+    finally:
+        pdf_logger.handlers = old_handlers
+        pdf_logger.setLevel(old_level)
+        pdf_logger.propagate = old_propagate
+        if handler.messages and diagnostics is not None:
+            diagnostics.append(
+                f"PDF text parser reported {len(handler.messages)} recoverable warnings; "
+                "rendered pages are complete but affected text may be incomplete"
+            )
     return texts
 
 
@@ -96,6 +121,7 @@ def extract_pdf(
     *,
     scale: float = SLIDE_RENDER_SCALE,
     max_px: int = SLIDE_MAX_PX,
+    diagnostics: list[str] | None = None,
 ) -> list[tuple[int, Path, str]]:
     """Render every page to `page-NNNN.png` + `page-NNNN.txt` in `out_dir`.
 
@@ -118,7 +144,7 @@ def extract_pdf(
         n = len(doc)
         if n == 0:
             raise ExtractionError(f"PDF {path.name} has no pages")
-        texts = _text_layer(path, n)
+        texts = _text_layer(path, n, diagnostics)
         for i in range(n):
             stem = page_stem(i)
             png_path = out_dir / f"{stem}.png"

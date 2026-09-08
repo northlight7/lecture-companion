@@ -330,6 +330,7 @@ def get_course(cid: str):
         {"id": f.id, "filename": f.filename, "role": f.role, "reason": f.classified_by}
         for f in course.files
     ]
+    row["artifacts"] = [a.to_dict() for a in store.load_artifacts(cid)]
     row["progress"] = _progress_dict(store, course)
     return row
 
@@ -366,6 +367,11 @@ def _filed_rows(result) -> list[dict[str, Any]]:
             "reason": item.reason,
             "deck_id": item.deck_id,
             "n_slides": item.n_slides,
+            "artifact_id": item.artifact_id,
+            "kind": item.kind,
+            "source_path": item.source_path,
+            "object_count": item.object_count,
+            "status": item.status,
         }
         for item in result.filed
     ]
@@ -401,6 +407,51 @@ async def upload_files(cid: str, files: list[UploadFile] = File(default=[])):
         "overview_refreshed": overview_refreshed,
         "course": _course_row(store, course),
     }
+
+
+@app.get("/api/courses/{cid}/artifacts")
+def list_artifacts(cid: str):
+    store, course = _course_or_404(cid)
+    if course is None:
+        return _err(404, f"No course {cid!r}.")
+    return [artifact.to_dict() for artifact in store.load_artifacts(cid)]
+
+
+@app.get("/api/courses/{cid}/artifacts/{aid}/objects")
+def list_artifact_objects(cid: str, aid: str):
+    store, course = _course_or_404(cid)
+    if course is None:
+        return _err(404, f"No course {cid!r}.")
+    if aid not in {artifact.id for artifact in store.load_artifacts(cid)}:
+        return _err(404, f"No artifact {aid!r} in {cid!r}.")
+    return [obj.to_dict() for obj in store.load_learning_objects(cid, aid)]
+
+
+@app.get("/api/courses/{cid}/artifacts/{aid}/objects/{oid}")
+def get_artifact_object(cid: str, aid: str, oid: str):
+    store, course = _course_or_404(cid)
+    if course is None:
+        return _err(404, f"No course {cid!r}.")
+    if aid not in {artifact.id for artifact in store.load_artifacts(cid)}:
+        return _err(404, f"No artifact {aid!r} in {cid!r}.")
+    for obj in store.load_learning_objects(cid, aid):
+        if obj.id == oid:
+            return obj.to_dict()
+    return _err(404, f"No learning object {oid!r} in {aid!r}.")
+
+
+@app.get("/api/courses/{cid}/artifacts/{aid}/original")
+def artifact_original(cid: str, aid: str):
+    store, course = _course_or_404(cid)
+    if course is None:
+        return _err(404, f"No course {cid!r}.")
+    artifact = next((a for a in store.load_artifacts(cid) if a.id == aid), None)
+    if artifact is None:
+        return _err(404, f"No artifact {aid!r} in {cid!r}.")
+    path = store.course_dir(cid) / artifact.stored_path
+    if not path.is_file() or store.course_dir(cid) not in path.resolve().parents:
+        return _err(404, "Original file is unavailable.")
+    return FileResponse(path, filename=artifact.filename)
 
 
 @app.post("/api/import/preview")

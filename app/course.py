@@ -31,7 +31,10 @@ from pathlib import Path
 from typing import Any
 
 from app import config
-from app.contracts import Course, Deck, Explanation, Progress, Slide, SourceFile
+from app.contracts import (
+    Artifact, Course, Deck, Explanation, LearningObject, Progress, Slide,
+    SourceFile, SourceLocator,
+)
 
 _SLUG_STRIP = re.compile(r"[^a-z0-9]+")
 _UNSAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
@@ -259,6 +262,12 @@ class CourseStore:
     def refs_dir(self, course_id: str) -> Path:
         return self._within(course_id, "refs")
 
+    def objects_dir(self, course_id: str) -> Path:
+        return self._within(course_id, "objects")
+
+    def artifacts_path(self, course_id: str) -> Path:
+        return self._within(course_id, "artifacts.json")
+
     def index_path(self, course_id: str) -> Path:
         return self._within(course_id, "index.jsonl")
 
@@ -304,7 +313,7 @@ class CourseStore:
             course_id = f"{base}-{n}"
         _check_id(course_id, "course_id")
         cdir = root / course_id
-        for sub in ("", "raw", "slides", "refs", "explanations"):
+        for sub in ("", "raw", "slides", "refs", "explanations", "objects"):
             (cdir / sub if sub else cdir).mkdir(parents=True, exist_ok=True)
         course = Course(id=course_id, title=(title or "").strip() or course_id)
         self.save_course(course)
@@ -349,6 +358,93 @@ class CourseStore:
         path = self._within(course_id, "raw", f"{file_id}__{name}")
         atomic_write_bytes(path, data)
         return file_id, path
+
+    def add_raw_artifact(self, course_id: str, filename: str, data: bytes) -> tuple[str, Path]:
+        """Store one canonical byte copy keyed by the full SHA-256 digest."""
+        content_hash = hashlib.sha256(data).hexdigest()
+        suffix = Path(safe_filename(filename)).suffix.lower()
+        path = self._within(course_id, "raw", f"{content_hash}{suffix}")
+        if not path.is_file():
+            atomic_write_bytes(path, data)
+        return content_hash, path
+
+    # -- typed artifacts --------------------------------------------------
+
+    def load_artifacts(self, course_id: str, *, include_superseded: bool = False) -> list[Artifact]:
+        path = self.artifacts_path(course_id)
+        if not path.is_file():
+            return []
+        try:
+            raw = json.loads(path.read_text("utf-8"))
+        except (OSError, ValueError):
+            return []
+        out: list[Artifact] = []
+        for row in raw if isinstance(raw, list) else []:
+            if not isinstance(row, dict):
+                continue
+            try:
+                artifact = Artifact(
+                    id=str(row["id"]), content_hash=str(row["content_hash"]),
+                    filename=str(row.get("filename", "")), source_path=str(row.get("source_path", "")),
+                    kind=str(row["kind"]), purpose=str(row.get("purpose", "unknown")),
+                    stored_path=str(row.get("stored_path", "")), order=int(row.get("order", 0)),
+                    duplicate_of=str(row.get("duplicate_of", "")), supersedes=str(row.get("supersedes", "")),
+                    version=int(row.get("version", 1)), extraction_status=str(row.get("extraction_status", "done")),
+                    extraction_quality=float(row.get("extraction_quality", 1.0)),
+                    extraction_warnings=[str(x) for x in row.get("extraction_warnings", [])],
+                    object_count=int(row.get("object_count", 0)), added_at=float(row.get("added_at", 0.0)),
+                )
+            except (KeyError, TypeError, ValueError):
+                continue
+            out.append(artifact)
+        if include_superseded:
+            return sorted(out, key=lambda a: (a.order, a.source_path, a.version))
+        superseded = {a.supersedes for a in out if a.supersedes}
+        return sorted((a for a in out if a.id not in superseded), key=lambda a: (a.order, a.source_path))
+
+    def save_artifacts(self, course_id: str, artifacts: list[Artifact]) -> None:
+        atomic_write_json(self.artifacts_path(course_id), [a.to_dict() for a in artifacts])
+
+    def save_learning_objects(self, course_id: str, artifact_id: str, objects: list[LearningObject]) -> None:
+        _check_id(artifact_id, "artifact_id")
+        path = self._within(course_id, "objects", f"{artifact_id}.jsonl")
+        body = "".join(json.dumps(obj.to_dict(), ensure_ascii=False) + "\n" for obj in objects)
+        atomic_write_text(path, body)
+
+    def load_learning_objects(self, course_id: str, artifact_id: str | None = None) -> list[LearningObject]:
+        if artifact_id is not None:
+            _check_id(artifact_id, "artifact_id")
+            paths = [self._within(course_id, "objects", f"{artifact_id}.jsonl")]
+        else:
+            directory = self.objects_dir(course_id)
+            paths = sorted(directory.glob("*.jsonl")) if directory.is_dir() else []
+        out: list[LearningObject] = []
+        for path in paths:
+            if not path.is_file():
+                continue
+            for line in path.read_text("utf-8", errors="replace").splitlines():
+                try:
+                    row = json.loads(line)
+                    loc = row.get("locator", {})
+                    locator = SourceLocator(
+                        artifact_id=str(loc["artifact_id"]), kind=str(loc["kind"]),
+                        page=loc.get("page"), slide=loc.get("slide"), note=loc.get("note"),
+                        block=loc.get("block"), sheet=str(loc.get("sheet", "")),
+                        cell_range=str(loc.get("cell_range", "")), chart=str(loc.get("chart", "")),
+                        notebook_cell=loc.get("notebook_cell"), output=loc.get("output"),
+                        dataset_field=str(loc.get("dataset_field", "")), fragment=str(loc.get("fragment", "")),
+                    )
+                    out.append(LearningObject(
+                        id=str(row["id"]), artifact_id=str(row["artifact_id"]),
+                        object_type=str(row["object_type"]), locator=locator,
+                        text=str(row.get("text", "")), data=row.get("data", {}),
+                        source_version=str(row.get("source_version", "")),
+                        quality=float(row.get("quality", 1.0)),
+                        warnings=[str(x) for x in row.get("warnings", [])],
+                    ))
+                except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                    continue
+        return out
 
     def register_file(self, course_id: str, sf: SourceFile) -> None:
         course = self.get_course(course_id)

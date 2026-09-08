@@ -149,3 +149,29 @@ claim by the critic). Invariants 1, 4 and 5 were re-proven rather than newly
 served.
 
 Round 2 done — pass — the app was booted for the first time, verified against the live DeepSeek API, and a fresh critic passed it; six findings fixed.
+
+## Capability Round 1: 2026-09-08T22:29:18+0800
+
+**Goal and invariants:** build a five-course companion that lets a student import, inspect, search, understand, question, practise, and verify mixed material. Preserve structural course isolation, exact grounding, byte-preserved originals, resumable idempotent processing, credential secrecy, and honest uncertainty.
+
+**Frozen bar:** both required hashes matched before work. The capability assessment was `2c51dd51651b8b0467986f85836f4377dde66bb0f039e91ef5f0cff6413a9587`. `SPEC.md` was `7641e3135ce5eb7b5369393f72ad875eb70af8bc51178af3e0165b45e7b9e875`.
+
+**Item chosen and why:** six-format ingestion was the highest-value failing P0 gate. A fresh baseline critic measured that only 11 of 29 released files were supported and that every DOCX, XLSX, CSV, and IPYNB upload was rejected.
+
+**Orchestrator contract decision:** extend the frozen slide-only `app/contracts.py` without breaking its existing types. `Artifact`, `LearningObject`, and `SourceLocator` were added because exact block, cell, chart, notebook, output, and dataset-field evidence cannot be represented by `Slide`. This is an orchestrator decision required by the expanded frozen capability bar.
+
+**Attempt:** implemented deterministic extractors for DOCX, XLSX, CSV, and IPYNB. Added typed page and slide objects, separate speaker-note objects, content hashes, versioned path occurrences, hierarchy retention, canonical original storage, intentional duplicate references, incremental no-op imports, failure quarantine, exact-locator APIs, and original downloads. Added parser-quality warnings and hashed package-part preservation for unsupported workbook extensions. Added a source-versus-extraction fidelity gate for every format.
+
+**Measured results:** `.venv/bin/python -m pytest -q` passed 143 tests. `.venv/bin/python scripts/verify_real_corpus.py` imported 29 of 29 files with the exact 8 PDF, 3 PPTX, 2 DOCX, 3 XLSX, 11 CSV, and 2 IPYNB distribution. It verified 32,757 typed objects and every original SHA-256. It found zero structural mismatches. Four artifacts were explicitly marked degraded instead of silently perfect. The browser G2 gate passed eight screens across light and dark at 1440x900 with no horizontal overflow. No paid model call was made.
+
+**Critic verdict:** full bar FAIL. The final fresh critic passed the Capability Round 1 six-format fidelity increment. Its independently authored non-LLM inventory holdout passed, and the real-corpus gate exited 0. True permission-enforced holdout separation remains unavailable because agents share the filesystem, so that protocol gate is honestly failed.
+
+**Largest remaining gap:** native read-only viewers and selected-context questions do not yet work across all six artifact types at both required viewport sizes.
+
+**Shipped work:** the typed evidence architecture, four new deterministic extractors, exact artifact and object APIs, byte-preserving deduplication and versioning, explicit quality degradation, comprehensive unit coverage, a rerunnable 29-file corpus verifier, updated upload controls, and truthful documentation.
+
+**Rejected work and do-not-repeat notes:** non-empty output is not fidelity evidence. Parser warnings cannot be printed and ignored. `uv sync --extra dev` prunes optional development packages in this project, so use the install command documented in state. Diagnostic scripts must use `process_course`, not a nonexistent `Pipeline` class. Two occupied test ports were abandoned rather than disturbing unknown listeners.
+
+**Drift check:** course isolation gained adversarial typed-object API coverage. Grounding gained exact locators and versioned source identity. Originals are byte-verified. Unchanged imports avoid duplicate processing. Failed artifacts quarantine and retry. Credential handling was not changed. Warnings and unsupported structures are visible. The legacy slide pipeline and viewer remained green.
+
+Capability Round 1 done: FAIL, six-format import and measured structural fidelity shipped. Native mixed viewers and selected-context questions remain.
