@@ -12,6 +12,7 @@ from docx import Document
 from fastapi.testclient import TestClient
 from openpyxl import Workbook
 from openpyxl.chart import BarChart, Reference
+from openpyxl.formatting.rule import CellIsRule
 from PIL import Image
 
 from app.importer import import_files
@@ -47,6 +48,7 @@ def _xlsx() -> bytes:
     ws.auto_filter.ref = "A1:C3"
     ws.freeze_panes = "A2"
     ws.row_dimensions[3].hidden = True
+    ws.conditional_formatting.add("B2:B3", CellIsRule(operator="lessThan", formula=["0"], stopIfTrue=True))
     chart = BarChart()
     chart.add_data(Reference(ws, min_col=2, min_row=1, max_row=3), titles_from_data=True)
     chart.title = "Weekly returns"
@@ -92,7 +94,7 @@ def test_all_new_formats_import_with_typed_exact_locators(store):
     objects = store.load_learning_objects(course.id)
     kinds = {obj.object_type for obj in objects}
     assert {"prompt", "table", "sheet", "cell", "chart", "dataset", "dataset_field",
-            "notebook_cell", "notebook_output"} <= kinds
+            "notebook_cell", "notebook_output", "formatting_rule", "filter_rule"} <= kinds
     assert all(obj.locator.artifact_id == obj.artifact_id for obj in objects)
     formula = next(obj for obj in objects if obj.object_type == "cell" and obj.locator.cell_range == "C2")
     assert formula.data["formula"] == "=B2*2"
@@ -100,6 +102,10 @@ def test_all_new_formats_import_with_typed_exact_locators(store):
     assert '"formula": "=B2*2"' in evidence_text(formula)
     sheet = next(obj for obj in objects if obj.object_type == "sheet")
     assert '"auto_filter": "A1:C3"' in evidence_text(sheet)
+    rule = next(obj for obj in objects if obj.object_type == "formatting_rule")
+    assert rule.locator.cell_range == "B2:B3" and rule.data["stop_if_true"] is True
+    filter_rule = next(obj for obj in objects if obj.object_type == "filter_rule")
+    assert filter_rule.locator.cell_range == "A1:C3"
     output = next(obj for obj in objects if obj.object_type == "notebook_output" and obj.data["output_type"] == "error")
     assert output.locator.notebook_cell == 1 and output.locator.output == 1
     field = next(obj for obj in objects if obj.object_type == "dataset_field" and obj.text == "return")

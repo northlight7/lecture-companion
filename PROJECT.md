@@ -6,7 +6,7 @@ A local web app that turns mixed course material into a grounded, plain-language
 
 ## Status
 
-The slide pipeline remains green. Capability Round 4 added confirmed, locally sandboxed notebook execution with exact computed provenance and interruption-safe resume. Its fresh critic passed the increment. The expanded product bar still fails because spreadsheet verification and subject-aware teaching workflows are not implemented.
+The slide pipeline remains green. Capability Round 5 now includes deterministic workbook verification and a native macOS launcher with the finished app icon. Local gates pass, and the workbook increment is waiting for its fresh critic. The expanded product bar still fails because subject-aware teaching workflows are incomplete.
 
 ## Current progress
 
@@ -17,6 +17,7 @@ The slide pipeline remains green. Capability Round 4 added confirmed, locally sa
 - Done: ran 24 live DeepSeek requests across eight representative course tasks. The initial token budget produced 6 of 8 usable structured responses. The corrected configuration produced 16 of 16 across two passes.
 - Done: objectives O1 to O7 for the original slide pipeline are verified. This includes boot, structural course isolation, grounding, key protection, resumability without repeat model calls, truthful documentation, and responsive layout.
 - Done: native read-only viewers operate PDF, PPTX, DOCX, XLSX, CSV, and IPYNB at 1280x720 and 1440x900 without measured console errors or horizontal overflow.
+- Done: the macOS launcher, Dock, Finder bundle, and embedded web view share the blue Lecture Companion app icon with transparent outer corners.
 - Done: exact object links and selected-context questions preserve typed locators, structured evidence, citations, uncertainty, remote disclosure, and course isolation.
 - Done: real Word images and saved notebook plots render from byte-validated course-local media endpoints.
 - Done: all five real courses pass local typed search, exact result links, concept-to-file evidence, explicit notebook-to-dataset references, and responsive relationship views.
@@ -24,7 +25,8 @@ The slide pipeline remains green. Capability Round 4 added confirmed, locally sa
 - Done: the browser accepts complete folder trees, groups the five-course parent folder correctly, preserves lecture subfolders, and skips unchanged repeat uploads without duplicate extraction.
 - Done: notebook viewers disclose the actual runtime and limits before confirmation, run all or selected code cells, capture computed stdout, tables, plots, warnings, errors, and diagnostics, and link every result to its exact source cell.
 - Done: the macOS sandbox denies network, child processes, foreign-course reads, and writes outside the run workspace. A stopped run resumes from its saved namespace without repeating completed cells, and source changes mark runs stale.
-- Next: add deterministic spreadsheet inspection, formula and chart diagnosis, and unit-aware calculation verification.
+- Done: workbook inspection independently checks supported formulas, exact precedents, cached values, units, chart inputs, formatting and filters without changing originals.
+- Next: run the fresh Round 5 workbook critic on the frozen implementation, then continue with cross-format subject-aware teaching.
 
 ## Decisions
 
@@ -46,10 +48,11 @@ The slide pipeline remains green. Capability Round 4 added confirmed, locally sa
 - Concept-to-artifact edges are measured source matches. Filename references are measured links. Prerequisite arrows remain visibly labeled candidates unless the source states the dependency.
 - Notebook execution uses a fixed disclosed scientific Python environment. Every run receives copies of current-course files, writes to a course-scoped run directory, makes no model call, and is addressed by source hash, selected cells, policy version, and timeout.
 - Computed notebook results remain separate from saved source outputs. Runtime diagnostics are deterministic descriptions of observed exceptions and warnings, never modeled guesses.
+- The macOS launcher owns the backend process. Closing its window or pressing Command-Q stops the server cleanly.
 
 ## Notes
 
-- Run `./run.sh` to serve on port 8765. `LC_FAKE_MODEL=1 ./run.sh` exercises the existing slide pipeline without an API key or model spend.
+- Double-click `Lecture Companion.app` for normal use. It starts the backend, opens the product in its own window, and stops the backend when the app quits. `./run.sh` remains available for development.
 - `.venv/bin/python -m pytest` runs the current offline suite.
 - Durable project rules remain unchanged. The DeepSeek key lives only in the OS keyring under service `lecture-companion` and account `deepseek-api-key`. `Courses/` is gitignored user data. Course isolation is structural.
 - Public repository: `northlight7/lecture-companion`.

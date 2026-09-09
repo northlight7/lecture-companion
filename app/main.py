@@ -750,6 +750,54 @@ def notebook_execution_output(cid: str, aid: str, run_id: str, filename: str):
     return FileResponse(path, media_type="image/png", headers={"Cache-Control": "private, max-age=3600"})
 
 
+@app.get("/api/courses/{cid}/artifacts/{aid}/workbook/status")
+def workbook_inspection_status(cid: str, aid: str):
+    from app.workbook import audit_status
+
+    store, course = _course_or_404(cid)
+    if course is None:
+        return _err(404, f"No course {cid!r}.")
+    try:
+        return audit_status(store, cid, aid)
+    except (KeyError, ValueError):
+        return _err(404, "No current workbook artifact was found in this course.")
+
+
+@app.post("/api/courses/{cid}/artifacts/{aid}/workbook/inspect")
+def inspect_workbook_route(cid: str, aid: str, payload: dict = Body(default={})):
+    from app.workbook import inspect_workbook
+
+    store, course = _course_or_404(cid)
+    if course is None:
+        return _err(404, f"No course {cid!r}.")
+    try:
+        return inspect_workbook(store, cid, aid, force=payload.get("force") is True)
+    except (KeyError, ValueError) as exc:
+        return _err(404, str(exc))
+
+
+@app.post("/api/courses/{cid}/artifacts/{aid}/workbook/experiments")
+def workbook_formula_experiment(cid: str, aid: str, payload: dict = Body(default={})):
+    from app.workbook import formula_experiment
+
+    store, course = _course_or_404(cid)
+    if course is None:
+        return _err(404, f"No course {cid!r}.")
+    sheet = payload.get("sheet", "") if isinstance(payload, dict) else ""
+    cell = payload.get("cell", "") if isinstance(payload, dict) else ""
+    formula = payload.get("formula", "") if isinstance(payload, dict) else ""
+    if not all(isinstance(value, str) for value in (sheet, cell, formula)):
+        return _err(400, "Sheet, cell, and formula must be text.")
+    try:
+        return formula_experiment(
+            store, cid, aid, sheet_name=sheet, cell_coordinate=cell, formula=formula,
+        )
+    except KeyError as exc:
+        return _err(404, str(exc))
+    except ValueError as exc:
+        return _err(400, str(exc))
+
+
 @app.post("/api/import/preview")
 async def import_preview(files: list[UploadFile] = File(default=[])):
     from app.importer import sort_bulk
@@ -938,7 +986,10 @@ def index():
 
 @app.get("/favicon.ico")
 def favicon():
-    return Response(status_code=204)
+    path = config.WEB_DIR / "app-icon.png"
+    if not path.is_file():
+        return Response(status_code=204)
+    return FileResponse(path, media_type="image/png")
 
 
 if config.WEB_DIR.is_dir():

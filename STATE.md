@@ -6,7 +6,7 @@ Overwritten each round. History lives in `RUNLOG.md`.
 
 Build a robust companion across the five real courses so a student can import, inspect, search, understand, question, practise, and verify mixed material. Preserve structural course isolation, exact grounding, byte-preserved originals, resumable idempotent processing, credential secrecy, and honest uncertainty.
 
-Frozen inputs verified at Capability Round 4:
+Frozen inputs verified at Capability Round 5:
 
 - `.internal/course-material-capability-assessment.md`: `2c51dd51651b8b0467986f85836f4377dde66bb0f039e91ef5f0cff6413a9587`
 - `SPEC.md`: `7641e3135ce5eb7b5369393f72ad875eb70af8bc51178af3e0165b45e7b9e875`
@@ -26,9 +26,11 @@ Frozen inputs verified at Capability Round 4:
 | Controlled notebook execution | Real notebook and relative CSV, selected and all cells, six output classes | done foundation |
 | Execution isolation and resume | OS denial of network, child processes, foreign reads, and outside writes; counter stays 1 after resume | done |
 | Notebook UI | Source and computed result at both target sizes, no console error or overflow | done |
-| Offline regression | 159 tests pass | done for current scope |
+| Workbook verification | Three real workbooks, exact precedents, cached-value separation, units, charts, rules, copy-only experiment | implemented, critic pending |
+| macOS app launcher and icon | Native bundle opens, pauses cleanly, and shows the blue icon in Finder | done |
+| Offline regression | 165 tests pass | done for current scope |
 | Resumable mixed-artifact model work | Slides and notebooks only | fail |
-| Spreadsheet and subject-aware workflows | Benchmark exists, product workflows not implemented | fail |
+| Subject-aware workflows | Spreadsheet foundation exists, broader teaching workflows remain | fail |
 
 ## Decisions
 
@@ -42,11 +44,14 @@ Frozen inputs verified at Capability Round 4:
 - Each execution uses copies of current-course files, a deterministic course-scoped run id, per-cell checkpoints, and exact source-cell provenance. Saved notebook output and newly computed output remain distinct.
 - The macOS sandbox denies network, child processes, foreign-course paths, and writes outside the run workspace. Time, output, file, descriptor, and data-segment limits are disclosed.
 - Runtime diagnostics describe only observed warnings, exceptions, and traces. They do not guess at unobserved causes.
+- Workbook checks keep source cached values separate from locally calculated values. Checks using cached formula precedents are not labeled independently verified.
+- Formula experiments run on course-scoped copies. Original workbook hashes are checked before and after inspection.
+- The macOS bundle uses one transparent-corner blue icon master for its native `.icns` resource and browser favicon.
 - True permission-enforced holdout separation is unavailable because all agents share the filesystem. Every round continues to report that protocol gate as failed.
 
 ## Work queue
 
-1. Add deterministic workbook inspection, formula and chart diagnosis, and unit-aware calculation verification.
+1. Run the fresh Round 5 critic against the frozen workbook implementation.
 2. Extend artifact-specific grounded explanations and schema validation to non-slide objects with adaptive DeepSeek budgets and duplicate-billing tests.
 3. Implement ER diagram validation, balanced ethics scaffolding, finance leakage checks, and practice workflows.
 4. Run the two-pass live DeepSeek sample within the remaining $5 cap, then clean-checkout, security, accessibility, and smoke gates.
@@ -63,21 +68,24 @@ Frozen inputs verified at Capability Round 4:
 - `RLIMIT_NPROC=32` was rejected because it counts the user's existing processes and prevented a reliable launch. Deny child creation in the OS sandbox instead and prove it with a live subprocess probe.
 - `RLIMIT_AS` was rejected on macOS because it aborted the scientific runtime. Use a disclosed data-segment limit and avoid claiming a total-memory cap.
 - A full-width execution panel above the notebook source was rejected because it hid source evidence below the fold. Keep local computation beside the source in the artifact viewer.
+- Calling a formula independently verified when it consumes cached formula precedents was rejected. Label that state `verified_using_cached_precedents` and disclose its calculation basis.
+- The generated transparency edit that removed the blue app tile was rejected. The blue rounded-square gradient is part of the icon, and only its outer corners are transparent.
 - True blind holdout isolation cannot be claimed in this shared filesystem.
 
 ## CURRENT STATE
 
-Capability Round 4 is complete. The full frozen product bar remains FAIL. A fresh independent critic passed the controlled notebook-execution increment. The critic identified the missing cross-format teaching workflows as the strongest product failure. The pre-commit dirty-tree gate is resolved by the round commit.
+Capability Round 5 is in progress. The full frozen product bar remains FAIL. Deterministic workbook verification passes local unit, real-course, browser, byte-preservation, staleness, resume, and course-isolation gates. A fresh independent critic remains required before the round can close. The native macOS launcher now uses the finished blue Lecture Companion icon in Finder and at runtime. Business Data Analytics was paused at 7 of 110 before the launcher was restarted, and it resumes from slide 8.
 
 Measured rerunnable commands:
 
 ```bash
 .venv/bin/python -m pytest -q
 uv lock --check
-LC_COURSES_ROOT=.internal/notebook-courses LC_FAKE_MODEL=1 LC_PORT=45729 ./run.sh
-.venv/bin/python scripts/gate_notebook_execution.py --base http://127.0.0.1:45729 --courses-root .internal/notebook-courses --shots .internal/notebook-execution-shots
+./launcher/build-app.sh
+LC_COURSES_ROOT=.internal/workbook-courses LC_FAKE_MODEL=1 LC_PORT=45751 ./run.sh
+.venv/bin/python scripts/gate_workbook_inspection.py --base http://127.0.0.1:45751 --courses-root .internal/workbook-courses
 ```
 
-Measured results: 159 tests passed. A released Business Data Analytics cell read its relative `L2/Airbnb.csv` and returned a 5 by 15 table. Selected-cell and all-cell UI runs passed at 1280x720 and 1440x900 with no console errors or horizontal overflow. The sandbox denied network, child processes, a foreign-course read, and an outside-workspace write with `Errno 1`. A forced interruption resumed cells `[0, 1, 2]` while the completed-cell counter stayed `1`. Confirmation omission returned HTTP 412. Source replacement made prior output stale and blocked resume. A clean environment installed the declared runtime and passed six execution-focused checks.
+Measured results: 165 tests passed. All three released workbooks retained matching source hashes. The verifier independently reproduced `1 Comparison!C8` as 420.0 from 260.4, 113.4, and 46.2 with the source unit identified as HKD thousands. It distinguished the workbook's cached 419.99999999999994 value, exposed exact intermediate references, diagnosed the orientation exercise, retained both Stop If True rules, and passed both target viewport sizes without console errors or horizontal overflow. The rebuilt app bundle contains a valid 1024-pixel RGBA master and `AppIcon.icns`. Finder visibly rendered the blue Lecture Companion icon.
 
 No paid model call was made in this round.

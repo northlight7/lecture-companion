@@ -204,6 +204,7 @@ def extract_xlsx(path: Path, artifact_id: str) -> tuple[list[LearningObject], li
         hidden_columns = [k for k, dim in sheet.column_dimensions.items() if dim.hidden]
         tables = sorted(str(name) for name in sheet.tables.keys())
         validations = [str(dv.sqref) for dv in sheet.data_validations.dataValidation]
+        formatting_rule_count = sum(len(group.rules) for group in sheet.conditional_formatting)
         objects.append(_obj(
             artifact_id, "xlsx", "sheet", text=sheet.title,
             data={
@@ -211,11 +212,62 @@ def extract_xlsx(path: Path, artifact_id: str) -> tuple[list[LearningObject], li
                 "dimensions": sheet.calculate_dimension(), "freeze_panes": str(sheet.freeze_panes or ""),
                 "auto_filter": str(sheet.auto_filter.ref or ""), "merged_ranges": merged,
                 "hidden_rows": hidden_rows, "hidden_columns": hidden_columns,
-                "tables": tables, "conditional_formatting_rules": len(sheet.conditional_formatting),
+                "tables": tables, "conditional_formatting_rules": formatting_rule_count,
+                "conditional_formatting_ranges": [str(group.sqref) for group in sheet.conditional_formatting],
                 "data_validations": validations,
             },
             sheet=sheet.title, cell_range=sheet.calculate_dimension(),
         ))
+        for group_index, group in enumerate(sheet.conditional_formatting, start=1):
+            for rule_index, rule in enumerate(group.rules, start=1):
+                objects.append(_obj(
+                    artifact_id, "xlsx", "formatting_rule", text=f"Conditional formatting {rule.type}",
+                    data={
+                        "rule_type": str(rule.type), "operator": str(rule.operator or ""),
+                        "formula": [str(value) for value in (rule.formula or [])],
+                        "priority": int(rule.priority or 0),
+                        "stop_if_true": bool(rule.stopIfTrue),
+                    },
+                    sheet=sheet.title, cell_range=str(group.sqref),
+                    fragment=f"conditional-formatting-{group_index}-{rule_index}",
+                ))
+        if sheet.auto_filter.ref:
+            filter_columns: list[dict[str, Any]] = []
+            for column in sheet.auto_filter.filterColumn:
+                detail: dict[str, Any] = {"column_id": int(column.colId)}
+                if column.filters:
+                    detail["values"] = [str(value) for value in column.filters.filter]
+                    detail["date_groups"] = [
+                        {
+                            key: getattr(item, key)
+                            for key in ("year", "month", "day", "dateTimeGrouping")
+                            if getattr(item, key) is not None
+                        }
+                        for item in column.filters.dateGroupItem
+                    ]
+                if column.customFilters:
+                    detail["custom"] = [
+                        {"operator": str(item.operator or "equal"), "value": str(item.val)}
+                        for item in column.customFilters.customFilter
+                    ]
+                    detail["and"] = bool(column.customFilters._and)
+                if column.top10:
+                    detail["top10"] = {
+                        "top": bool(column.top10.top), "value": column.top10.val,
+                        "filter_value": column.top10.filterVal,
+                    }
+                filter_columns.append(detail)
+            sort_conditions = []
+            if sheet.auto_filter.sortState:
+                sort_conditions = [
+                    {"range": item.ref, "descending": bool(item.descending)}
+                    for item in sheet.auto_filter.sortState.sortCondition
+                ]
+            objects.append(_obj(
+                artifact_id, "xlsx", "filter_rule", text="Workbook filter and sort definition",
+                data={"columns": filter_columns, "sort": sort_conditions},
+                sheet=sheet.title, cell_range=str(sheet.auto_filter.ref), fragment="auto-filter",
+            ))
         for row in sheet.iter_rows():
             for cell in row:
                 if cell.value is None:
