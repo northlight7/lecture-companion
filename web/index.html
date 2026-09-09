@@ -172,6 +172,29 @@
         </div>
       </section>
       <aside class="question-panel" aria-labelledby="question-title">
+        <section class="execution-panel" id="execution-panel" aria-labelledby="execution-title" hidden>
+          <div class="execution-heading">
+            <div>
+              <p class="kicker">Computed locally</p>
+              <h2 id="execution-title">Run notebook code</h2>
+            </div>
+            <span class="execution-state" id="execution-state">Not run</span>
+          </div>
+          <p class="help" id="execution-disclosure"></p>
+          <dl class="execution-environment" id="execution-environment"></dl>
+          <label class="execution-confirm">
+            <input type="checkbox" id="execution-confirm">
+            I understand this notebook code will run locally with the limits shown above.
+          </label>
+          <div class="execution-actions">
+            <button class="btn btn-primary" id="run-all-cells" type="button">Run all code cells</button>
+            <button class="btn btn-quiet" id="run-selected-cells" type="button">Run selected code cells</button>
+            <button class="btn btn-quiet" id="stop-execution" type="button" hidden>Stop</button>
+            <button class="btn btn-quiet" id="resume-execution" type="button" hidden>Resume</button>
+          </div>
+          <p class="field-error" id="execution-error" role="alert" hidden></p>
+          <div class="execution-results" id="execution-results" aria-live="polite"></div>
+        </section>
         <h2 id="question-title">Ask about selected context</h2>
         <p class="help">Select source blocks, cells, fields, or notebook cells. When connected, only your question and those bounded excerpts are sent to DeepSeek. Original files, unselected material, and other courses are not sent. Offline demo answers stay local.</p>
         <div id="selected-context" class="selected-summary" aria-live="polite">Nothing selected.</div>

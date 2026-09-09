@@ -223,3 +223,27 @@ Capability Round 2 done: FAIL, the native six-format viewer and selected-context
 **Drift check:** retrieval remains structurally isolated by one database per course. Every result and relationship carries exact current object identity. Source changes invalidate derived knowledge. Search and graph work entirely offline. Original bytes, slide resume, credential storage, media validation, and uncertainty display remain unchanged and green.
 
 Capability Round 3 done: FAIL, local cross-artifact search and the course concept graph passed independently. Resumable artifact-specific teaching remains.
+
+## Capability Round 4: 2026-09-09T11:29:40+0800
+
+**Goal and invariants:** build a five-course companion that lets a student import, inspect, search, understand, question, practise, and verify mixed material. Preserve structural course isolation, exact grounding, byte-preserved originals, resumable idempotent processing, credential secrecy, and honest uncertainty.
+
+**Frozen bar:** both required hashes matched before work and in the fresh critic run. The capability assessment was `2c51dd51651b8b0467986f85836f4377dde66bb0f039e91ef5f0cff6413a9587`. `SPEC.md` was `7641e3135ce5eb7b5369393f72ad875eb70af8bc51178af3e0165b45e7b9e875`.
+
+**Item chosen and why:** controlled notebook execution was the highest-value gap after notebook source, output, and dataset relationships became inspectable. The released analytics notebooks require real relative paths, execution order, scientific packages, output capture, and honest diagnostics.
+
+**Attempt:** added a confirmed local notebook runtime for all or selected code cells. Each deterministic run receives current-course file copies, an artifact-hash identity, a restricted working directory, per-cell timeout, bounded streams and files, a data-segment cap, durable status, and a serialized namespace checkpoint. The macOS sandbox denies network, child processes, foreign-course reads, and writes outside the run workspace. Computed stdout, tables, plots, warnings, errors, and evidence-based diagnostics remain distinct from saved notebook output and link to exact source cells. The viewer presents the actual runtime, packages, file scope, and limits before confirmation, with stop, resume, stale-source blocking, and side-by-side source evidence.
+
+**Measured results:** `.venv/bin/python -m pytest -q` passed 159 tests. A clean environment installed 66 declared packages and passed six execution-focused checks. The real-course gate ran released regression notebook cell 26 against its relative `L2/Airbnb.csv`, returned a 5 by 15 table, and linked eight current-course files. A forced interruption resumed cells `[0, 1, 2]` while the first-cell counter remained `1`. The browser ran all cells at 1280x720 and one selected cell at 1440x900 with exact source links, visible computed output, no console errors, and no horizontal overflow. Confirmation omission returned HTTP 412. Live adversarial probes returned `Errno 1` for network, child process, foreign-course read, and `/tmp` write, without exposing the foreign marker. `uv lock --check` passed. No paid model call was made.
+
+**Critic verdict:** full frozen product bar FAIL. Round 4 increment PASS from a fresh independent critic after a restarted stable-tree inspection. The critic recorded unchanged frozen hashes, implementation hashes, diff hash, git status, HEAD, and `origin/main` throughout its inspection. True permission-enforced holdout isolation remains unavailable because agents share the filesystem, so that protocol gate remains failed. One earlier critic launch failed at the delegated-agent usage boundary and issued no product verdict.
+
+**Largest remaining gap:** artifact-specific grounded teaching and resumable processing remain incomplete across DOCX, XLSX, and CSV. Deterministic spreadsheet formula, chart, and calculation verification is the next highest-value gate.
+
+**Shipped work:** the isolated execution service and child runner, actual environment disclosure, confirmation and lifecycle APIs, deterministic run identity, current-course workspace linking, exact computed provenance, scientific dependencies, local diagnostics, notebook controls, responsive source-and-output layout, unit and HTTP coverage, a real-course browser gate, and truthful documentation.
+
+**Rejected work and do-not-repeat notes:** a hand-written default-deny sandbox without `system.sb` aborted the Python runtime. `RLIMIT_NPROC` inherited the user's existing process count and was unreliable. `RLIMIT_AS` aborted the macOS scientific stack. These were replaced by the system baseline plus narrow path and process rules, OS child-process denial, and an accurately labeled data-segment cap. A full-width execution panel hid notebook source below the fold and was replaced by a side-by-side panel. A rerun-only interruption gate was replaced by an idempotent gate that verifies the persisted counter on later runs.
+
+**Drift check:** every execution directory remains structurally nested under one course and artifact. Exact source object ids and locators accompany every result. Imported originals are copied, never modified. Run identity and checkpoints prevent duplicate completed work. No credential or model call enters execution. Failures, warnings, environment limits, and stale state remain visible. The frozen contracts file was unchanged.
+
+Capability Round 4 done: FAIL, controlled notebook execution passed independently. Cross-format teaching and spreadsheet verification remain.

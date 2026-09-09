@@ -285,6 +285,14 @@ class CourseStore:
         """Course-local derived search and concept index."""
         return self._within(course_id, "objects", "knowledge.sqlite3")
 
+    def executions_dir(self, course_id: str) -> Path:
+        return self._within(course_id, "executions")
+
+    def execution_run_dir(self, course_id: str, artifact_id: str, run_id: str) -> Path:
+        _check_id(artifact_id, "artifact_id")
+        _check_id(run_id, "run_id")
+        return self._within(course_id, "executions", artifact_id, run_id)
+
     def index_path(self, course_id: str) -> Path:
         return self._within(course_id, "index.jsonl")
 
