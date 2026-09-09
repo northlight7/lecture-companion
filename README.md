@@ -88,6 +88,14 @@ and bounded selected excerpts go to DeepSeek. Original files, unselected
 objects, and other courses are excluded. Offline demo mode returns a local,
 deterministic evidence-only answer.
 
+**Run notebook code.** Notebook viewers disclose the exact local Python and
+package versions, file scope, network denial, time, output, file, memory, and
+process limits before execution. After explicit confirmation, run every code
+cell or only selected cells. Computed stdout, tables, plots, warnings, errors,
+and local traces stay separate from saved notebook output and link back to the
+exact source cell. Stop and resume uses a durable namespace checkpoint, so
+completed cells are not run twice. Source changes mark prior runs stale.
+
 **Search and relationships.** Each course has a local typed-object search over
 slides, notes, document blocks, formulas, code, outputs, and dataset fields.
 Results open the exact source object. An inspectable alias catalog connects
@@ -207,15 +215,28 @@ course isolation, warm-search latency, and the browser UI at both target sizes:
 .venv/bin/python scripts/gate_course_knowledge.py --base http://127.0.0.1:45711 --courses-root .internal/knowledge-courses
 ```
 
+This gate executes a released Business Data Analytics notebook cell against
+its relative `Airbnb.csv` path, forces and resumes an interruption, checks
+computed provenance, and operates all-cell and selected-cell controls at both
+target viewport sizes:
+
+```bash
+LC_COURSES_ROOT=.internal/notebook-courses LC_FAKE_MODEL=1 LC_PORT=45729 ./run.sh
+.venv/bin/python scripts/gate_notebook_execution.py --base http://127.0.0.1:45729 --courses-root .internal/notebook-courses
+```
+
 Known limits:
 
 - The retrieval quality claim rests on the hashing embedder. The e5 path is
   implemented but has not been measured.
 - `.pptx` rendering has been exercised on a small deck; complex decks with
   animations, embedded video or unusual fonts are untested.
-- DOCX, XLSX, CSV, and IPYNB have native read-only viewers, cited
-  selected-context questions, and cross-artifact local search. They do not yet
-  have artifact-specific generated explanations or resumable model processing.
+- DOCX, XLSX, and CSV have native read-only viewers, cited selected-context
+  questions, and cross-artifact local search. They do not yet have
+  artifact-specific generated explanations or resumable model processing.
+- IPYNB adds confirmed, locally sandboxed, interruption-safe execution on this
+  macOS prototype. It does not install arbitrary notebook dependencies or
+  enable network access.
 - Prerequisite arrows are transparent catalog candidates. They are not promoted
   to source facts unless linked course evidence states the dependency.
 - The offline stub writes deliberately mechanical prose. It exists to verify

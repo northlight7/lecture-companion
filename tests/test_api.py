@@ -12,6 +12,7 @@ prompts for) the real macOS keychain.
 from __future__ import annotations
 
 import importlib
+import json
 import time
 from pathlib import Path
 
@@ -88,6 +89,44 @@ def test_index_is_served(client: TestClient) -> None:
     assert resp.status_code == 200
     assert "text/html" in resp.headers["content-type"]
     assert "<title" in resp.text.lower()
+
+
+def test_notebook_execution_http_contract_is_confirmed_scoped_and_serves_only_listed_outputs(client: TestClient) -> None:
+    cid = client.post("/api/courses", json={"title": "Execution API"}).json()["id"]
+    notebook = json.dumps({
+        "cells": [{
+            "cell_type": "code", "id": "plot", "metadata": {},
+            "execution_count": None, "outputs": [],
+            "source": ["import matplotlib.pyplot as plt\nplt.plot([1, 2], [3, 4])\nprint('HTTP_RUN')"],
+        }],
+        "metadata": {"kernelspec": {"name": "python3"}}, "nbformat": 4, "nbformat_minor": 5,
+    }).encode("utf-8")
+    uploaded = client.post(
+        f"/api/courses/{cid}/files",
+        files=[("files", ("api.ipynb", notebook, "application/x-ipynb+json"))],
+    )
+    assert uploaded.status_code == 200, uploaded.text
+    aid = uploaded.json()["filed"][0]["artifact_id"]
+    base = f"/api/courses/{cid}/artifacts/{aid}/execution"
+    environment = client.get(base + "/environment")
+    assert environment.status_code == 200
+    assert environment.json()["environment"]["remote_model_used"] is False
+    assert client.post(base, json={"confirmed": False}).status_code == 412
+    started = client.post(base, json={"confirmed": True, "cell_timeout_seconds": 10})
+    assert started.status_code == 200, started.text
+    run_id = started.json()["run_id"]
+    for _ in range(200):
+        status = client.get(f"{base}/{run_id}").json()
+        if status["state"] in {"done", "error", "paused"}:
+            break
+        time.sleep(0.05)
+    assert status["state"] == "done", status
+    plot = status["results"][0]["plots"][0]
+    served = client.get(f"{base}/{run_id}/outputs/{plot}")
+    assert served.status_code == 200 and served.headers["content-type"] == "image/png"
+    assert client.get(f"{base}/{run_id}/outputs/cell-0001-plot-99.png").status_code == 404
+    other = client.post("/api/courses", json={"title": "Other Course"}).json()["id"]
+    assert client.get(f"/api/courses/{other}/artifacts/{aid}/execution/{run_id}").status_code == 404
 
 
 # --------------------------------------------------------------------------

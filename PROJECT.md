@@ -6,7 +6,7 @@ A local web app that turns mixed course material into a grounded, plain-language
 
 ## Status
 
-The slide pipeline remains green. Capability Round 3 added course-local typed search, exact cross-artifact relationships, a concept graph, and source-version invalidation. Its fresh critic passed the increment. The expanded product bar still fails because computational tools and resumable subject-aware learning workflows are not implemented.
+The slide pipeline remains green. Capability Round 4 added confirmed, locally sandboxed notebook execution with exact computed provenance and interruption-safe resume. Its fresh critic passed the increment. The expanded product bar still fails because spreadsheet verification and subject-aware teaching workflows are not implemented.
 
 ## Current progress
 
@@ -21,7 +21,9 @@ The slide pipeline remains green. Capability Round 3 added course-local typed se
 - Done: real Word images and saved notebook plots render from byte-validated course-local media endpoints.
 - Done: all five real courses pass local typed search, exact result links, concept-to-file evidence, explicit notebook-to-dataset references, and responsive relationship views.
 - Done: source changes mark the course knowledge index stale. The next search rebuilds it atomically and removes superseded evidence.
-- Next: add resumable artifact-specific teaching workflows, starting with controlled notebook execution and deterministic spreadsheet inspection.
+- Done: notebook viewers disclose the actual runtime and limits before confirmation, run all or selected code cells, capture computed stdout, tables, plots, warnings, errors, and diagnostics, and link every result to its exact source cell.
+- Done: the macOS sandbox denies network, child processes, foreign-course reads, and writes outside the run workspace. A stopped run resumes from its saved namespace without repeating completed cells, and source changes mark runs stale.
+- Next: add deterministic spreadsheet inspection, formula and chart diagnosis, and unit-aware calculation verification.
 
 ## Decisions
 
@@ -41,6 +43,8 @@ The slide pipeline remains green. Capability Round 3 added course-local typed se
 - Embedded DOCX and notebook raster visuals are capped at 32 MiB and verified against their declared image type before serving.
 - Cross-artifact search uses a course-local SQLite FTS5 index and an explicit, inspectable alias catalog. It does not claim that lexical matching is a semantic model.
 - Concept-to-artifact edges are measured source matches. Filename references are measured links. Prerequisite arrows remain visibly labeled candidates unless the source states the dependency.
+- Notebook execution uses a fixed disclosed scientific Python environment. Every run receives copies of current-course files, writes to a course-scoped run directory, makes no model call, and is addressed by source hash, selected cells, policy version, and timeout.
+- Computed notebook results remain separate from saved source outputs. Runtime diagnostics are deterministic descriptions of observed exceptions and warnings, never modeled guesses.
 
 ## Notes
 
@@ -52,3 +56,4 @@ The slide pipeline remains green. Capability Round 3 added course-local typed se
 - `.venv/bin/python scripts/verify_real_corpus.py` reruns the read-only 29-file import and structural fidelity gate.
 - `.venv/bin/python scripts/gate_native_viewers.py --courses-root <project-internal-course-root>` reruns the six-format viewer, exact-link, selected-question, embedded-media, viewport, overflow, and console gate against a running fake-model server.
 - `.venv/bin/python scripts/gate_course_knowledge.py --courses-root <project-internal-course-root>` reruns five-course search, relationship, isolation, staleness, performance, and responsive-browser checks.
+- `.venv/bin/python scripts/gate_notebook_execution.py --courses-root <project-internal-course-root>` reruns real-course relative-data execution, forced resume, exact computed provenance, and the notebook UI at both target sizes against a running fake-model server.

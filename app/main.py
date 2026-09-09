@@ -643,6 +643,113 @@ def course_concepts(
     return concept_graph(store, cid, q, limit)
 
 
+@app.get("/api/courses/{cid}/artifacts/{aid}/execution/environment")
+def notebook_execution_environment(cid: str, aid: str):
+    from app.execution import environment_info, list_executions
+
+    store, course = _course_or_404(cid)
+    if course is None:
+        return _err(404, f"No course {cid!r}.")
+    artifact = next((item for item in store.load_artifacts(cid) if item.id == aid and item.kind == "ipynb"), None)
+    if artifact is None:
+        return _err(404, "No current notebook artifact was found in this course.")
+    cells = [
+        obj for obj in store.load_learning_objects(cid, aid)
+        if obj.object_type == "notebook_cell" and obj.data.get("cell_type") == "code"
+    ]
+    return {
+        "environment": environment_info(), "artifact_id": aid,
+        "source_version": artifact.id, "source_hash": artifact.content_hash,
+        "code_cells": [
+            {"index": obj.locator.notebook_cell, "object_id": obj.id, "location": f"notebook cell {int(obj.locator.notebook_cell or 0) + 1}"}
+            for obj in cells
+        ],
+        "executions": list_executions(store, cid, aid),
+    }
+
+
+@app.post("/api/courses/{cid}/artifacts/{aid}/execution")
+def run_notebook(cid: str, aid: str, payload: dict = Body(default={})):
+    from app.execution import start_execution
+
+    store, course = _course_or_404(cid)
+    if course is None:
+        return _err(404, f"No course {cid!r}.")
+    indices = payload.get("cell_indices") if isinstance(payload, dict) else None
+    if indices is not None and (not isinstance(indices, list) or any(not isinstance(value, int) for value in indices)):
+        return _err(400, "cell_indices must be a list of notebook cell numbers.")
+    try:
+        return start_execution(
+            store, cid, aid, confirmed=payload.get("confirmed") is True,
+            cell_indices=indices, cell_timeout_seconds=int(payload.get("cell_timeout_seconds", 30)),
+        )
+    except PermissionError as exc:
+        return _err(412, str(exc))
+    except KeyError as exc:
+        return _err(404, str(exc))
+    except (TypeError, ValueError) as exc:
+        return _err(400, str(exc))
+    except RuntimeError as exc:
+        return _err(503, str(exc))
+
+
+@app.get("/api/courses/{cid}/artifacts/{aid}/execution/{run_id}")
+def notebook_execution_status(cid: str, aid: str, run_id: str):
+    from app.execution import execution_status
+
+    store, course = _course_or_404(cid)
+    if course is None:
+        return _err(404, f"No course {cid!r}.")
+    try:
+        return execution_status(store, cid, aid, run_id)
+    except (KeyError, ValueError):
+        return _err(404, "No such course-scoped notebook execution.")
+
+
+@app.post("/api/courses/{cid}/artifacts/{aid}/execution/{run_id}/stop")
+def stop_notebook_execution(cid: str, aid: str, run_id: str):
+    from app.execution import stop_execution
+
+    store, course = _course_or_404(cid)
+    if course is None:
+        return _err(404, f"No course {cid!r}.")
+    try:
+        return stop_execution(store, cid, aid, run_id)
+    except (KeyError, ValueError):
+        return _err(404, "No such course-scoped notebook execution.")
+
+
+@app.post("/api/courses/{cid}/artifacts/{aid}/execution/{run_id}/resume")
+def resume_notebook_execution(cid: str, aid: str, run_id: str, payload: dict = Body(default={})):
+    from app.execution import resume_execution
+
+    store, course = _course_or_404(cid)
+    if course is None:
+        return _err(404, f"No course {cid!r}.")
+    try:
+        return resume_execution(store, cid, aid, run_id, confirmed=payload.get("confirmed") is True)
+    except PermissionError as exc:
+        return _err(412, str(exc))
+    except KeyError:
+        return _err(404, "No such course-scoped notebook execution.")
+    except RuntimeError as exc:
+        return _err(409, str(exc))
+
+
+@app.get("/api/courses/{cid}/artifacts/{aid}/execution/{run_id}/outputs/{filename}")
+def notebook_execution_output(cid: str, aid: str, run_id: str, filename: str):
+    from app.execution import output_path
+
+    store, course = _course_or_404(cid)
+    if course is None:
+        return _err(404, f"No course {cid!r}.")
+    try:
+        path = output_path(store, cid, aid, run_id, filename)
+    except (KeyError, ValueError):
+        return _err(404, "No such course-scoped execution output.")
+    return FileResponse(path, media_type="image/png", headers={"Cache-Control": "private, max-age=3600"})
+
+
 @app.post("/api/import/preview")
 async def import_preview(files: list[UploadFile] = File(default=[])):
     from app.importer import sort_bulk

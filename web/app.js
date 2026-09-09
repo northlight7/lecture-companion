@@ -36,7 +36,10 @@ const state = {
   artifactOffset: 0,
   artifactSheet: "",
   selectedObjects: new Map(),
+  execution: null,
 };
+
+let executionTimer = null;
 
 // ---------------------------------------------------------------- utilities
 
@@ -994,6 +997,142 @@ function spreadsheetHtml(objects, artifact, cid, currentOid) {
   return sheetCards + grid + others.map((obj) => objectCard(obj, artifact, cid, currentOid)).join("");
 }
 
+function executionBase() {
+  const { cid, aid } = state.route;
+  return `/api/courses/${encodeURIComponent(cid)}/artifacts/${encodeURIComponent(aid)}/execution`;
+}
+
+function executionValueHtml(value) {
+  if (!value) return "";
+  if (value.kind === "table") {
+    return tableHtml([value.columns || [], ...(value.rows || [])]);
+  }
+  return `<pre class="execution-output">${esc(value.text || "")}</pre>`;
+}
+
+function executionResultHtml(result, run) {
+  const source = sourceHash(state.route.cid, state.route.aid, result.object_id);
+  const warnings = (result.warnings || []).map((warning) =>
+    `<div class="execution-warning"><strong>${esc(warning.category)}:</strong> ${esc(warning.message)}
+      <p>${esc(warning.diagnostic || "This warning came from the disclosed local runtime.")}</p></div>`).join("");
+  const streams = [
+    result.stdout ? `<h4>Standard output</h4><pre class="execution-output">${esc(result.stdout)}</pre>` : "",
+    result.stderr ? `<h4>Standard error</h4><pre class="execution-output">${esc(result.stderr)}</pre>` : "",
+  ].join("");
+  const plots = (result.plots || []).map((name) =>
+    `<img class="execution-plot" src="${executionBase()}/${encodeURIComponent(run.run_id)}/outputs/${encodeURIComponent(name)}" alt="Computed plot from notebook cell ${Number(result.cell_index) + 1}">`).join("");
+  const failure = result.error
+    ? `<p class="field-error">${esc(result.error_type)}: ${esc(result.error)}</p>
+      <p>${esc(result.diagnostic || "Inspect the captured local trace before changing the cell.")}</p>
+      <details><summary>Local traceback</summary><pre>${esc(result.traceback)}</pre></details>`
+    : "";
+  return `<article class="execution-cell" data-execution-cell="${esc(result.cell_index)}">
+    <h3><a href="${source}">Notebook cell ${Number(result.cell_index) + 1}</a> · ${esc(result.state)}</h3>
+    <p class="help">${esc(result.provenance)} · ${esc(result.duration_seconds)} seconds</p>
+    ${warnings}${streams}${executionValueHtml(result.value)}${plots}${failure}
+  </article>`;
+}
+
+function paintExecution(run = null) {
+  const stateLabel = $("execution-state");
+  const results = $("execution-results");
+  const stop = $("stop-execution");
+  const resume = $("resume-execution");
+  if (!run) {
+    stateLabel.textContent = "Not run";
+    stop.hidden = true;
+    resume.hidden = true;
+    results.innerHTML = `<p class="help">Computed results appear here and remain separate from saved notebook output.</p>`;
+    return;
+  }
+  state.execution.current = run;
+  stateLabel.textContent = run.stale ? "Stale" : run.state;
+  stop.hidden = run.state !== "running";
+  resume.hidden = run.stale || !["paused", "error"].includes(run.state);
+  const progress = `${run.completed_cells.length} of ${run.selected_cells.length} selected code cells completed.`;
+  const pause = run.pause_reason ? `<p class="${run.state === "error" ? "field-error" : "help"}">${esc(run.pause_reason)}</p>` : "";
+  results.innerHTML = `<p class="help">${esc(progress)} Source version ${esc(run.artifact_version)}.</p>${pause}` +
+    (run.results || []).map((result) => executionResultHtml(result, run)).join("");
+}
+
+function stopExecutionPolling() {
+  clearTimeout(executionTimer);
+  executionTimer = null;
+}
+
+async function pollExecution() {
+  const run = state.execution?.current;
+  if (!run || state.route.name !== "artifact") return;
+  try {
+    const fresh = await getJSON(`${executionBase()}/${encodeURIComponent(run.run_id)}`);
+    paintExecution(fresh);
+    if (["queued", "running"].includes(fresh.state)) {
+      executionTimer = setTimeout(pollExecution, 250);
+    }
+  } catch (err) {
+    $("execution-error").hidden = false;
+    $("execution-error").textContent = err.message;
+  }
+}
+
+async function loadExecutionPanel() {
+  stopExecutionPolling();
+  const panel = $("execution-panel");
+  if (state.artifact?.kind !== "ipynb") {
+    panel.hidden = true;
+    state.execution = null;
+    return;
+  }
+  panel.hidden = false;
+  const payload = await getJSON(`${executionBase()}/environment`);
+  state.execution = { info: payload, current: payload.executions[0] || null };
+  const env = payload.environment;
+  $("execution-disclosure").textContent = "Runs locally without DeepSeek. Network is denied. Code reads copies of current-course files and writes only its execution workspace.";
+  $("execution-environment").innerHTML = [
+    ["Runtime", `${env.implementation} ${env.python}`],
+    ["Packages", Object.entries(env.packages).map(([name, version]) => `${name} ${version}`).join(", ")],
+    ["Network", env.network],
+    ["Files", env.filesystem],
+    ["Limits", `${env.cell_timeout_seconds}s per cell, ${env.output_char_limit_per_stream.toLocaleString()} characters per stream, ${Math.round(env.memory_limit_bytes / 1073741824)} GiB data segment`],
+    ["Processes", env.process_limit],
+  ].map(([term, value]) => `<dt>${esc(term)}</dt><dd>${esc(value)}</dd>`).join("");
+  paintExecution(state.execution.current);
+  if (state.execution.current && ["queued", "running"].includes(state.execution.current.state)) {
+    executionTimer = setTimeout(pollExecution, 100);
+  }
+}
+
+async function startNotebookExecution(selectedOnly) {
+  const error = $("execution-error");
+  error.hidden = true;
+  if (!$("execution-confirm").checked) {
+    error.textContent = "Confirm the disclosed local runtime before running code.";
+    error.hidden = false;
+    return;
+  }
+  const payload = { confirmed: true };
+  if (selectedOnly) {
+    const indices = [...state.selectedObjects.values()]
+      .filter((obj) => obj.object_type === "notebook_cell" && obj.data.cell_type === "code")
+      .map((obj) => Number(obj.locator.notebook_cell));
+    if (!indices.length) {
+      error.textContent = "Select at least one code cell in the source pane.";
+      error.hidden = false;
+      return;
+    }
+    payload.cell_indices = indices;
+  }
+  try {
+    const run = await postJSON(executionBase(), payload);
+    paintExecution(run);
+    stopExecutionPolling();
+    executionTimer = setTimeout(pollExecution, 100);
+  } catch (err) {
+    error.textContent = err.message;
+    error.hidden = false;
+  }
+}
+
 function paintSelected() {
   const values = [...state.selectedObjects.values()];
   $("selected-context").textContent = values.length
@@ -1038,6 +1177,7 @@ async function loadArtifactPage({ append = false } = {}) {
   $("native-viewer").dataset.artifactId = artifact.id;
   $("artifact-more").hidden = !payload.has_more;
   paintSelected();
+  await loadExecutionPanel();
   if (oid) requestAnimationFrame(() => document.getElementById(`source-${oid}`)?.scrollIntoView({ block: "center" }));
 }
 
@@ -1104,6 +1244,33 @@ $("ask-selected-context").addEventListener("click", async () => {
   } catch (err) { answer.innerHTML = `<p class="field-error">${esc(err.message)}</p>`; }
 });
 
+$("run-all-cells").addEventListener("click", () => startNotebookExecution(false));
+$("run-selected-cells").addEventListener("click", () => startNotebookExecution(true));
+
+$("stop-execution").addEventListener("click", async () => {
+  const run = state.execution?.current;
+  if (!run) return;
+  try {
+    paintExecution(await postJSON(`${executionBase()}/${encodeURIComponent(run.run_id)}/stop`, {}));
+    stopExecutionPolling();
+  } catch (err) { handle(err); }
+});
+
+$("resume-execution").addEventListener("click", async () => {
+  const run = state.execution?.current;
+  if (!run) return;
+  if (!$("execution-confirm").checked) {
+    $("execution-error").textContent = "Confirm the disclosed local runtime before resuming code.";
+    $("execution-error").hidden = false;
+    return;
+  }
+  try {
+    paintExecution(await postJSON(`${executionBase()}/${encodeURIComponent(run.run_id)}/resume`, { confirmed: true }));
+    stopExecutionPolling();
+    executionTimer = setTimeout(pollExecution, 100);
+  } catch (err) { handle(err); }
+});
+
 // ---------------------------------------------------------------- routing
 
 function parseHash() {
@@ -1131,6 +1298,7 @@ async function route() {
     state.route.name === "viewer" && next.name === "viewer" &&
     state.route.cid === next.cid && state.route.did === next.did;
   state.route = next;
+  if (next.name !== "artifact") stopExecutionPolling();
   showScreen(next.name);
 
   if (next.name === "courses") {
