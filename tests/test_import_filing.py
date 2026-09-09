@@ -175,6 +175,37 @@ def test_import_bulk_creates_one_course_per_group(store, tmp_courses):
     assert len(comp.decks) == 1, "the syllabus must not become a deck"
 
 
+def test_folder_tree_groups_courses_and_preserves_relative_hierarchy():
+    names = [
+        "Courses/Database Management Systems/L1/Chapter01.pptx",
+        "Courses/Database Management Systems/L2/Tutorial.docx",
+        "Courses/Business Data Analytics/L2/Airbnb.csv",
+        "Courses/Business Data Analytics/L2/Regression.ipynb",
+        "Courses/.DS_Store",
+    ]
+    groups = sort_bulk(names)
+    by_title = {group.title: group for group in groups}
+    assert set(by_title) == {"Database Management Systems", "Business Data Analytics"}
+    assert by_title["Database Management Systems"].filenames == names[:2]
+    assert by_title["Business Data Analytics"].filenames == names[2:4]
+
+
+def test_reimporting_the_same_folder_drops_duplicate_work(store):
+    lecture = (FIXTURES / "lecture_w1.pdf").read_bytes()
+    files = [("Courses/Databases/L1/lecture_w1.pdf", lecture)]
+
+    first = import_bulk(store, files)
+    second = import_bulk(store, files)
+
+    assert len(store.list_courses()) == 1
+    course = store.list_courses()[0]
+    assert len(store.load_artifacts(course.id)) == 1
+    assert len(course.decks) == 1
+    assert first[0][1].filed[0].source_path == "L1/lecture_w1.pdf"
+    assert second[0][1].filed[0].status == "unchanged"
+    assert second[0][1].filed[0].reason == "unchanged bytes were already extracted"
+
+
 def test_unsupported_file_is_an_error_not_a_crash(store, course):
     res = import_files(store, course.id, [("notes.txt", b"hello")])
     assert res.filed == []

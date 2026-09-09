@@ -915,3 +915,13 @@ label {
   overflow-wrap: anywhere;
 }
 .toast[hidden] { display: none; }
+.link-button {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}

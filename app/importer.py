@@ -311,10 +311,87 @@ def _shared_prefix(names: list[str]) -> str:
     return pre.strip(" -_")
 
 
+def _normalised_upload_path(name: str) -> str:
+    return _source_path(str(name))
+
+
+def _looks_like_course_unit(name: str) -> bool:
+    value = name.strip().lower()
+    return bool(re.fullmatch(r"(?:l|lec|lecture|week|wk|module|unit|chapter)\s*\d+", value))
+
+
+def _folder_groups(names: list[str]) -> list[BulkGroup] | None:
+    """Use a selected folder tree before falling back to filename heuristics."""
+    paths = [_normalised_upload_path(name) for name in names]
+    split = [path.split("/") for path in paths]
+    if not split or any(len(parts) < 2 for parts in split):
+        return None
+    roots = {parts[0] for parts in split}
+    if len(roots) != 1:
+        return None
+
+    root = split[0][0]
+    direct_files = any(len(parts) == 2 for parts in split)
+    children = {parts[1] for parts in split if len(parts) >= 3}
+    generic_root = root.strip().lower() in {"courses", "course", "course materials", "course_materials"}
+
+    if direct_files or not children or (not generic_root and all(_looks_like_course_unit(c) for c in children)):
+        return [BulkGroup(
+            title=root,
+            filenames=paths,
+            reason=f'files were selected from the folder "{root}"',
+        )]
+
+    if generic_root or len(children) > 1:
+        grouped: dict[str, list[str]] = {}
+        for path, parts in zip(paths, split, strict=True):
+            if len(parts) >= 3:
+                grouped.setdefault(parts[1], []).append(path)
+        if grouped:
+            return [BulkGroup(
+                title=title,
+                filenames=members,
+                reason=f'files were selected from the course folder "{title}"',
+            ) for title, members in grouped.items()]
+    return None
+
+
+def _relative_group_members(names: list[str], course_title: str) -> list[str]:
+    """Remove the selected root/course prefix but retain L1/L2 hierarchy."""
+    paths = [_normalised_upload_path(name) for name in names]
+    split = [path.split("/") for path in paths]
+    title_key = course_title.strip().casefold()
+    title_indexes = [
+        next((i for i, part in enumerate(parts[:-1]) if part.casefold() == title_key), -1)
+        for parts in split
+    ]
+    if title_indexes and all(index >= 0 for index in title_indexes):
+        return [
+            "/".join(parts[index + 1:])
+            for parts, index in zip(split, title_indexes, strict=True)
+        ]
+    directories = [path.split("/")[:-1] for path in paths]
+    common: list[str] = []
+    if directories:
+        for columns in zip(*directories):
+            if len(set(columns)) != 1:
+                break
+            common.append(columns[0])
+    trim = len(common)
+    return ["/".join(path.split("/")[trim:]) for path in paths]
+
+
 def sort_bulk(files: list[tuple[str, bytes]] | list[str]) -> list[BulkGroup]:
     """Propose courses for a pile of files. Reads names only, writes nothing."""
     names = [f if isinstance(f, str) else f[0] for f in files]
-    names = [Path(str(n).replace("\\", "/")).name for n in names]
+    names = [_normalised_upload_path(n) for n in names]
+    names = [n for n in names if supported_suffix(Path(n).name)]
+
+    folder_groups = _folder_groups(names)
+    if folder_groups is not None:
+        return folder_groups
+
+    names = [Path(n).name for n in names]
 
     groups: list[BulkGroup] = []
     by_code: dict[str, list[str]] = {}
@@ -361,7 +438,7 @@ def sort_bulk(files: list[tuple[str, bytes]] | list[str]) -> list[BulkGroup]:
 
 def import_bulk(store, files: list[tuple[str, bytes]]) -> list[tuple[Course, ImportResult]]:
     """Apply `sort_bulk`, create or reuse a course per group, then import."""
-    data = {Path(str(n).replace("\\", "/")).name: b for n, b in files}
+    data = {_normalised_upload_path(n): b for n, b in files}
     existing = {c.title.strip().lower(): c for c in store.list_courses()}
     out: list[tuple[Course, ImportResult]] = []
     for group in sort_bulk(files):
@@ -369,7 +446,12 @@ def import_bulk(store, files: list[tuple[str, bytes]]) -> list[tuple[Course, Imp
         if course is None:
             course = store.create_course(group.title)
             existing[group.title.strip().lower()] = course
-        payload = [(n, data[n]) for n in group.filenames if n in data]
+        relative = _relative_group_members(group.filenames, group.title)
+        payload = [
+            (source_path, data[original])
+            for original, source_path in zip(group.filenames, relative, strict=True)
+            if original in data
+        ]
         res = import_files(store, course.id, payload)
         out.append((store.get_course(course.id), res))
     return out
