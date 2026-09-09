@@ -1,6 +1,8 @@
 <!doctype html>
 <html lang="en">
 <head>
+  <link rel="icon" type="image/png" href="/static/app-icon.png">
+  <link rel="apple-touch-icon" href="/static/app-icon.png">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
@@ -176,6 +178,30 @@
         </div>
       </section>
       <aside class="question-panel" aria-labelledby="question-title">
+        <section class="workbook-panel" id="workbook-panel" aria-labelledby="workbook-title" hidden>
+          <div class="execution-heading">
+            <div>
+              <p class="kicker">Measured locally</p>
+              <h2 id="workbook-title">Inspect workbook</h2>
+            </div>
+            <span class="execution-state" id="workbook-state">Not inspected</span>
+          </div>
+          <p class="help">Checks formulas against cached values, resolves source ranges, diagnoses chart structure, and preserves filters, formatting, and hidden state. No model or source-file write is used.</p>
+          <button class="btn btn-primary" id="inspect-workbook" type="button">Inspect formulas and charts</button>
+          <p class="field-error" id="workbook-error" role="alert" hidden></p>
+          <div class="workbook-results" id="workbook-results" aria-live="polite"></div>
+          <details class="formula-experiment">
+            <summary>Try a formula on a copy</summary>
+            <p class="help">The proposed formula is evaluated from current source values in a course-scoped workbook copy. The original is never changed.</p>
+            <div class="experiment-fields">
+              <label>Sheet <input id="experiment-sheet" type="text" autocomplete="off"></label>
+              <label>Cell <input id="experiment-cell" type="text" placeholder="C8" autocomplete="off"></label>
+            </div>
+            <label>Formula <input id="experiment-formula" type="text" placeholder="=SUM(A1:A3)" autocomplete="off" spellcheck="false"></label>
+            <button class="btn btn-quiet" id="run-formula-experiment" type="button">Calculate on copy</button>
+            <div id="experiment-result" aria-live="polite"></div>
+          </details>
+        </section>
         <section class="execution-panel" id="execution-panel" aria-labelledby="execution-title" hidden>
           <div class="execution-heading">
             <div>

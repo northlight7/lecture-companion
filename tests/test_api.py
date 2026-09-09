@@ -12,12 +12,15 @@ prompts for) the real macOS keychain.
 from __future__ import annotations
 
 import importlib
+from io import BytesIO
 import json
 import time
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from openpyxl import Workbook
+from PIL import Image
 
 FIXTURES = Path(__file__).parent / "fixtures"
 LECTURE = FIXTURES / "lecture_w1.pdf"
@@ -91,6 +94,17 @@ def test_index_is_served(client: TestClient) -> None:
     assert "<title" in resp.text.lower()
 
 
+def test_app_icon_is_served_with_transparent_corners(client: TestClient) -> None:
+    resp = client.get("/favicon.ico")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/png"
+    icon = Image.open(BytesIO(resp.content))
+    assert icon.mode == "RGBA"
+    assert icon.size == (1024, 1024)
+    assert icon.getpixel((0, 0))[3] == 0
+    assert icon.getpixel((512, 512))[3] == 255
+
+
 def test_notebook_execution_http_contract_is_confirmed_scoped_and_serves_only_listed_outputs(client: TestClient) -> None:
     cid = client.post("/api/courses", json={"title": "Execution API"}).json()["id"]
     notebook = json.dumps({
@@ -127,6 +141,38 @@ def test_notebook_execution_http_contract_is_confirmed_scoped_and_serves_only_li
     assert client.get(f"{base}/{run_id}/outputs/cell-0001-plot-99.png").status_code == 404
     other = client.post("/api/courses", json={"title": "Other Course"}).json()["id"]
     assert client.get(f"/api/courses/{other}/artifacts/{aid}/execution/{run_id}").status_code == 404
+
+
+def test_workbook_inspection_http_contract_is_local_scoped_and_copy_only(client: TestClient) -> None:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Checks"
+    sheet["A1"] = 3
+    sheet["B1"] = "=A1*2"
+    stream = BytesIO()
+    workbook.save(stream)
+    payload = stream.getvalue()
+    cid = client.post("/api/courses", json={"title": "Workbook API"}).json()["id"]
+    uploaded = client.post(
+        f"/api/courses/{cid}/files",
+        files=[("files", ("checks.xlsx", payload, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))],
+    )
+    aid = uploaded.json()["filed"][0]["artifact_id"]
+    base = f"/api/courses/{cid}/artifacts/{aid}/workbook"
+    assert client.get(base + "/status").json()["exists"] is False
+    inspected = client.post(base + "/inspect", json={})
+    assert inspected.status_code == 200, inspected.text
+    body = inspected.json()
+    assert body["summary"]["formulas_independently_verified"] == 1
+    assert body["formulas"][0]["calculated_value"] == 6
+    assert body["source_bytes_preserved"] is True and body["remote_model_used"] is False
+    experiment = client.post(base + "/experiments", json={
+        "sheet": "Checks", "cell": "B1", "formula": "=A1*3",
+    })
+    assert experiment.status_code == 200, experiment.text
+    assert experiment.json()["calculated_value"] == 9
+    assert experiment.json()["source_bytes_preserved"] is True
+    assert client.get(f"/api/courses/no-such-course/artifacts/{aid}/workbook/status").status_code == 404
 
 
 # --------------------------------------------------------------------------

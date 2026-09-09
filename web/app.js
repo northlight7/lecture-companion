@@ -37,6 +37,7 @@ const state = {
   artifactSheet: "",
   selectedObjects: new Map(),
   execution: null,
+  workbook: null,
 };
 
 let executionTimer = null;
@@ -1025,6 +1026,101 @@ function executionBase() {
   return `/api/courses/${encodeURIComponent(cid)}/artifacts/${encodeURIComponent(aid)}/execution`;
 }
 
+function workbookBase() {
+  const { cid, aid } = state.route;
+  return `/api/courses/${encodeURIComponent(cid)}/artifacts/${encodeURIComponent(aid)}/workbook`;
+}
+
+function evidenceLink(evidence) {
+  const locator = evidence.locator || {};
+  const label = `${locator.sheet || "sheet"}!${locator.cell_range || "range"}`;
+  return evidence.object_id
+    ? `<a href="${sourceHash(state.route.cid, state.route.aid, evidence.object_id)}">${esc(label)}</a>`
+    : esc(label);
+}
+
+function formulaFindingHtml(row) {
+  const status = row.verification_state === "verified_using_cached_precedents"
+    ? "partial: cached precedent"
+    : row.verification_state === "verified"
+    ? (row.matches_cached === false ? "mismatch" : "verified")
+    : row.verification_state;
+  const cls = status === "verified" ? "finding-pass" : "finding-warning";
+  const source = row.object_id
+    ? `<a href="${sourceHash(state.route.cid, state.route.aid, row.object_id)}">${esc(row.locator.sheet)}!${esc(row.locator.cell_range)}</a>`
+    : `${esc(row.locator.sheet)}!${esc(row.locator.cell_range)}`;
+  const intermediate = (row.intermediate || []).map((item) => item.locator
+    ? `<li>${evidenceLink(item)}: ${esc(item.nonblank_count)} nonblank cells, sample ${esc((item.sample || []).join(", "))}</li>`
+    : `<li>${esc(item.matching_rows)} matching rows for criteria ${esc((item.criteria || []).join(", "))}</li>`).join("");
+  return `<article class="workbook-finding" data-formula-cell="${esc(row.locator.cell_range)}">
+    <h3>${source} · <span class="${cls}">${esc(status)}</span></h3>
+    <code>${esc(row.formula)}</code>
+    <p>Cached source value: <strong>${esc(row.cached_value)}</strong>. Local check value: <strong>${esc(row.calculated_value)}</strong>.</p>
+    <p>Calculation basis: ${esc(row.calculation_basis)}.</p>
+    <p>Unit: ${esc(row.unit)}. ${esc(row.unit_basis)}.</p>
+    ${row.error ? `<p class="field-error">${esc(row.error)}</p>` : ""}
+    ${intermediate ? `<details><summary>Intermediate source evidence</summary><ul>${intermediate}</ul></details>` : ""}
+  </article>`;
+}
+
+function chartFindingHtml(chart) {
+  const source = chart.object_id
+    ? `<a href="${sourceHash(state.route.cid, state.route.aid, chart.object_id)}">${esc(chart.title)}</a>`
+    : esc(chart.title);
+  const ranges = chart.series.flatMap((series) => Object.values(series.evidence || {})).map((item) => item.error
+    ? `<li class="finding-warning">${esc(item.reference)}: ${esc(item.error)}</li>`
+    : `<li>${evidenceLink(item)}: ${esc(item.cell_count)} cells</li>`).join("");
+  const diagnostics = chart.diagnostics.map((item) =>
+    `<p class="${item.severity === "info" ? "finding-pass" : "finding-warning"}">${esc(item.message)}</p>`).join("");
+  return `<article class="workbook-finding"><h3>${source} · ${esc(chart.chart_type)}</h3>
+    ${diagnostics}<details><summary>Exact chart input ranges</summary><ul>${ranges}</ul></details></article>`;
+}
+
+function formattingFindingHtml(row) {
+  const where = evidenceLink(row);
+  if (row.kind === "conditional_formatting") {
+    return `<li>${where}: priority ${esc(row.priority)}, ${esc(row.rule_type)}${row.stop_if_true ? ", Stop If True" : ""}${row.formula?.length ? `, formula ${esc(row.formula.join(", "))}` : ""}</li>`;
+  }
+  if (row.kind === "auto_filter") {
+    return `<li>${where}: ${esc(row.columns.length)} filter columns, ${esc(row.sort.length)} sort conditions</li>`;
+  }
+  return `<li>${where}: sheet ${esc(row.sheet_state)}, hidden rows ${esc((row.hidden_rows || []).join(", ") || "none")}, hidden columns ${esc((row.hidden_columns || []).join(", ") || "none")}</li>`;
+}
+
+function paintWorkbook(audit) {
+  state.workbook = audit;
+  $("workbook-state").textContent = audit.cache_hit ? "Current" : "Inspected";
+  const summary = audit.summary;
+  const formulas = [...audit.formulas].sort((a, b) =>
+    Number(a.matches_cached !== false) - Number(b.matches_cached !== false) ||
+    Number(a.verification_state === "verified") - Number(b.verification_state === "verified"));
+  $("workbook-results").innerHTML = `
+    <p><strong>${esc(summary.formulas_independently_verified)} of ${esc(summary.formula_count)}</strong> formulas independently verified. ${esc(summary.cached_mismatches)} cached mismatches. ${esc(summary.charts)} charts inspected.</p>
+    <details open><summary>Formula checks</summary>${formulas.slice(0, 12).map(formulaFindingHtml).join("") || "<p>No formulas.</p>"}</details>
+    <details><summary>Chart checks</summary>${audit.charts.map(chartFindingHtml).join("") || "<p>No charts.</p>"}</details>
+    <details><summary>Filters, formatting, and hidden structure</summary><ul>${audit.formatting_and_filters.map(formattingFindingHtml).join("") || "<li>No stored rules found.</li>"}</ul></details>
+    <details><summary>Limits and uncertainty</summary><ul>${audit.uncertainty.map((item) => `<li>${esc(item)}</li>`).join("")}</ul></details>`;
+}
+
+async function loadWorkbookPanel() {
+  const panel = $("workbook-panel");
+  if (state.artifact?.kind !== "xlsx") {
+    panel.hidden = true;
+    state.workbook = null;
+    return;
+  }
+  panel.hidden = false;
+  const status = await getJSON(`${workbookBase()}/status`);
+  $("workbook-state").textContent = status.exists ? (status.stale ? "Stale" : "Ready") : "Not inspected";
+  if (status.exists && !status.stale) {
+    paintWorkbook(await postJSON(`${workbookBase()}/inspect`, {}));
+  } else {
+    $("workbook-results").innerHTML = status.stale
+      ? `<p class="finding-warning">The workbook source changed. Prior checks are stale and are not shown. Inspect this version before relying on results.</p>`
+      : `<p class="help">No independent formula or chart checks have been run for this source version.</p>`;
+  }
+}
+
 function executionValueHtml(value) {
   if (!value) return "";
   if (value.kind === "table") {
@@ -1201,6 +1297,8 @@ async function loadArtifactPage({ append = false } = {}) {
   $("artifact-more").hidden = !payload.has_more;
   paintSelected();
   await loadExecutionPanel();
+  await loadWorkbookPanel();
+  if (artifact.kind === "xlsx") $("experiment-sheet").value = state.artifactSheet || payload.sheets[0] || "";
   if (oid) requestAnimationFrame(() => document.getElementById(`source-${oid}`)?.scrollIntoView({ block: "center" }));
 }
 
@@ -1229,6 +1327,11 @@ $("native-viewer").addEventListener("change", (event) => {
   if (!obj) return;
   if (input.checked) state.selectedObjects.set(obj.id, obj);
   else state.selectedObjects.delete(obj.id);
+  if (input.checked && state.artifact?.kind === "xlsx" && obj.object_type === "cell") {
+    $("experiment-sheet").value = obj.locator.sheet || "";
+    $("experiment-cell").value = obj.locator.cell_range || "";
+    if (obj.data.formula) $("experiment-formula").value = obj.data.formula;
+  }
   paintSelected();
 });
 
@@ -1292,6 +1395,44 @@ $("resume-execution").addEventListener("click", async () => {
     stopExecutionPolling();
     executionTimer = setTimeout(pollExecution, 100);
   } catch (err) { handle(err); }
+});
+
+$("inspect-workbook").addEventListener("click", async () => {
+  const error = $("workbook-error");
+  error.hidden = true;
+  $("workbook-state").textContent = "Inspecting";
+  $("workbook-results").innerHTML = SKELETON;
+  try {
+    paintWorkbook(await postJSON(`${workbookBase()}/inspect`, {}));
+  } catch (err) {
+    $("workbook-state").textContent = "Error";
+    error.textContent = err.message;
+    error.hidden = false;
+    $("workbook-results").innerHTML = "";
+  }
+});
+
+$("run-formula-experiment").addEventListener("click", async () => {
+  const target = $("experiment-result");
+  target.innerHTML = SKELETON;
+  try {
+    const result = await postJSON(`${workbookBase()}/experiments`, {
+      sheet: $("experiment-sheet").value.trim(),
+      cell: $("experiment-cell").value.trim(),
+      formula: $("experiment-formula").value.trim(),
+    });
+    const source = result.object_id
+      ? `<a href="${sourceHash(state.route.cid, state.route.aid, result.object_id)}">${esc(result.sheet)}!${esc(result.cell)}</a>`
+      : `${esc(result.sheet)}!${esc(result.cell)}`;
+    const evidence = (result.intermediate || []).map((item) => item.locator
+      ? `<li>${evidenceLink(item)}: ${esc((item.sample || []).join(", "))}</li>`
+      : `<li>${esc(item.matching_rows)} matching rows</li>`).join("");
+    target.innerHTML = `<article class="workbook-finding"><h3>${source} · ${esc(result.verification_state)}</h3>
+      <p>Computed on copy: <strong>${esc(result.calculated_value)}</strong> ${esc(result.unit === "not identified" ? "" : result.unit)}.</p>
+      <p class="help">${esc(result.provenance)}.</p>${evidence ? `<ul>${evidence}</ul>` : ""}</article>`;
+  } catch (err) {
+    target.innerHTML = `<p class="field-error">${esc(err.message)}</p>`;
+  }
 });
 
 // ---------------------------------------------------------------- routing

@@ -293,6 +293,15 @@ class CourseStore:
         _check_id(run_id, "run_id")
         return self._within(course_id, "executions", artifact_id, run_id)
 
+    def workbook_inspection_path(self, course_id: str, artifact_id: str) -> Path:
+        _check_id(artifact_id, "artifact_id")
+        return self._within(course_id, "inspections", artifact_id, "workbook.json")
+
+    def workbook_experiment_dir(self, course_id: str, artifact_id: str, experiment_id: str) -> Path:
+        _check_id(artifact_id, "artifact_id")
+        _check_id(experiment_id, "experiment_id")
+        return self._within(course_id, "inspections", artifact_id, "experiments", experiment_id)
+
     def index_path(self, course_id: str) -> Path:
         return self._within(course_id, "index.jsonl")
 

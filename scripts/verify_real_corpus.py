@@ -77,7 +77,9 @@ def _structure_failures(path: Path, kind: str, objects) -> list[str]:
             "hidden_rows": sum(sum(bool(dim.hidden) for dim in sheet.row_dimensions.values()) for sheet in workbook.worksheets),
             "hidden_columns": sum(sum(bool(dim.hidden) for dim in sheet.column_dimensions.values()) for sheet in workbook.worksheets),
             "filters": sum(bool(sheet.auto_filter.ref) for sheet in workbook.worksheets),
-            "conditional_formatting": sum(len(sheet.conditional_formatting) for sheet in workbook.worksheets),
+            "conditional_formatting": sum(
+                len(group.rules) for sheet in workbook.worksheets for group in sheet.conditional_formatting
+            ),
             "validations": sum(len(sheet.data_validations.dataValidation) for sheet in workbook.worksheets),
         }
         sheet_objects = [obj for obj in objects if obj.object_type == "sheet"]
@@ -95,6 +97,8 @@ def _structure_failures(path: Path, kind: str, objects) -> list[str]:
             failures.append("workbook sheet or non-empty cell count differs from source")
         if formulas != expected_formulas or actual["chart"] != expected_charts or actual["range"] < expected_tables:
             failures.append("workbook formula, chart, or table count differs from source")
+        if actual["formatting_rule"] != expected_features["conditional_formatting"] or actual["filter_rule"] != expected_features["filters"]:
+            failures.append("workbook formatting or filter rule object count differs from source")
         if actual_features != expected_features:
             failures.append(f"workbook feature inventory differs: {actual_features} != {expected_features}")
     elif kind == "csv":

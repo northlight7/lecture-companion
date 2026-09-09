@@ -101,6 +101,16 @@ and local traces stay separate from saved notebook output and link back to the
 exact source cell. Stop and resume uses a durable namespace checkpoint, so
 completed cells are not run twice. Source changes mark prior runs stale.
 
+**Inspect workbooks.** Workbook viewers locally resolve formula precedents,
+keep cached source values separate from calculated checks, infer units from
+source labels and number formats, and expose every intermediate range. The
+inspector checks chart input lengths and likely row-versus-column orientation,
+then inventories filters, sort conditions, hidden structure, and each
+conditional-formatting rule with its priority and Stop If True setting. A
+formula experiment runs on a course-scoped copy. Unsupported formulas and
+checks that depend on cached formula precedents are labeled instead of treated
+as independently verified.
+
 **Search and relationships.** Each course has a local typed-object search over
 slides, notes, document blocks, formulas, code, outputs, and dataset fields.
 Results open the exact source object. An inspectable alias catalog connects
@@ -230,15 +240,28 @@ LC_COURSES_ROOT=.internal/notebook-courses LC_FAKE_MODEL=1 LC_PORT=45729 ./run.s
 .venv/bin/python scripts/gate_notebook_execution.py --base http://127.0.0.1:45729 --courses-root .internal/notebook-courses
 ```
 
+This gate checks all three released workbooks, independently reproduces the
+real `SUMIFS` result and its HKD-thousands unit, diagnoses the orientation
+exercise, verifies formatting and filter semantics, operates a copy-only
+formula experiment, and checks exact links at both target sizes:
+
+```bash
+LC_COURSES_ROOT=.internal/workbook-courses LC_FAKE_MODEL=1 LC_PORT=45751 ./run.sh
+.venv/bin/python scripts/gate_workbook_inspection.py --base http://127.0.0.1:45751 --courses-root .internal/workbook-courses
+```
+
 Known limits:
 
 - The retrieval quality claim rests on the hashing embedder. The e5 path is
   implemented but has not been measured.
 - `.pptx` rendering has been exercised on a small deck; complex decks with
   animations, embedded video or unusual fonts are untested.
-- DOCX, XLSX, and CSV have native read-only viewers, cited selected-context
-  questions, and cross-artifact local search. They do not yet have
-  artifact-specific generated explanations or resumable model processing.
+- DOCX and CSV have native read-only viewers, cited selected-context questions,
+  and cross-artifact local search. They do not yet have artifact-specific
+  generated explanations or resumable model processing.
+- XLSX adds local formula verification, chart diagnosis, detailed rule
+  inspection, source-version invalidation, and copy-only formula experiments.
+  Its evaluator deliberately labels formulas outside its supported subset.
 - IPYNB adds confirmed, locally sandboxed, interruption-safe execution on this
   macOS prototype. It does not install arbitrary notebook dependencies or
   enable network access.

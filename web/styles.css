@@ -781,7 +781,7 @@ label {
   border-bottom: 1px solid var(--line-soft);
 }
 .quality-warning { color: var(--warn); }
-.execution-panel {
+.execution-panel, .workbook-panel {
   margin: 0 0 1.5rem;
   padding: 1rem;
   border: 1px solid var(--line);
@@ -789,7 +789,7 @@ label {
   background: var(--surface);
   min-width: 0;
 }
-.execution-panel[hidden] { display: none; }
+.execution-panel[hidden], .workbook-panel[hidden] { display: none; }
 .execution-heading { display: flex; justify-content: space-between; gap: 1rem; align-items: start; }
 .execution-heading h2 { margin: 0; font-size: 1.1rem; text-transform: none; letter-spacing: 0; }
 .execution-heading .kicker { margin: 0 0 .15rem; }
@@ -807,6 +807,17 @@ label {
 .execution-output { padding: .6rem .75rem; background: var(--surface-2); border-radius: var(--r-md); }
 .execution-warning { color: var(--warn); }
 .execution-plot { max-height: 30rem; object-fit: contain; border: 1px solid var(--line); border-radius: var(--r-md); }
+.workbook-results { display: grid; gap: .75rem; margin-top: 1rem; min-width: 0; }
+.workbook-finding { border-top: 1px solid var(--line-soft); padding-top: .7rem; min-width: 0; }
+.workbook-finding h3 { margin: 0 0 .35rem; font-size: .9rem; }
+.workbook-finding p { margin: .25rem 0; }
+.finding-pass { color: var(--accent); }
+.finding-warning { color: var(--warn); }
+.formula-experiment { margin-top: 1rem; border-top: 1px solid var(--line); padding-top: .75rem; }
+.formula-experiment summary { cursor: pointer; font-weight: 600; }
+.experiment-fields { display: grid; grid-template-columns: minmax(0, 1fr) 7rem; gap: .5rem; }
+.formula-experiment input { width: 100%; }
+.formula-experiment .btn { margin-top: .65rem; }
 .artifact-controls {
   display: flex;
   align-items: end;
