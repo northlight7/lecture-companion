@@ -77,6 +77,11 @@ If you have a pile of files and no course yet, drop them all in. The app groups
 them into proposed courses by course code and filename prefix and shows you the
 grouping before anything is written.
 
+You can also choose a complete folder tree. Selecting a parent `Courses` folder
+groups files by its immediate course folders and preserves paths such as
+`L1/` and `L2/`. Re-selecting the same folder later skips files whose relative
+path and bytes are unchanged, so they are not extracted or processed twice.
+
 **Read.** The course list opens into a two-pane viewer: the rendered slide, and
 the explanation with its heading, body, a set-off example, and a mermaid diagram
 where one helps. Arrow keys move between slides. Light and dark themes.

@@ -21,6 +21,7 @@ The slide pipeline remains green. Capability Round 4 added confirmed, locally sa
 - Done: real Word images and saved notebook plots render from byte-validated course-local media endpoints.
 - Done: all five real courses pass local typed search, exact result links, concept-to-file evidence, explicit notebook-to-dataset references, and responsive relationship views.
 - Done: source changes mark the course knowledge index stale. The next search rebuilds it atomically and removes superseded evidence.
+- Done: the browser accepts complete folder trees, groups the five-course parent folder correctly, preserves lecture subfolders, and skips unchanged repeat uploads without duplicate extraction.
 - Done: notebook viewers disclose the actual runtime and limits before confirmation, run all or selected code cells, capture computed stdout, tables, plots, warnings, errors, and diagnostics, and link every result to its exact source cell.
 - Done: the macOS sandbox denies network, child processes, foreign-course reads, and writes outside the run workspace. A stopped run resumes from its saved namespace without repeating completed cells, and source changes mark runs stale.
 - Next: add deterministic spreadsheet inspection, formula and chart diagnosis, and unit-aware calculation verification.

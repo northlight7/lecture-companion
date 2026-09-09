@@ -72,7 +72,10 @@ const postJSON = (path, payload) =>
 
 function postFiles(path, fileList) {
   const form = new FormData();
-  for (const file of fileList) form.append("files", file, file.name);
+  for (const file of fileList) {
+    const sourcePath = file.webkitRelativePath || file.name;
+    form.append("files", file, sourcePath);
+  }
   return api(path, { method: "POST", body: form });
 }
 
@@ -489,7 +492,7 @@ function wireDrop(zoneId, inputId, onFiles) {
 
 let bulkFiles = [];
 
-wireDrop("bulk-drop", "bulk-input", async (files) => {
+async function previewBulkFiles(files) {
   bulkFiles = files;
   const box = $("bulk-preview");
   box.hidden = false;
@@ -515,7 +518,24 @@ wireDrop("bulk-drop", "bulk-input", async (files) => {
   } catch (err) {
     box.innerHTML = `<p class="field-error">${esc(err.message)}</p>`;
   }
-});
+}
+
+wireDrop("bulk-drop", "bulk-input", previewBulkFiles);
+
+function wireFolderPicker(buttonId, inputId, onFiles) {
+  const button = $(buttonId);
+  const input = $(inputId);
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    input.click();
+  });
+  input.addEventListener("change", () => {
+    if (input.files.length) onFiles([...input.files]);
+    input.value = "";
+  });
+}
+
+wireFolderPicker("bulk-folder-picker", "bulk-folder-input", previewBulkFiles);
 
 async function commitBulk() {
   const button = $("bulk-commit");
@@ -535,7 +555,7 @@ async function commitBulk() {
   }
 }
 
-wireDrop("course-drop", "course-input", async (files) => {
+async function uploadCourseFiles(files) {
   const cid = state.route.cid;
   if (!cid) return;
   const report = $("filed-report");
@@ -558,7 +578,10 @@ wireDrop("course-drop", "course-input", async (files) => {
   } catch (err) {
     report.innerHTML = `<p class="field-error">${esc(err.message)}</p>`;
   }
-});
+}
+
+wireDrop("course-drop", "course-input", uploadCourseFiles);
+wireFolderPicker("course-folder-picker", "course-folder-input", uploadCourseFiles);
 
 // ---------------------------------------------------------------- course screen
 
