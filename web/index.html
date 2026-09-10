@@ -145,6 +145,7 @@
         <span class="counter" id="slide-counter" aria-live="polite">-</span>
         <button class="btn btn-quiet" id="next-slide" type="button" aria-label="Next slide">Next</button>
       </div>
+      <button class="btn btn-quiet" id="regen-open" type="button">Explain again</button>
     </div>
 
     <div class="runbar runbar-viewer" id="viewer-runbar"></div>
@@ -272,6 +273,24 @@
       <button class="btn btn-quiet" id="connect-forget" type="button">Forget key</button>
     </div>
   </form>
+</dialog>
+
+<dialog id="regen-dialog" class="sheet" aria-labelledby="regen-title">
+  <form method="dialog" class="sheet-close-form">
+    <button class="sheet-close" value="cancel">Close</button>
+  </form>
+  <h2 id="regen-title">Explain again</h2>
+  <p class="lede">The explanation is written from the slide, its image, and the
+    course context. Say what the last one got wrong and it will be taken into
+    account. Leave this empty to simply try again.</p>
+  <label for="regen-steer">What should it do differently? (optional)</label>
+  <textarea id="regen-steer" rows="3" maxlength="600"
+    placeholder="Explain the graph in more detail."></textarea>
+  <div class="sheet-actions">
+    <button class="btn btn-primary" id="regen-slide-go" type="button">This slide</button>
+    <button class="btn btn-quiet" id="regen-deck-go" type="button">This whole deck</button>
+  </div>
+  <p class="field-error" id="regen-error" role="alert" hidden></p>
 </dialog>
 
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>

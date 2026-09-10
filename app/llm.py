@@ -225,7 +225,13 @@ def build_prompt_text(ctx: SlideContext) -> str:
         f"## This slide ({ctx.deck_title}, {ctx.slide_index + 1} of {ctx.n_slides})\n"
         "Extracted text:\n"
         f"{slide_text}\n\n"
-        "The slide image follows. Explain the subject of this slide, grounded "
+        + (
+            "## What the reader asked to change\n"
+            f"{steer}\n\n"
+            if (steer := getattr(ctx, "_steer", "")).strip()
+            else ""
+        )
+        + "The slide image follows. Explain the subject of this slide, grounded "
         "in what it actually shows, for a student who has read everything "
         "above. Use earlier material silently, to avoid repeating it, and use "
         "related files only when they directly clarify the subject. Match the "

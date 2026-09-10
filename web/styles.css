@@ -1241,15 +1241,6 @@ label {
 
 /* ------------------------------------------- acting on one slide */
 
-.reading-actions {
-  display: flex;
-  gap: var(--sp-2);
-  flex-wrap: wrap;
-  margin-top: var(--sp-6);
-  padding-top: var(--sp-4);
-  border-top: 1px solid var(--line);
-}
-
 .notes {
   margin-top: var(--sp-5);
   font-family: var(--sans);

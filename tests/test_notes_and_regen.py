@@ -60,6 +60,40 @@ def test_forcing_one_slide_leaves_the_others_alone(store):
     assert store.load_explanation(cid, "w1", 1).body == untouched
 
 
+def test_a_steer_reaches_the_prompt_and_an_absent_one_leaves_no_trace(store):
+    """The reader can say what was wrong. It is optional, and when absent the
+    prompt has to look exactly as it did before, or every ordinary slide would
+    carry an empty section."""
+    from app.llm import build_prompt_text
+    from app.pipeline import build_context
+
+    cid = _course(store)
+    embedder = HashingEmbedder()
+
+    plain = build_prompt_text(build_context(store, cid, "w1", 0, embedder))
+    assert "What the reader asked to change" not in plain
+
+    steered = build_prompt_text(
+        build_context(store, cid, "w1", 0, embedder, steer="Explain the graph in more detail.")
+    )
+    assert "What the reader asked to change" in steered
+    assert "Explain the graph in more detail." in steered
+    # Everything else about the prompt is unchanged.
+    assert len(steered) > len(plain)
+
+
+def test_a_steer_is_collapsed_and_bounded(store):
+    from app.pipeline import MAX_STEER_CHARS, build_context
+
+    cid = _course(store)
+    ctx = build_context(
+        store, cid, "w1", 0, HashingEmbedder(), steer="  a\n\n b   " * 200
+    )
+    steer = getattr(ctx, "_steer")
+    assert "\n" not in steer
+    assert len(steer) <= MAX_STEER_CHARS
+
+
 def test_the_regenerate_route_answers_with_a_fresh_explanation(client: TestClient, store):
     cid = _course(store)
     process_slide(store, cid, "w1", 0, FakeClient(), HashingEmbedder())

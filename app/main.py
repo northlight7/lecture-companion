@@ -174,7 +174,11 @@ def _reap(cid: str) -> None:
 
 
 def _run_course(
-    cid: str, deck_id: str | None, worker: Worker, force: bool = False
+    cid: str,
+    deck_id: str | None,
+    worker: Worker,
+    force: bool = False,
+    steer: str = "",
 ) -> None:
     """Thread body. Everything it can raise becomes a stored Progress state."""
     from app.course import CourseStore
@@ -201,6 +205,7 @@ def _run_course(
             deck_id=deck_id,
             should_stop=worker.stop.is_set,
             force=force,
+            steer=steer,
         )
     except NoApiKey:
         _pause("No API key configured. Open Connect and paste your DeepSeek key.")
@@ -1058,7 +1063,7 @@ def save_note_route(cid: str, payload: dict = Body(default={})):
 
 
 @app.post("/api/courses/{cid}/decks/{did}/slides/{i}/regenerate")
-def regenerate_slide(cid: str, did: str, i: int):
+def regenerate_slide(cid: str, did: str, i: int, payload: dict = Body(default={})):
     """Explain one slide again, replacing what is stored.
 
     Synchronous, because it is one model call and the reader is waiting on it.
@@ -1085,6 +1090,7 @@ def regenerate_slide(cid: str, did: str, i: int):
     exp = process_slide(
         CourseStore(config.courses_root()), cid, did, i,
         get_client(), get_embedder(), force=True,
+        steer=str(payload.get("steer") or ""),
     )
     return {
         "explanation": exp.to_dict(),
@@ -1129,6 +1135,8 @@ def start_process(cid: str, payload: dict = Body(default={})):
     # Re-running a deck the reader already has is a deliberate act, so it has to
     # be asked for. Without this the run sees every slide as done and returns.
     force = bool(payload.get("force")) if isinstance(payload, dict) else False
+    # An optional note from the reader on what the last attempt got wrong.
+    steer = str(payload.get("steer") or "") if isinstance(payload, dict) else ""
 
     if not config.fake_model():
         from app import keystore
@@ -1151,7 +1159,7 @@ def start_process(cid: str, payload: dict = Body(default={})):
     store.save_progress(cid, progress)
 
     worker.thread = threading.Thread(
-        target=_run_course, args=(cid, deck_id or None, worker, force), daemon=True,
+        target=_run_course, args=(cid, deck_id or None, worker, force, steer), daemon=True,
         name=f"lc-worker-{cid}",
     )
     worker.thread.start()

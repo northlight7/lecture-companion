@@ -1230,25 +1230,65 @@ async function showSlide(index, seq = routeSeq) {
   }
   state.terms = Array.isArray(payload.terms) ? payload.terms : [];
   state.note = typeof payload.note === "string" ? payload.note : "";
-  parts.push(readingActionsHtml(cid, did, index));
   parts.push(notesHtml());
   parts.push(termsHtml(state.terms));
   reading.innerHTML = parts.join("\n");
   reading.querySelectorAll("[data-mermaid]").forEach(drawDiagram);
 }
 
-/* Regenerating is the reader saying the answer was not good enough. One slide
-   is one call and runs here. A whole deck is minutes of work and goes to the
-   background worker, so the page keeps working while it runs. */
-function readingActionsHtml(cid, did, index) {
-  const busy = state.course?.progress?.running || state.course?.progress?.state === "running";
-  return `<div class="reading-actions">
-    <button class="btn btn-quiet" type="button" data-act="regen-slide"
-      data-course="${esc(cid)}" data-deck="${esc(did)}" data-index="${index}">Explain this slide again</button>
-    <button class="btn btn-quiet" type="button" data-act="regen-deck"
-      data-course="${esc(cid)}" data-deck="${esc(did)}"${busy ? " disabled" : ""}>Explain this whole deck again</button>
-  </div>`;
+/* Regenerating lives in the viewer bar, with the other slide controls, because
+   it acts on the slide rather than on the reading. One entry point, and the
+   reader can say what the last attempt got wrong before spending another call. */
+function openRegen() {
+  const sheet = $("regen-dialog");
+  $("regen-error").hidden = true;
+  $("regen-steer").value = "";
+  const busy = state.course?.progress?.running
+    || state.course?.progress?.state === "running";
+  $("regen-deck-go").disabled = Boolean(busy);
+  sheet.showModal();
+  $("regen-steer").focus();
 }
+
+async function regenerate(wholeDeck) {
+  const { cid, did, index } = state.route;
+  const steer = $("regen-steer").value.trim();
+  const button = wholeDeck ? $("regen-deck-go") : $("regen-slide-go");
+  const original = button.textContent;
+  $("regen-error").hidden = true;
+  button.disabled = true;
+  button.textContent = "Explaining";
+
+  try {
+    if (wholeDeck) {
+      await postJSON(`/api/courses/${encodeURIComponent(cid)}/process`, {
+        deck_id: did, force: true, steer,
+      });
+      startPolling(cid);
+      $("regen-dialog").close();
+      toast("Explaining this deck again. Every slide will be replaced.");
+    } else {
+      await postJSON(
+        `/api/courses/${encodeURIComponent(cid)}/decks/${encodeURIComponent(did)}`
+        + `/slides/${index}/regenerate`,
+        { steer },
+      );
+      $("regen-dialog").close();
+      await showSlide(index);
+      toast(`Slide ${index + 1} explained again.`);
+    }
+  } catch (err) {
+    $("regen-error").hidden = false;
+    $("regen-error").textContent = err.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = original;
+  }
+}
+
+$("regen-open").addEventListener("click", openRegen);
+$("regen-slide-go").addEventListener("click", () => regenerate(false));
+$("regen-deck-go").addEventListener("click", () => regenerate(true));
 
 function notesHtml() {
   return `<section class="notes" aria-label="Your notes on this slide">
@@ -1375,45 +1415,6 @@ async function askTerm(term) {
 $("reading").addEventListener("click", async (event) => {
   if (event.target.closest("#save-note")) {
     await saveNote();
-    return;
-  }
-
-  const regen = event.target.closest("[data-act='regen-slide']");
-  if (regen) {
-    const cid = regen.dataset.course;
-    const did = regen.dataset.deck;
-    const index = Number(regen.dataset.index);
-    regen.disabled = true;
-    regen.textContent = "Explaining";
-    try {
-      await postJSON(
-        `/api/courses/${encodeURIComponent(cid)}/decks/${encodeURIComponent(did)}`
-        + `/slides/${index}/regenerate`,
-        {},
-      );
-      await showSlide(index);
-      toast(`Slide ${index + 1} explained again.`);
-    } catch (err) {
-      regen.disabled = false;
-      regen.textContent = "Explain this slide again";
-      handle(err);
-    }
-    return;
-  }
-
-  const regenDeck = event.target.closest("[data-act='regen-deck']");
-  if (regenDeck) {
-    const cid = regenDeck.dataset.course;
-    const did = regenDeck.dataset.deck;
-    try {
-      await postJSON(`/api/courses/${encodeURIComponent(cid)}/process`, {
-        deck_id: did, force: true,
-      });
-      startPolling(cid);
-      toast("Explaining this deck again. Every slide will be replaced.");
-    } catch (err) {
-      handle(err);
-    }
     return;
   }
 

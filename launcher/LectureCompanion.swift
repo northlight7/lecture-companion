@@ -38,6 +38,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
         true
     }
 
+    /// Clicking the Dock icon of a running app that has no window on screen must
+    /// bring the window back. Without this the app does nothing at all: the
+    /// process is alive and the backend is serving, but the only way to reach it
+    /// is to quit and relaunch, which reads as the app having silently died.
+    func applicationShouldHandleReopen(
+        _ sender: NSApplication, hasVisibleWindows flag: Bool
+    ) -> Bool {
+        if !flag {
+            if let window {
+                window.makeKeyAndOrderFront(nil)
+            } else {
+                showWindow()
+            }
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        return true
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         readinessTimer?.invalidate()
         guard let backend, backend.isRunning else { return }
@@ -116,8 +134,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
             defer: false
         )
         window.title = "Lecture Companion"
-        window.center()
         window.setFrameAutosaveName("LectureCompanionMainWindow")
+        // A saved frame can name a screen that is no longer attached, or a
+        // sliver off the edge. That leaves a real window somewhere the reader
+        // cannot see, which looks identical to no window at all.
+        let onScreen = NSScreen.screens.contains { $0.visibleFrame.intersects(window.frame) }
+        if !onScreen { window.center() }
         // Without this the green button zooms the window to fill the screen but
         // stays windowed. `.fullScreenPrimary` is what actually enters the
         // native full-screen space.

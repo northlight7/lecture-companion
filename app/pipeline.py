@@ -90,6 +90,9 @@ SUMMARY_DEDUP_RATIO = 0.7
 #: slide is a bad slide; three in a row is a broken model or a broken prompt.
 MAX_CONSECUTIVE_BAD = 3
 
+#: The reader's steering note, in characters.
+MAX_STEER_CHARS = 600
+
 ProgressCallback = Callable[[str, int, str], None]
 
 
@@ -192,6 +195,7 @@ def build_context(
     embedder,
     *,
     k: int | None = None,
+    steer: str = "",
 ) -> SlideContext:
     """Assemble everything one generation call sees, for this course only."""
     course = store.get_course(course_id)
@@ -317,6 +321,9 @@ def build_context(
         )
     except (KeyError, OSError, ValueError):
         related_material, related_source_ids = "", []
+    # The reader's own steer, when they asked for this slide to be done again
+    # and said what was wrong with it.
+    setattr(ctx, "_steer", " ".join(str(steer or "").split())[:MAX_STEER_CHARS])
     setattr(ctx, "_related_material", related_material)
     setattr(ctx, "_related_source_ids", related_source_ids)
     return ctx
@@ -336,6 +343,7 @@ def process_slide(
     embedder,
     *,
     force: bool = False,
+    steer: str = "",
 ) -> Explanation:
     """Explain one slide, or return the stored explanation without spending.
 
@@ -350,7 +358,7 @@ def process_slide(
         if existing is not None and (existing.body or "").strip():
             return existing
 
-    ctx = build_context(store, course_id, deck_id, slide_index, embedder)
+    ctx = build_context(store, course_id, deck_id, slide_index, embedder, steer=steer)
     exp = client.explain_slide(ctx)
 
     # The client returns content; the pipeline owns identity.
@@ -549,6 +557,7 @@ def process_course(
     on_progress: ProgressCallback | None = None,
     should_stop: Callable[[], bool] | None = None,
     force: bool = False,
+    steer: str = "",
 ) -> Progress:
     """Explain every unfinished slide in the course, checkpointing as it goes.
 
@@ -607,7 +616,7 @@ def process_course(
             try:
                 exp = process_slide(
                     store, course_id, deck.id, slide.index, client, embedder,
-                    force=force,
+                    force=force, steer=steer,
                 )
             except (RateLimited, ModelUnavailable) as exc:
                 # Invariant 5 / gate G8: a pause, with position intact.
