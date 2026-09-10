@@ -376,6 +376,109 @@ class CourseStore:
         if cdir.is_dir():
             shutil.rmtree(cdir)
 
+    def delete_artifact(self, course_id: str, artifact_id: str) -> dict[str, Any]:
+        """Delete one logical upload and its derived data inside this course.
+
+        All versions at the same imported source path are removed together so
+        an old superseded copy cannot reappear. A canonical original or deck is
+        retained when another current path still refers to the same bytes.
+        """
+        import shutil
+
+        _check_id(artifact_id, "artifact_id")
+        all_artifacts = self.load_artifacts(course_id, include_superseded=True)
+        target = next((a for a in all_artifacts if a.id == artifact_id), None)
+        if target is None:
+            raise KeyError(f"no such artifact: {artifact_id!r}")
+        removed = [a for a in all_artifacts if a.source_path == target.source_path]
+        removed_ids = {a.id for a in removed}
+        remaining = [a for a in all_artifacts if a.id not in removed_ids]
+        self.save_artifacts(course_id, remaining)
+
+        for artifact in removed:
+            for path in (
+                self._within(course_id, "objects", f"{artifact.id}.jsonl"),
+                self.artifact_renders_dir(course_id, artifact.id),
+                self._within(course_id, "executions", artifact.id),
+                self._within(course_id, "inspections", artifact.id),
+            ):
+                if path.is_dir():
+                    shutil.rmtree(path)
+                elif path.is_file():
+                    path.unlink()
+
+        referenced_raw = {a.stored_path for a in remaining}
+        for artifact in removed:
+            if artifact.stored_path and artifact.stored_path not in referenced_raw:
+                raw = self._within(course_id, *Path(artifact.stored_path).parts)
+                if raw.is_file():
+                    raw.unlink()
+
+        remaining_hashes = {a.content_hash for a in remaining}
+        orphan_hashes = {a.content_hash for a in removed} - remaining_hashes
+        course = self.get_course(course_id)
+        orphan_file_ids = {digest[:12] for digest in orphan_hashes}
+        orphan_decks = {
+            deck.id for deck in course.decks
+            if deck.source_file_id in orphan_file_ids
+        }
+        course.files = [f for f in course.files if f.id not in orphan_file_ids]
+        course.decks = [d for d in course.decks if d.id not in orphan_decks]
+        self.save_course(course)
+
+        for file_id in orphan_file_ids:
+            ref = self._within(course_id, "refs", f"{file_id}.txt")
+            if ref.is_file():
+                ref.unlink()
+        for deck_id in orphan_decks:
+            for directory in (
+                self.slides_dir(course_id, deck_id),
+                self.explanations_dir(course_id, deck_id),
+            ):
+                if directory.is_dir():
+                    shutil.rmtree(directory)
+
+        if orphan_decks:
+            from app.vectors import VectorIndex
+
+            index = VectorIndex(self.index_path(course_id))
+            index.rebuild_from([r for r in index.all() if r.deck_id not in orphan_decks])
+            progress = self.load_progress(course_id)
+            progress.done = {
+                did: indices for did, indices in progress.done.items()
+                if did not in orphan_decks
+            }
+            if progress.cursor_deck_id in orphan_decks:
+                progress.cursor_deck_id = ""
+                progress.cursor_slide_index = 0
+            progress.running_summary = ""
+            self.save_progress(course_id, progress)
+
+        knowledge = self.knowledge_index_path(course_id)
+        for path in (knowledge, Path(str(knowledge) + "-wal"), Path(str(knowledge) + "-shm")):
+            if path.is_file():
+                path.unlink()
+
+        try:
+            from app.organization import load_organization, save_organization
+
+            organization = load_organization(self, course_id)
+            save_organization(
+                self,
+                course_id,
+                organization["assignments"],
+                reasons=organization["reasons"],
+                method=organization["method"],
+            )
+        except (OSError, ValueError):
+            pass
+
+        return {
+            "deleted_artifact_ids": sorted(removed_ids),
+            "source_path": target.source_path,
+            "removed_deck_ids": sorted(orphan_decks),
+        }
+
     # -- ingest -----------------------------------------------------------
 
     def add_raw_file(self, course_id: str, filename: str, data: bytes) -> tuple[str, Path]:

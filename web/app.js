@@ -71,6 +71,13 @@ const postJSON = (path, payload) =>
     body: JSON.stringify(payload ?? {}),
   });
 
+const putJSON = (path, payload) =>
+  api(path, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload ?? {}),
+  });
+
 function postFiles(path, fileList) {
   const form = new FormData();
   for (const file of fileList) {
@@ -345,7 +352,7 @@ function runbarHtml(progress, courseId, deckId) {
 document.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-act]");
   if (!button) return;
-  const { act, course, deck } = button.dataset;
+  const { act, course, deck, artifact, filename } = button.dataset;
   button.disabled = true;
   try {
     if (act === "process") {
@@ -360,6 +367,14 @@ document.addEventListener("click", async (event) => {
       await api(`/api/courses/${encodeURIComponent(course)}`, { method: "DELETE" });
       location.hash = "#/";
       await renderCourses();
+    } else if (act === "delete-file") {
+      if (!confirm(`Delete ${filename || "this file"} and its generated data?`)) return;
+      await api(
+        `/api/courses/${encodeURIComponent(course)}/artifacts/${encodeURIComponent(artifact)}`,
+        { method: "DELETE" },
+      );
+      await renderCourse(course);
+      toast(`${filename || "File"} deleted.`);
     }
   } catch (err) {
     handle(err);
@@ -523,11 +538,23 @@ async function previewBulkFiles(files) {
 
 wireDrop("bulk-drop", "bulk-input", previewBulkFiles);
 
-function wireFolderPicker(buttonId, inputId, onFiles) {
+function wireFolderPicker(buttonId, inputId, mode, onFiles) {
   const button = $(buttonId);
   const input = $(inputId);
   button.addEventListener("click", (event) => {
     event.stopPropagation();
+    const nativePicker = window.webkit?.messageHandlers?.folderPicker;
+    if (nativePicker) {
+      if (mode === "bulk") {
+        $("bulk-preview").hidden = false;
+        $("bulk-preview").innerHTML = `<p class="muted">Choose a folder to import.</p>`;
+      } else {
+        $("filed-report").hidden = false;
+        $("filed-report").innerHTML = `<p class="muted">Choose a folder to import into this course.</p>`;
+      }
+      nativePicker.postMessage({ mode, courseId: mode === "course" ? state.route.cid : "" });
+      return;
+    }
     input.click();
   });
   input.addEventListener("change", () => {
@@ -536,7 +563,28 @@ function wireFolderPicker(buttonId, inputId, onFiles) {
   });
 }
 
-wireFolderPicker("bulk-folder-picker", "bulk-folder-input", previewBulkFiles);
+wireFolderPicker("bulk-folder-picker", "bulk-folder-input", "bulk", previewBulkFiles);
+
+window.nativeFolderImportFinished = async ({ mode, ok, message }) => {
+  if (!ok) {
+    if (mode === "bulk") {
+      $("bulk-preview").hidden = false;
+      $("bulk-preview").innerHTML = `<p class="field-error">${esc(message)}</p>`;
+    } else {
+      $("filed-report").hidden = false;
+      $("filed-report").innerHTML = `<p class="field-error">${esc(message)}</p>`;
+    }
+    return;
+  }
+  toast(message);
+  if (mode === "bulk") {
+    $("bulk-preview").hidden = true;
+    await renderCourses();
+  } else if (state.route.name === "course") {
+    $("filed-report").hidden = true;
+    await renderCourse(state.route.cid);
+  }
+};
 
 async function commitBulk() {
   const button = $("bulk-commit");
@@ -582,7 +630,7 @@ async function uploadCourseFiles(files) {
 }
 
 wireDrop("course-drop", "course-input", uploadCourseFiles);
-wireFolderPicker("course-folder-picker", "course-folder-input", uploadCourseFiles);
+wireFolderPicker("course-folder-picker", "course-folder-input", "course", uploadCourseFiles);
 
 // ---------------------------------------------------------------- course screen
 
@@ -598,6 +646,7 @@ async function renderCourse(cid) {
   state.course = course;
 
   $("course-title").textContent = course.title;
+  $("delete-course").dataset.course = cid;
   $("course-overview").textContent =
     course.overview ||
     "No overview yet. Drop the syllabus or the programme requirements in and " +
@@ -616,14 +665,40 @@ async function renderCourse(cid) {
     : `<p class="empty">No slide deck in this course yet. Other imported artifacts remain available in the file list.</p>`;
 
   const artifacts = course.artifacts || [];
+  const folderNames = [...new Set(artifacts.map((a) => a.folder).filter(Boolean))].sort();
+  $("folder-options").innerHTML = folderNames.map((name) => `<option value="${esc(name)}"></option>`).join("");
+  const groups = new Map();
+  for (const artifact of artifacts) {
+    const folder = artifact.folder || "Unfiled";
+    if (!groups.has(folder)) groups.set(folder, []);
+    groups.get(folder).push(artifact);
+  }
+  const groupRows = [...groups.entries()].sort(([a], [b]) =>
+    a === "Unfiled" ? 1 : b === "Unfiled" ? -1 : a.localeCompare(b));
   $("file-list").innerHTML = artifacts.length
-    ? artifacts.map((a) => `<a class="file-row"
-        href="#/c/${encodeURIComponent(cid)}/a/${encodeURIComponent(a.id)}">
-        <span class="name">${esc(a.source_path || a.filename)}</span>
-        <span class="meta">${esc(a.kind.toUpperCase())} · ${esc(a.purpose.replaceAll("_", " "))}</span>
-        <span class="why">${plural(a.object_count, "source object", "source objects")}${a.extraction_warnings.length ? " · extraction warning" : ""}</span>
-      </a>`).join("")
+    ? groupRows.map(([folder, rows]) => {
+      const reason = rows.find((item) => item.folder_reason)?.folder_reason || "";
+      return `<section class="study-folder">
+        <div class="study-folder-head"><h3>${esc(folder)}</h3>${reason ? `<p>${esc(reason)}</p>` : ""}</div>
+        ${rows.map((a) => `<div class="file-row-wrap">
+          <a class="file-row" href="#/c/${encodeURIComponent(cid)}/a/${encodeURIComponent(a.id)}">
+            <span class="name">${esc(a.source_path || a.filename)}</span>
+            <span class="meta">${esc(a.kind.toUpperCase())} · ${esc(a.purpose.replaceAll("_", " "))}</span>
+            <span class="why">${plural(a.object_count, "source object", "source objects")}${a.extraction_warnings.length ? " · extraction warning" : ""}</span>
+          </a>
+          <label class="folder-field">Study folder
+            <input class="folder-input" data-artifact="${esc(a.id)}" list="folder-options" maxlength="80" value="${esc(a.folder || "")}" placeholder="Unfiled">
+          </label>
+          <button class="btn btn-danger file-delete" type="button" data-act="delete-file"
+            data-course="${esc(cid)}" data-artifact="${esc(a.id)}" data-filename="${esc(a.filename)}">Delete</button>
+        </div>`).join("")}
+      </section>`;
+    }).join("")
     : `<p class="empty">Nothing uploaded yet.</p>`;
+
+  $("organization-status").textContent = artifacts.length
+    ? "DeepSeek receives file names, imported paths, purposes, and short extracted samples only from this course."
+    : "Add files before creating study folders.";
 
   $("search-results").innerHTML = "";
   $("concept-graph").hidden = true;
@@ -637,6 +712,41 @@ async function renderCourse(cid) {
 
   if (course.progress.running || course.progress.state === "running") startPolling(cid);
 }
+
+$("save-folders").addEventListener("click", async () => {
+  const cid = state.route.cid;
+  if (!cid) return;
+  const assignments = {};
+  document.querySelectorAll(".folder-input").forEach((input) => {
+    const name = input.value.trim();
+    if (name) assignments[input.dataset.artifact] = name;
+  });
+  try {
+    await putJSON(`/api/courses/${encodeURIComponent(cid)}/organization`, { assignments });
+    await renderCourse(cid);
+    toast("Study folders saved.");
+  } catch (err) {
+    handle(err);
+  }
+});
+
+$("organize-files").addEventListener("click", async () => {
+  const cid = state.route.cid;
+  if (!cid) return;
+  const button = $("organize-files");
+  button.disabled = true;
+  $("organization-status").textContent = "DeepSeek is matching related course files.";
+  try {
+    await postJSON(`/api/courses/${encodeURIComponent(cid)}/organization/suggest`, {});
+    await renderCourse(cid);
+    toast("DeepSeek organized the files. You can edit and save any folder name.");
+  } catch (err) {
+    handle(err);
+    $("organization-status").textContent = err.message;
+  } finally {
+    button.disabled = false;
+  }
+});
 
 function paintKnowledgeStatus(index, rebuilt) {
   const status = $("knowledge-status");
@@ -873,14 +983,23 @@ async function showSlide(index) {
   }
   if (exp.context_used && exp.context_used.length) {
     const links = exp.context_used.map((chunk) => {
+      if (String(chunk).startsWith("object:")) {
+        const [, artifactId, ...objectParts] = String(chunk).split(":");
+        const objectId = objectParts.join(":");
+        const artifact = (state.course?.artifacts || []).find((item) => item.id === artifactId);
+        const label = artifact ? `${artifact.filename} (related file)` : "Related course source";
+        return `<li><a href="${sourceHash(cid, artifactId, objectId)}">${esc(label)}</a></li>`;
+      }
       const [deck, slideIndex] = String(chunk).split(":");
-      const label = `Slide ${Number(slideIndex) + 1}`;
+      const sourceDeck = state.course?.decks.find((item) => item.id === deck);
+      const isPrevious = deck === did && Number(slideIndex) === index - 1;
+      const label = `${sourceDeck?.title || "Deck"}, slide ${Number(slideIndex) + 1}${isPrevious ? " (previous slide)" : ""}`;
       if (deck && slideIndex !== undefined && !Number.isNaN(Number(slideIndex))) {
         return `<li><a href="#/c/${encodeURIComponent(cid)}/${encodeURIComponent(deck)}/${Number(slideIndex)}">${esc(label)}</a></li>`;
       }
       return `<li>${esc(chunk)}</li>`;
     }).join("");
-    parts.push(`<div class="drawn">Written with these earlier slides in view:<ul>${links}</ul></div>`);
+    parts.push(`<div class="drawn">Earlier slides and grouped sources connected to this topic:<ul>${links}</ul></div>`);
   }
   reading.innerHTML = parts.join("\n");
   reading.querySelectorAll("[data-mermaid]").forEach(drawDiagram);

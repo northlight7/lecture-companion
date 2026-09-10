@@ -59,11 +59,11 @@
         <div class="drop" id="bulk-drop" tabindex="0" role="button"
              aria-label="Drop a mixed pile of files to preview a grouping">
           <p class="drop-main">Drop PDF, PPTX, Word, Excel, CSV, or notebook files</p>
-          <p class="drop-sub">or <span class="linky">choose files</span> or
-            <button class="link-button" id="bulk-folder-picker" type="button">choose a folder</button></p>
+          <p class="drop-sub">or <span class="linky">choose files</span></p>
           <input type="file" id="bulk-input" multiple accept=".pdf,.pptx,.docx,.xlsx,.csv,.ipynb" hidden>
           <input type="file" id="bulk-folder-input" multiple webkitdirectory directory hidden>
         </div>
+        <button class="btn btn-quiet folder-picker" id="bulk-folder-picker" type="button">Choose a whole folder</button>
         <div id="bulk-preview" class="preview" hidden></div>
       </section>
     </div>
@@ -73,9 +73,12 @@
   <section class="screen" id="screen-course" hidden>
     <div class="wrap">
       <a class="back" href="#/">All courses</a>
-      <div class="page-head">
-        <h1 id="course-title">Course</h1>
-        <p class="lede" id="course-overview"></p>
+      <div class="page-head page-head-actions">
+        <div>
+          <h1 id="course-title">Course</h1>
+          <p class="lede" id="course-overview"></p>
+        </div>
+        <button class="btn btn-danger" type="button" data-act="delete-course" id="delete-course">Delete course</button>
       </div>
 
       <div class="runbar" id="course-runbar"></div>
@@ -108,13 +111,24 @@
           <div class="drop" id="course-drop" tabindex="0" role="button"
                aria-label="Drop course files into this course">
             <p class="drop-main">Drop course files</p>
-            <p class="drop-sub">or <span class="linky">choose files</span> or
-              <button class="link-button" id="course-folder-picker" type="button">choose a folder</button></p>
+            <p class="drop-sub">or <span class="linky">choose files</span></p>
             <input type="file" id="course-input" multiple accept=".pdf,.pptx,.docx,.xlsx,.csv,.ipynb" hidden>
             <input type="file" id="course-folder-input" multiple webkitdirectory directory hidden>
           </div>
+          <button class="btn btn-quiet folder-picker" id="course-folder-picker" type="button">Choose a whole folder</button>
           <div id="filed-report" class="filed" hidden></div>
-          <h2 class="mt">Files</h2>
+          <div class="file-heading mt">
+            <div>
+              <h2>Files and study folders</h2>
+              <p class="help">Group a lecture with its tutorial, data, workbook, notebook, and supplements. Edit any folder name before saving.</p>
+            </div>
+            <div class="file-actions">
+              <button class="btn btn-quiet" id="organize-files" type="button">Organize with DeepSeek</button>
+              <button class="btn btn-primary" id="save-folders" type="button">Save folders</button>
+            </div>
+          </div>
+          <p class="help" id="organization-status" aria-live="polite"></p>
+          <datalist id="folder-options"></datalist>
           <div id="file-list" class="files"></div>
         </section>
       </div>

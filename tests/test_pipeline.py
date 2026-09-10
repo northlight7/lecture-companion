@@ -11,7 +11,7 @@ import base64
 
 import pytest
 
-from app.contracts import Deck
+from app.contracts import Artifact, Deck, LearningObject, SourceLocator
 from app.embed import HashingEmbedder, cosine
 from app.llm import FakeClient, build_prompt_text
 from app.pipeline import (
@@ -175,6 +175,61 @@ def test_context_grows_across_the_course(store, course):
     assert all(r.slide_index < last for r in last_ctx.retrieved)
     assert all(r.chunk_id != f"w1:{last}" for r in last_ctx.retrieved)
     assert all(r.deck_id == "w1" for r in last_ctx.retrieved)
+    assert last_ctx.retrieved[0].chunk_id == f"w1:{last - 1}"
+    assert getattr(last_ctx, "_previous_chunk_id") == f"w1:{last - 1}"
+
+
+def test_context_never_retrieves_future_slides_during_regeneration(store, course):
+    embedder = HashingEmbedder()
+    process_course(store, course, FakeClient(), embedder)
+    middle = build_context(store, course, "w1", 2, embedder)
+    assert middle.retrieved[0].chunk_id == "w1:1"
+    assert all(row.slide_index < 2 for row in middle.retrieved)
+
+
+def test_first_slide_of_next_deck_gets_previous_deck_continuity(store, course):
+    embedder = HashingEmbedder()
+    process_course(store, course, FakeClient(), embedder)
+    make_deck(store, course, "w2", "Week 2", ["A new topic that builds on Week 1"])
+    ctx = build_context(store, course, "w2", 0, embedder)
+    assert ctx.retrieved[0].chunk_id == f"w1:{len(SLIDE_TEXTS) - 1}"
+    prompt = build_prompt_text(ctx)
+    assert "Immediately previous, Week 1, slide 5" in prompt
+
+
+def test_grouped_supplement_is_prompt_context_with_exact_source_link(store):
+    from app.organization import save_organization
+
+    cid = make_course(store, "Grouped Context", "A course with one applied lab.").id
+    digest = "c" * 64
+    deck_id = f"deck-{digest[:12]}"
+    make_deck(store, cid, deck_id, "Lecture 4", ["Regression residuals"])
+    deck_artifact = Artifact(
+        "deck-file", digest, "lecture_4.pptx", "Lecture 4/lecture_4.pptx",
+        "pptx", "lecture", f"raw/{digest}.pptx",
+    )
+    data_artifact = Artifact(
+        "data-file", "d" * 64, "lab_4.csv", "Lecture 4/lab_4.csv",
+        "csv", "dataset", f"raw/{'d' * 64}.csv",
+    )
+    store.save_artifacts(cid, [deck_artifact, data_artifact])
+    obj = LearningObject(
+        "residual-field", "data-file", "dataset_field",
+        SourceLocator("data-file", "csv", dataset_field="residual"),
+        text="Residual is observed value minus fitted value.",
+    )
+    store.save_learning_objects(cid, "data-file", [obj])
+    save_organization(store, cid, {
+        "deck-file": "Lecture 4", "data-file": "Lecture 4",
+    })
+
+    client = FakeClient()
+    process_course(store, cid, client, HashingEmbedder())
+    assert "## Related files in this lecture folder" in client.prompts[0]
+    assert "lab_4.csv, field residual" in client.prompts[0]
+    exp = store.load_explanation(cid, deck_id, 0)
+    assert exp is not None
+    assert "object:data-file:residual-field" in exp.context_used
 
 
 def test_running_summary_grows_and_names_earlier_headings(store, course):

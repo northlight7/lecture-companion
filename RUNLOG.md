@@ -247,3 +247,27 @@ Capability Round 3 done: FAIL, local cross-artifact search and the course concep
 **Drift check:** every execution directory remains structurally nested under one course and artifact. Exact source object ids and locators accompany every result. Imported originals are copied, never modified. Run identity and checkpoints prevent duplicate completed work. No credential or model call enters execution. Failures, warnings, environment limits, and stale state remain visible. The frozen contracts file was unchanged.
 
 Capability Round 4 done: FAIL, controlled notebook execution passed independently. Cross-format teaching and spreadsheet verification remain.
+
+## Capability Round 5 checkpoint: 2026-09-10T14:26:49+08:00
+
+**Goal and invariants:** build a five-course companion that lets a student import, inspect, search, understand, question, practise, and verify mixed material. Preserve structural course isolation, exact grounding, byte-preserved originals, resumable idempotent processing, credential secrecy, and honest uncertainty.
+
+**Frozen bar:** the capability assessment matched `2c51dd51651b8b0467986f85836f4377dde66bb0f039e91ef5f0cff6413a9587`. `SPEC.md` matched `7641e3135ce5eb7b5369393f72ad875eb70af8bc51178af3e0165b45e7b9e875` before the increment and at checkpoint.
+
+**Chosen items and reason:** the user identified four connected learning blockers. Slide explanations were too long and repetitive. Earlier-slide links lacked deck names. Related tutorials and data were not grouped into teaching context. The native macOS app could not select a whole folder. File and course deletion also needed a complete UI.
+
+**Attempt:** reduced the slide completion ceiling to 900 tokens and added a 100 to 180 word normal target, a 240 word dense-slide ceiling, plain definitions for jargon, repetition controls, and learner-facing punctuation normalization. Context now always includes the previous completed slide, includes only strictly earlier vector matches, labels earlier deck and slide names, and adds bounded exact objects from editable course-local study folders. DeepSeek can propose folders from current-course metadata and short extracted samples. The UI exposes editable folder names and exact related-source links. File deletion removes all versions at one source path plus orphaned derivations while preserving shared canonical bytes. Course deletion is now visible. The macOS launcher now uses a native `NSOpenPanel` bridge to enumerate supported files recursively and upload preserved relative paths. Browser folder input remains as fallback.
+
+**Measured results:** 176 offline tests passed. `node --check web/app.js`, `swiftc launcher/LectureCompanion.swift -framework AppKit -framework WebKit -o /tmp/LectureCompanion-folder-test`, `./launcher/build-app.sh`, `git diff --check`, and both frozen hash checks passed. The built native app visibly exposed `Choose a whole folder`. It imported five released Database Management Systems files from L1 through L3 into a temporary course and preserved paths such as `Database Management Systems/L2/IS5413_Tutorial_01.docx`. The temporary course was deleted afterward. The organization page showed no console errors or horizontal overflow in the isolated browser check. No live explanation call was made. The native folder test did not make a paid model call.
+
+**Critic verdict:** pending. This is a graceful user-requested checkpoint, not a Round 5 PASS. A fresh critic must read the frozen bar and inspect the product without builder reasoning.
+
+**Largest remaining gap:** Round 5 has not received a fresh independent verdict. The full product bar remains FAIL. Broader subject-aware teaching and practice remain incomplete after the critic gate.
+
+**Shipped work:** concise continuity-aware explanations, prior-deck links, future-slide exclusion, exact grouped-file context, editable and model-assisted study folders, file and course deletion, native recursive folder upload, browser fallback, tests, and updated project handoff notes.
+
+**Rejected work and do-not-repeat notes:** relying on `webkitdirectory` alone was rejected because WKWebView did not expose a usable folder flow. Nesting the folder action inside a button-like drop zone was rejected because the native accessibility tree hid it. The working design uses a separate real button and a native chooser bridge. Study folders do not rewrite original paths or bytes.
+
+**Drift check:** all new storage remains inside one course. Model grouping validates ids against current course artifacts. Related context comes only from the current course and carries exact object ids. Future slides are excluded. Deletion checks course ownership and refuses while processing. The frozen assessment, spec, and contracts were not weakened.
+
+Round 5 checkpoint ready: FAIL, fresh critic pending after concise teaching, organization, deletion, and native folder upload.

@@ -217,6 +217,15 @@ main:focus { outline: none; }
 [hidden] { display: none !important; }
 
 .page-head { margin-bottom: 2rem; }
+.page-head-actions, .file-heading, .file-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.page-head-actions > div, .file-heading > div:first-child { min-width: 0; flex: 1 1 18rem; }
+.file-actions { justify-content: flex-start; gap: .5rem; }
 
 h1 {
   font-size: clamp(1.6rem, 3.4vw, 2.1rem);
@@ -440,6 +449,7 @@ label {
 .preview-group ul { margin: .4rem 0 0; padding-left: 1.1rem; font-size: .875rem; color: var(--ink-2); }
 .preview-group li { overflow-wrap: anywhere; }
 .preview-actions { display: flex; gap: .5rem; margin-top: 1rem; flex-wrap: wrap; }
+.folder-picker { margin-top: .6rem; }
 
 /* ---------------------------------------------------------------- decks + files */
 
@@ -466,6 +476,28 @@ label {
   font-size: .8125rem;
   color: var(--ink-3);
   overflow-wrap: anywhere;
+}
+
+.study-folder { border-bottom: 1px solid var(--line); padding: .9rem 0; }
+.study-folder-head { margin-bottom: .35rem; }
+.study-folder-head h3 { font-size: 1rem; margin: 0; }
+.study-folder-head p { color: var(--ink-3); font-size: .8125rem; margin: .2rem 0 0; }
+.file-row-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(9rem, 12rem) auto;
+  align-items: center;
+  gap: .65rem;
+  border-top: 1px solid var(--line-soft);
+}
+.file-row-wrap .file-row { border: 0; flex-wrap: wrap; min-width: 0; }
+.file-row-wrap .file-row:hover { background: var(--surface-2); }
+.folder-field { margin: 0; font-size: .7rem; }
+.folder-field input { margin-top: .2rem; }
+.file-delete { align-self: center; }
+@media (max-width: 42rem) {
+  .file-row-wrap { grid-template-columns: minmax(0, 1fr) auto; padding: .6rem 0; }
+  .file-row-wrap .file-row { grid-column: 1 / -1; padding: .2rem 0; }
+  .folder-field { min-width: 0; }
 }
 
 .filed {

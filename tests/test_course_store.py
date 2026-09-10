@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from app.contracts import Course, Deck, Explanation, Progress, SourceFile
+from app.contracts import Artifact, Course, Deck, Explanation, Progress, SourceFile
 from app.course import CourseStore, safe_filename, slugify
 
 
@@ -37,6 +37,38 @@ def test_create_list_get_delete_round_trip(store: CourseStore):
     assert store.list_courses() == []
     with pytest.raises(KeyError):
         store.get_course("machine-learning")
+
+
+def test_delete_artifact_removes_versions_but_preserves_shared_original(store: CourseStore):
+    cid = store.create_course("Delete file").id
+    digest = "e" * 64
+    raw = store.course_dir(cid) / "raw" / f"{digest}.csv"
+    raw.write_bytes(b"a,b\n1,2\n")
+    old = Artifact(
+        "old", digest, "data.csv", "Week 1/data.csv", "csv", "dataset",
+        f"raw/{digest}.csv", version=1,
+    )
+    current = Artifact(
+        "current", digest, "data.csv", "Week 1/data.csv", "csv", "dataset",
+        f"raw/{digest}.csv", supersedes="old", version=2,
+    )
+    shared = Artifact(
+        "shared", digest, "copy.csv", "Week 2/copy.csv", "csv", "dataset",
+        f"raw/{digest}.csv",
+    )
+    store.save_artifacts(cid, [old, current, shared])
+    store.save_learning_objects(cid, "old", [])
+    store.save_learning_objects(cid, "current", [])
+
+    result = store.delete_artifact(cid, "current")
+    assert result["deleted_artifact_ids"] == ["current", "old"]
+    assert [a.id for a in store.load_artifacts(cid, include_superseded=True)] == ["shared"]
+    assert raw.is_file()
+    assert not (store.objects_dir(cid) / "old.jsonl").exists()
+    assert not (store.objects_dir(cid) / "current.jsonl").exists()
+
+    store.delete_artifact(cid, "shared")
+    assert not raw.exists()
 
 
 def test_slug_collision_appends_a_counter(store: CourseStore):

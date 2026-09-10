@@ -82,6 +82,21 @@ def _counts(store, course: Course) -> tuple[int, int]:
     return n_slides, n_explained
 
 
+def _artifact_rows(store, course_id: str) -> list[dict[str, Any]]:
+    from app.organization import load_organization
+
+    organization = load_organization(store, course_id)
+    assignments = organization["assignments"]
+    reasons = organization["reasons"]
+    rows = []
+    for artifact in store.load_artifacts(course_id):
+        row = artifact.to_dict()
+        row["folder"] = assignments.get(artifact.id, "")
+        row["folder_reason"] = reasons.get(row["folder"], "")
+        rows.append(row)
+    return rows
+
+
 def _course_row(store, course: Course) -> dict[str, Any]:
     n_slides, n_explained = _counts(store, course)
     return {
@@ -335,7 +350,7 @@ def get_course(cid: str):
         {"id": f.id, "filename": f.filename, "role": f.role, "reason": f.classified_by}
         for f in course.files
     ]
-    row["artifacts"] = [a.to_dict() for a in store.load_artifacts(cid)]
+    row["artifacts"] = _artifact_rows(store, cid)
     row["progress"] = _progress_dict(store, course)
     return row
 
@@ -419,7 +434,66 @@ def list_artifacts(cid: str):
     store, course = _course_or_404(cid)
     if course is None:
         return _err(404, f"No course {cid!r}.")
-    return [artifact.to_dict() for artifact in store.load_artifacts(cid)]
+    return _artifact_rows(store, cid)
+
+
+@app.delete("/api/courses/{cid}/artifacts/{aid}")
+def delete_artifact(cid: str, aid: str):
+    store, course = _course_or_404(cid)
+    if course is None:
+        return _err(404, f"No course {cid!r}.")
+    if cid in _running_ids():
+        return _err(409, "That course is still processing. Pause it first.")
+    try:
+        return store.delete_artifact(cid, aid)
+    except (KeyError, ValueError):
+        return _err(404, f"No artifact {aid!r} in {cid!r}.")
+
+
+@app.get("/api/courses/{cid}/organization")
+def get_organization(cid: str):
+    from app.organization import load_organization
+
+    store, course = _course_or_404(cid)
+    if course is None:
+        return _err(404, f"No course {cid!r}.")
+    return load_organization(store, cid)
+
+
+@app.put("/api/courses/{cid}/organization")
+def update_organization(cid: str, payload: dict = Body(default={})):
+    from app.organization import save_organization
+
+    store, course = _course_or_404(cid)
+    if course is None:
+        return _err(404, f"No course {cid!r}.")
+    assignments = payload.get("assignments") if isinstance(payload, dict) else None
+    if not isinstance(assignments, dict):
+        return _err(400, "Assignments must map file ids to folder names.")
+    try:
+        return save_organization(store, cid, assignments)
+    except KeyError as exc:
+        return _err(400, str(exc))
+
+
+@app.post("/api/courses/{cid}/organization/suggest")
+def suggest_organization(cid: str):
+    from app.llm import get_client
+    from app.organization import apply_model_suggestion
+
+    store, course = _course_or_404(cid)
+    if course is None:
+        return _err(404, f"No course {cid!r}.")
+    if cid in _running_ids():
+        return _err(409, "Pause slide processing before organizing files.")
+    try:
+        return apply_model_suggestion(store, cid, get_client())
+    except NoApiKey as exc:
+        return _err(409, str(exc))
+    except LectureCompanionError as exc:
+        return _err(502, str(exc))
+    except ValueError as exc:
+        return _err(502, str(exc))
 
 
 @app.get("/api/courses/{cid}/artifacts/{aid}/objects")

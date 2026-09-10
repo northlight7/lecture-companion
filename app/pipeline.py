@@ -155,6 +155,13 @@ def _course_overview(store, course_id: str) -> str:
     return fallback_overview(store, course_id)
 
 
+def _reading_order(store, course_id: str, course) -> list[tuple[str, int]]:
+    order: list[tuple[str, int]] = []
+    for item in _decks_in_order(course):
+        order.extend((item.id, slide.index) for slide in store.load_slides(course_id, item.id))
+    return order
+
+
 def index_text_for(slide_text: str, exp: Explanation | None) -> str:
     """What gets embedded and stored for one slide.
 
@@ -207,10 +214,41 @@ def build_context(
 
     top_k = config.top_k() if k is None else k
     retrieved: list[IndexRow] = []
+    index = VectorIndex(store.index_path(course_id))
+    order = _reading_order(store, course_id, course)
+    ranks = {pair: rank for rank, pair in enumerate(order)}
+    current_rank = ranks.get((deck_id, slide_index), len(order))
+    previous_chunk_id = ""
+    if current_rank > 0:
+        previous_deck, previous_index = order[current_rank - 1]
+        previous_exp = store.load_explanation(
+            course_id, previous_deck, previous_index
+        )
+        if previous_exp is not None and (previous_exp.body or "").strip():
+            previous_chunk_id = chunk_id_for(previous_deck, previous_index)
+            previous_row = index.get(previous_chunk_id)
+            if previous_row is None:
+                previous_slide = store.load_slide(
+                    course_id, previous_deck, previous_index
+                )
+                previous_row = IndexRow(
+                    chunk_id=previous_chunk_id,
+                    deck_id=previous_deck,
+                    slide_index=previous_index,
+                    text=index_text_for(previous_slide.text, previous_exp),
+                    vec=[],
+                )
+            retrieved.append(IndexRow(
+                chunk_id=previous_row.chunk_id,
+                deck_id=previous_row.deck_id,
+                slide_index=previous_row.slide_index,
+                text=_truncate_words(previous_row.text, CHUNK_WORD_BUDGET),
+                vec=[],
+            ))
+
     if top_k > 0 and query.strip():
         # ONLY this course's index. This single line is where invariant 1 is
         # enforced for retrieval; `index_path` resolves inside the course dir.
-        index = VectorIndex(store.index_path(course_id))
         own_chunk = chunk_id_for(deck_id, slide_index)
         qvec = embedder.embed_query(query)
         # Over-fetch, because dedup and the isolation guard both drop rows.
@@ -218,7 +256,7 @@ def build_context(
 
         known_decks = {d.id for d in course.decks}
         for row, score in hits:
-            if len(retrieved) >= top_k:
+            if len(retrieved) >= top_k + bool(previous_chunk_id):
                 break
             if row.deck_id not in known_decks:
                 # Defensive: an index row for a deck this course does not own
@@ -232,6 +270,12 @@ def build_context(
                 )
                 continue
             if row.chunk_id == own_chunk:
+                continue
+            if row.chunk_id == previous_chunk_id:
+                continue
+            if ranks.get((row.deck_id, row.slide_index), len(order)) >= current_rank:
+                # Regeneration can see a fully built index. Context must still
+                # contain only material the student has already reached.
                 continue
             if score <= 0.0:
                 continue
@@ -263,6 +307,18 @@ def build_context(
     # Stamp it so a client can key on the slide it was asked about (the stub
     # uses this for fault injection and call recording).
     setattr(ctx, "_deck_id", deck_id)
+    setattr(ctx, "_previous_chunk_id", previous_chunk_id)
+    setattr(ctx, "_deck_titles", {item.id: item.title or item.id for item in course.decks})
+    try:
+        from app.organization import related_material_for_deck
+
+        related_material, related_source_ids = related_material_for_deck(
+            store, course_id, deck_id
+        )
+    except (KeyError, OSError, ValueError):
+        related_material, related_source_ids = "", []
+    setattr(ctx, "_related_material", related_material)
+    setattr(ctx, "_related_source_ids", related_source_ids)
     return ctx
 
 
@@ -295,7 +351,9 @@ def process_slide(
     exp.deck_id = deck_id
     exp.slide_index = slide_index
     if not exp.context_used:
-        exp.context_used = [row.chunk_id for row in ctx.retrieved]
+        exp.context_used = [row.chunk_id for row in ctx.retrieved] + list(
+            getattr(ctx, "_related_source_ids", [])
+        )
 
     # Order matters for a crash: the explanation lands first, so a resume sees
     # the slide as done and never re-calls the model for it. Indexing is
@@ -345,7 +403,7 @@ def _gist(exp: Explanation) -> str:
     heading = " ".join((exp.heading or "").split()) or f"Slide {exp.slide_index + 1}"
     first = _first_sentence(exp.body)
     label = f"Slide {exp.slide_index + 1}: {heading}"
-    return f"- {label} — {first}" if first else f"- {label}"
+    return f"- {label}: {first}" if first else f"- {label}"
 
 
 def _gists_from_disk(store, course_id: str) -> list[str]:
