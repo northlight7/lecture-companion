@@ -57,12 +57,11 @@
         <p class="lede">Drop everything here. The app proposes a grouping into
           courses, and nothing is written until you accept it.</p>
         <div class="drop" id="bulk-drop" tabindex="0" role="button"
-             aria-label="Drop a mixed pile of files or folders to preview a grouping">
+             aria-label="Drop or choose a mixed pile of files or folders to preview a grouping">
           <p class="drop-main">Drop files or folders here</p>
-          <p class="drop-sub">or <span class="linky">choose what to add</span></p>
-          <input type="file" id="bulk-input" multiple accept=".pdf,.pptx,.docx,.xlsx,.csv,.ipynb" hidden>
+          <p class="drop-sub">or <span class="linky">choose files or a folder</span></p>
         </div>
-        <button class="btn btn-quiet picker" id="bulk-picker" type="button">Choose files or a folder</button>
+        <input type="file" id="bulk-input" multiple accept=".pdf,.pptx,.docx,.xlsx,.csv,.ipynb" hidden>
         <div id="bulk-preview" class="preview" hidden></div>
       </section>
     </div>
@@ -108,12 +107,11 @@
         <section>
           <h2>Add files to this course</h2>
           <div class="drop" id="course-drop" tabindex="0" role="button"
-               aria-label="Drop files or folders into this course">
+               aria-label="Drop or choose files or folders for this course">
             <p class="drop-main">Drop files or folders here</p>
-            <p class="drop-sub">or <span class="linky">choose what to add</span></p>
-            <input type="file" id="course-input" multiple accept=".pdf,.pptx,.docx,.xlsx,.csv,.ipynb" hidden>
+            <p class="drop-sub">or <span class="linky">choose files or a folder</span></p>
           </div>
-          <button class="btn btn-quiet picker" id="course-picker" type="button">Choose files or a folder</button>
+          <input type="file" id="course-input" multiple accept=".pdf,.pptx,.docx,.xlsx,.csv,.ipynb" hidden>
           <div id="filed-report" class="filed" hidden></div>
           <div class="file-heading mt">
             <div>

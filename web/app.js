@@ -541,17 +541,35 @@ $("new-course-form").addEventListener("submit", async (event) => {
 
 // ---------------------------------------------------------------- drop zones
 
-function wireDrop(zoneId, inputId, onFiles) {
+// One control for everything that adds material. The dotted box is both the
+// drop target and the button: clicking it opens the native panel, which takes
+// files and folders together.
+function wireDrop(zoneId, inputId, mode, onFiles) {
   const zone = $(zoneId);
   const input = $(inputId);
-  zone.addEventListener("click", () => input.click());
+  const report = $(mode === "bulk" ? "bulk-preview" : "filed-report");
+
+  const ask = () => {
+    const nativePicker = window.webkit?.messageHandlers?.folderPicker;
+    if (!nativePicker) {
+      // No native bridge (a plain browser): the file input is all there is.
+      input.click();
+      return;
+    }
+    report.hidden = false;
+    report.innerHTML = `<p class="muted">Choose files or a folder to add.</p>`;
+    nativePicker.postMessage({ mode, courseId: mode === "course" ? state.route.cid : "" });
+  };
+
+  zone.addEventListener("click", ask);
   zone.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" || event.key === " ") { event.preventDefault(); input.click(); }
+    if (event.key === "Enter" || event.key === " ") { event.preventDefault(); ask(); }
   });
   input.addEventListener("change", () => {
     if (input.files.length) onFiles([...input.files]);
     input.value = "";
   });
+
   ["dragenter", "dragover"].forEach((type) =>
     zone.addEventListener(type, (event) => {
       event.preventDefault();
@@ -562,10 +580,42 @@ function wireDrop(zoneId, inputId, onFiles) {
       event.preventDefault();
       zone.classList.remove("over");
     }));
-  zone.addEventListener("drop", (event) => {
-    const files = [...(event.dataTransfer?.files || [])];
-    if (files.length) onFiles(files);
+  zone.addEventListener("drop", async (event) => {
+    const dropped = await filesFromDrop(event.dataTransfer);
+    if (dropped.length) onFiles(dropped);
   });
+}
+
+/// Expand a drop into files. A dropped folder arrives as a directory entry, and
+/// `dataTransfer.files` alone would hand back the folder and nothing inside it.
+/// Names keep the folder as a prefix, matching what the native picker sends.
+async function filesFromDrop(dataTransfer) {
+  const entries = [...(dataTransfer?.items || [])]
+    .map((item) => item.webkitGetAsEntry?.())
+    .filter(Boolean);
+  if (!entries.length) return [...(dataTransfer?.files || [])];
+
+  const out = [];
+  const walk = async (entry, prefix) => {
+    if (entry.isFile) {
+      const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
+      out.push(prefix ? new File([file], `${prefix}/${file.name}`, { type: file.type }) : file);
+      return;
+    }
+    if (!entry.isDirectory) return;
+    const reader = entry.createReader();
+    const children = [];
+    // readEntries returns at most 100 at a time, so keep asking until empty.
+    for (;;) {
+      const batch = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+      if (!batch.length) break;
+      children.push(...batch);
+    }
+    const next = prefix ? `${prefix}/${entry.name}` : entry.name;
+    for (const child of children) await walk(child, next);
+  };
+  for (const entry of entries) await walk(entry, "");
+  return out;
 }
 
 let bulkFiles = [];
@@ -598,27 +648,8 @@ async function previewBulkFiles(files) {
   }
 }
 
-wireDrop("bulk-drop", "bulk-input", previewBulkFiles);
+wireDrop("bulk-drop", "bulk-input", "bulk", previewBulkFiles);
 
-// One button for files and for folders. The native panel accepts either, so the
-// reader never has to decide which kind of thing they are about to pick.
-function wirePicker(buttonId, inputId, mode) {
-  const report = $(mode === "bulk" ? "bulk-preview" : "filed-report");
-  $(buttonId).addEventListener("click", (event) => {
-    event.stopPropagation();
-    const nativePicker = window.webkit?.messageHandlers?.folderPicker;
-    if (nativePicker) {
-      report.hidden = false;
-      report.innerHTML = `<p class="muted">Choose files or a folder to add.</p>`;
-      nativePicker.postMessage({ mode, courseId: mode === "course" ? state.route.cid : "" });
-      return;
-    }
-    // No native bridge: fall back to the same input the drop zone uses.
-    $(inputId).click();
-  });
-}
-
-wirePicker("bulk-picker", "bulk-input", "bulk");
 
 window.nativeFolderImportFinished = async ({ mode, ok, message }) => {
   if (!ok) {
@@ -684,8 +715,7 @@ async function uploadCourseFiles(files) {
   }
 }
 
-wireDrop("course-drop", "course-input", uploadCourseFiles);
-wirePicker("course-picker", "course-input", "course");
+wireDrop("course-drop", "course-input", "course", uploadCourseFiles);
 
 // ---------------------------------------------------------------- course screen
 
