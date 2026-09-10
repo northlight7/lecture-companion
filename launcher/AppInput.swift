@@ -146,7 +146,9 @@ case "key":
         exit(2)
     }
     // Trailing "cmd" posts the equivalent the menu bar is listening for.
-    let flags: CGEventFlags = args.contains("cmd") ? .maskCommand : []
+    var flags: CGEventFlags = []
+    if args.contains("cmd") { flags.insert(.maskCommand) }
+    if args.contains("shift") { flags.insert(.maskShift) }
     activateApp()
     postKey(code, flags: flags)
     print("key \(args[1])\(args.contains("cmd") ? " cmd" : "")")

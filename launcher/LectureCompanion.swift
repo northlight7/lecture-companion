@@ -218,6 +218,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
         )
         var files: [(URL, String)] = []
         while let url = enumerator?.nextObject() as? URL {
+            // `~$deck.pptx` is an Office lock file, not a document. It carries a
+            // real extension and is not marked hidden, so it used to be uploaded
+            // and then fail extraction on the server.
+            guard !url.lastPathComponent.hasPrefix("~$") else { continue }
             guard supported.contains(url.pathExtension.lowercased()),
                   (try? url.resourceValues(forKeys: Set(keys)).isRegularFile) == true else { continue }
             let prefix = root.standardizedFileURL.path.hasSuffix("/")
@@ -228,6 +232,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
         }
         files.sort { $0.1.localizedStandardCompare($1.1) == .orderedAscending }
         guard !files.isEmpty else {
+            // An empty result is not the same as an empty folder. If macOS
+            // blocked the directory the enumerator yields nothing, and saying
+            // "no supported files" sends the reader looking for the wrong thing.
+            if !FileManager.default.isReadableFile(atPath: root.path) {
+                notifyFolderImport(
+                    mode: mode,
+                    ok: false,
+                    message: readFailureMessage(root: root, files: [], error: nil)
+                )
+                return
+            }
             notifyFolderImport(mode: mode, ok: false, message: "No supported course files were found.")
             return
         }
@@ -235,18 +250,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
         let boundary = "LectureCompanion-" + UUID().uuidString
         var body = Data()
         func append(_ text: String) { body.append(text.data(using: .utf8)!) }
-        do {
-            for (url, relativePath) in files {
-                let safeName = relativePath.replacingOccurrences(of: "\"", with: "_")
-                append("--\(boundary)\r\n")
-                append("Content-Disposition: form-data; name=\"files\"; filename=\"\(safeName)\"\r\n")
-                append("Content-Type: application/octet-stream\r\n\r\n")
-                body.append(try Data(contentsOf: url, options: .mappedIfSafe))
-                append("\r\n")
+        var unreadable: [String] = []
+        var firstReadError: Error?
+        for (url, relativePath) in files {
+            let bytes: Data
+            do {
+                bytes = try Data(contentsOf: url, options: .mappedIfSafe)
+            } catch {
+                // One unreadable file must not abandon the folder. Collect it
+                // and report it, the way the server reports a failed extraction.
+                if firstReadError == nil { firstReadError = error }
+                unreadable.append(url.lastPathComponent)
+                continue
             }
-            append("--\(boundary)--\r\n")
-        } catch {
-            notifyFolderImport(mode: mode, ok: false, message: "A file in that folder could not be read.")
+            let safeName = relativePath.replacingOccurrences(of: "\"", with: "_")
+            append("--\(boundary)\r\n")
+            append("Content-Disposition: form-data; name=\"files\"; filename=\"\(safeName)\"\r\n")
+            append("Content-Type: application/octet-stream\r\n\r\n")
+            body.append(bytes)
+            append("\r\n")
+        }
+        append("--\(boundary)--\r\n")
+
+        guard unreadable.count < files.count else {
+            notifyFolderImport(
+                mode: mode,
+                ok: false,
+                message: readFailureMessage(root: root, files: unreadable, error: firstReadError)
+            )
             return
         }
 
@@ -268,7 +299,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
                 self?.notifyFolderImport(
                     mode: mode,
                     ok: true,
-                    message: "Imported \(files.count) files from \(root.lastPathComponent)."
+                    message: unreadable.isEmpty
+                        ? "Imported \(files.count) files from \(root.lastPathComponent)."
+                        : "Imported \(files.count - unreadable.count) files from "
+                            + "\(root.lastPathComponent). Could not read: "
+                            + unreadable.prefix(3).joined(separator: ", ")
+                            + (unreadable.count > 3 ? " and \(unreadable.count - 3) more." : ".")
                 )
                 return
             }
@@ -280,6 +316,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
             }
             self?.notifyFolderImport(mode: mode, ok: false, message: message)
         }.resume()
+    }
+
+    /// A read that macOS blocked is a different problem from a read that failed
+    /// for another reason, and only one of them is something the reader can fix.
+    private func readFailureMessage(root: URL, files: [String], error: Error?) -> String {
+        let nsError = error as NSError?
+        let blocked = nsError?.domain == NSCocoaErrorDomain
+            && nsError?.code == NSFileReadNoPermissionError
+        if blocked || nsError?.code == 257 {
+            return "macOS is not letting Lecture Companion read \(root.path). Open System "
+                + "Settings, then Privacy & Security, then Files and Folders, and allow "
+                + "Lecture Companion access to that folder. If it is not listed there, "
+                + "choose the folder again from inside the app."
+        }
+        let detail = nsError.map { "\($0.domain) \($0.code): \($0.localizedDescription)" } ?? "unknown"
+        return "Could not read \(files.count) file(s) in \(root.lastPathComponent) (\(detail)). "
+            + "First: " + (files.first ?? "-")
     }
 
     private func notifyFolderImport(mode: String, ok: Bool, message: String) {
