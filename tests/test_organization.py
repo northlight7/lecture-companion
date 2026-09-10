@@ -77,6 +77,51 @@ def test_model_grouping_and_related_source_context_are_exact(store):
     assert source_ids == ["object:data-a:field-revenue"]
 
 
+def test_related_evidence_is_sampled_across_files_not_taken_from_the_first(store):
+    """One file must not eat the whole evidence budget.
+
+    Regression, measured: an explanation for the Fintech deck listed
+    "aapl_weekly_prices_returns_156w.csv (related file)" four times and never
+    mentioned the other files in its own folder. A dataset exposes a learning
+    object per column, so taking them in file order spent every slot on
+    whichever file came first.
+    """
+    cid = store.create_course("Sampling").id
+    deck_artifact = _artifact(
+        "deck-a", "a" * 64, "lecture_2.pptx", "Lecture 2/lecture_2.pptx", "pptx"
+    )
+    wide = _artifact("wide", "b" * 64, "wide.csv", "Lecture 2/wide.csv", "csv")
+    narrow = _artifact("narrow", "c" * 64, "narrow.csv", "Lecture 2/narrow.csv", "csv")
+    store.save_artifacts(cid, [deck_artifact, wide, narrow])
+    deck_id = f"deck-{deck_artifact.content_hash[:12]}"
+    store.add_deck(cid, Deck(deck_id, deck_artifact.content_hash[:12], "Lecture 2", 1))
+
+    store.save_learning_objects(cid, wide.id, [
+        LearningObject(
+            id=f"wide-{n}", artifact_id=wide.id, object_type="dataset_field",
+            locator=SourceLocator(artifact_id=wide.id, kind="csv", dataset_field=f"col{n}"),
+            text=f"Wide column number {n} of the dataset.",
+        )
+        for n in range(12)
+    ])
+    store.save_learning_objects(cid, narrow.id, [
+        LearningObject(
+            id="narrow-0", artifact_id=narrow.id, object_type="dataset_field",
+            locator=SourceLocator(artifact_id=narrow.id, kind="csv", dataset_field="only"),
+            text="The one column in the narrow dataset.",
+        )
+    ])
+
+    save_organization(store, cid, {
+        deck_artifact.id: "Lecture 2", wide.id: "Lecture 2", narrow.id: "Lecture 2",
+    })
+    text, source_ids = related_material_for_deck(store, cid, deck_id)
+
+    assert any("narrow.csv" in line for line in text.splitlines()), text
+    assert sum(1 for line in text.splitlines() if "wide.csv" in line) <= 2
+    assert len(source_ids) == len(set(source_ids))
+
+
 def test_organization_is_structurally_course_isolated(store):
     a = store.create_course("A").id
     b = store.create_course("B").id

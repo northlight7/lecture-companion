@@ -17,6 +17,10 @@ from app.course import atomic_write_json
 MAX_FOLDER_NAME = 80
 MAX_SAMPLE_CHARS = 500
 MAX_CONTEXT_WORDS = 600
+#: How many exact source objects the grouped-files evidence may cite.
+MAX_RELATED_SOURCES = 8
+#: And how many of them may come from any one file.
+MAX_PER_RELATED_FILE = 2
 
 
 def organization_path(store, course_id: str) -> Path:
@@ -187,23 +191,43 @@ def related_material_for_deck(
         a for a in artifacts
         if a.id != current.id and org["assignments"].get(a.id) == folder
     ]
-    lines: list[str] = []
-    source_ids: list[str] = []
-    words = 0
+    # Take one object from each grouped file in turn, rather than filling every
+    # slot from the first file met. A workbook or a dataset exposes a learning
+    # object per column, so taking them in file order spent the whole budget on
+    # whichever file sorted first, and the evidence list read as the same
+    # filename four times over with the other files absent. The concept graph
+    # samples across artifacts for the same reason.
+    texts: list[list[tuple[object, str]]] = []
     for artifact in related:
+        rows = []
         for obj in store.load_learning_objects(course_id, artifact.id):
             text = " ".join((obj.text or "").split())
-            if not text:
-                continue
-            remaining = MAX_CONTEXT_WORDS - words
-            if remaining <= 0 or len(source_ids) >= 8:
+            if text:
+                rows.append((obj, text))
+        if rows:
+            texts.append(rows)
+
+    lines: list[str] = []
+    source_ids: list[str] = []
+    taken = [0] * len(texts)
+    words = 0
+    while len(source_ids) < MAX_RELATED_SOURCES and words < MAX_CONTEXT_WORDS:
+        progressed = False
+        for index, rows in enumerate(texts):
+            if len(source_ids) >= MAX_RELATED_SOURCES or words >= MAX_CONTEXT_WORDS:
                 break
+            if taken[index] >= len(rows) or taken[index] >= MAX_PER_RELATED_FILE:
+                continue
+            obj, text = rows[taken[index]]
+            taken[index] += 1
+            progressed = True
+            remaining = MAX_CONTEXT_WORDS - words
             excerpt = " ".join(text.split()[:min(120, remaining)])
             lines.append(
-                f"- {artifact.filename}, {_locator_label(obj)}: {excerpt}"
+                f"- {related[index].filename}, {_locator_label(obj)}: {excerpt}"
             )
-            source_ids.append(f"object:{artifact.id}:{obj.id}")
+            source_ids.append(f"object:{related[index].id}:{obj.id}")
             words += len(excerpt.split())
-        if words >= MAX_CONTEXT_WORDS or len(source_ids) >= 8:
+        if not progressed:
             break
     return "\n".join(lines), source_ids
