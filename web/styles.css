@@ -658,7 +658,7 @@ label {
    across three lines mid-word. */
 .file-row-wrap {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 9rem auto;
+  grid-template-columns: minmax(0, 1fr) 10rem auto;
   grid-template-areas:
     "file   file   file"
     "facts  folder delete";
@@ -685,7 +685,15 @@ label {
    visually while leaving it as the control's accessible name; the input sets
    its own size back. */
 .folder-field { grid-area: folder; margin: 0; font-size: 0; min-width: 0; }
-.folder-field input, .folder-field select { font-size: .8125rem; padding: .35rem .55rem; }
+/* Both the menu and the free-text field it can swap to. The field used to be an
+   input with no `type`, so it matched none of the rules above and WebKit drew a
+   native control instead, whose chevron collided with the Delete button. */
+.folder-field input, .folder-field select {
+  width: 100%;
+  font-size: .8125rem;
+  padding: .35rem .55rem;
+  text-overflow: ellipsis;
+}
 .file-delete { grid-area: delete; justify-self: end; }
 
 @media (max-width: 42rem) {

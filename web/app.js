@@ -45,6 +45,9 @@ let executionTimer = null;
 let progressFailures = 0;
 let executionFailures = 0;
 
+/* Sentinel option in the study-folder menu: choose it to type a new name. */
+const NEW_FOLDER = "__new__";
+
 /* Bumped on every route change. A render that started under an older token
  * must not paint, because its response can arrive after the reader moved on. */
 let routeSeq = 0;
@@ -751,7 +754,20 @@ async function renderCourse(cid, seq = routeSeq) {
 
   const artifacts = course.artifacts || [];
   const folderNames = [...new Set(artifacts.map((a) => a.folder).filter(Boolean))].sort();
-  $("folder-options").innerHTML = folderNames.map((name) => `<option value="${esc(name)}"></option>`).join("");
+
+  /* A real menu, because the reader's next move after organising is usually to
+     correct one filing. The old control was a free-text field with a datalist,
+     and WebKit never shows a datalist on click, only as you type, so it looked
+     like an empty dropdown. "New folder..." still allows a fresh name. */
+  const folderOptions = (current) => {
+    const names = [...new Set([...folderNames, current].filter((n) => n && n !== "Unfiled"))].sort();
+    return [
+      `<option value=""${current ? "" : " selected"}>Unfiled</option>`,
+      ...names.map((n) =>
+        `<option value="${esc(n)}"${n === current ? " selected" : ""}>${esc(n)}</option>`),
+      `<option value="${NEW_FOLDER}">New folder...</option>`,
+    ].join("");
+  };
   const groups = new Map();
   for (const artifact of artifacts) {
     const folder = artifact.folder || "Unfiled";
@@ -766,7 +782,7 @@ async function renderCourse(cid, seq = routeSeq) {
   const typedFolders = new Map();
   document.querySelectorAll("#file-list .folder-input").forEach((input) => {
     if (input.value !== input.getAttribute("value")) {
-      typedFolders.set(input.dataset.artifact, input.value);
+      if (input.value !== NEW_FOLDER) typedFolders.set(input.dataset.artifact, input.value);
     }
   });
 
@@ -781,7 +797,7 @@ async function renderCourse(cid, seq = routeSeq) {
           </a>
           <span class="file-facts">${esc((a.kind || "file").toUpperCase())} · ${esc((a.purpose ?? "").replaceAll("_", " "))} · ${plural(a.object_count, "source object", "source objects")}${(a.extraction_warnings ?? []).length ? " · extraction warning" : ""}</span>
           <label class="folder-field">Study folder
-            <input class="folder-input" data-artifact="${esc(a.id)}" list="folder-options" maxlength="80" value="${esc(a.folder || "")}" placeholder="Unfiled">
+            <select class="folder-input" data-artifact="${esc(a.id)}">${folderOptions(a.folder || "")}</select>
           </label>
           <button class="btn btn-danger file-delete" type="button" data-act="delete-file"
             data-course="${esc(cid)}" data-artifact="${esc(a.id)}" data-filename="${esc(a.filename)}"
@@ -791,9 +807,14 @@ async function renderCourse(cid, seq = routeSeq) {
     }).join("")
     : `<p class="empty">Nothing uploaded yet.</p>`;
 
-  for (const input of $("file-list").querySelectorAll(".folder-input")) {
-    const typed = typedFolders.get(input.dataset.artifact);
-    if (typed !== undefined) input.value = typed;
+  for (const field of $("file-list").querySelectorAll(".folder-input")) {
+    const typed = typedFolders.get(field.dataset.artifact);
+    if (typed === undefined) continue;
+    if (field.tagName === "SELECT" && ![...field.options].some((o) => o.value === typed)) {
+      field.replaceWith(newFolderField(field.dataset.artifact, typed));
+    } else {
+      field.value = typed;
+    }
   }
 
   $("organization-status").textContent = artifacts.length
@@ -816,6 +837,28 @@ async function renderCourse(cid, seq = routeSeq) {
 
   if (course.progress.running || course.progress.state === "running") startPolling(cid);
 }
+
+/// A free-text study-folder field, used when the reader picks "New folder...".
+function newFolderField(artifactId, value) {
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "folder-input";
+  input.dataset.artifact = artifactId;
+  input.maxLength = 80;
+  input.placeholder = "New folder name";
+  input.value = value;
+  return input;
+}
+
+/// "New folder..." cannot use `prompt()`: WebKit only supplies that when the UI
+/// delegate implements the text input panel, and this app's does not.
+$("file-list").addEventListener("change", (event) => {
+  const select = event.target.closest("select.folder-input");
+  if (!select || select.value !== NEW_FOLDER) return;
+  const field = newFolderField(select.dataset.artifact, "");
+  select.replaceWith(field);
+  field.focus();
+});
 
 $("save-folders").addEventListener("click", async () => {
   const cid = state.route.cid;
