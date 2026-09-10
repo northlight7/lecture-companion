@@ -366,6 +366,40 @@ def test_import_preview_groups_a_pile(client: TestClient) -> None:
         assert g["title"] and isinstance(g["filenames"], list) and g["filenames"]
 
 
+def test_study_folders_can_be_model_sorted_edited_and_files_deleted(client: TestClient) -> None:
+    cid = client.post("/api/courses", json={"title": "Folder API"}).json()["id"]
+    uploaded = client.post(
+        f"/api/courses/{cid}/files",
+        files=[
+            ("files", ("lecture_3.csv", b"topic,value\nregression,1\n", "text/csv")),
+            ("files", ("tutorial_3.csv", b"task,answer\nfit,2\n", "text/csv")),
+        ],
+    )
+    assert uploaded.status_code == 200, uploaded.text
+    artifacts = client.get(f"/api/courses/{cid}").json()["artifacts"]
+    assert len(artifacts) == 2
+
+    suggested = client.post(f"/api/courses/{cid}/organization/suggest", json={})
+    assert suggested.status_code == 200, suggested.text
+    assert set(suggested.json()["assignments"].values()) == {"Lecture 3"}
+
+    assignments = {item["id"]: "Week Three" for item in artifacts}
+    edited = client.put(
+        f"/api/courses/{cid}/organization", json={"assignments": assignments}
+    )
+    assert edited.status_code == 200
+    detail = client.get(f"/api/courses/{cid}").json()
+    assert {item["folder"] for item in detail["artifacts"]} == {"Week Three"}
+
+    victim = artifacts[0]
+    deleted = client.delete(f"/api/courses/{cid}/artifacts/{victim['id']}")
+    assert deleted.status_code == 200, deleted.text
+    remaining = client.get(f"/api/courses/{cid}").json()["artifacts"]
+    assert [item["id"] for item in remaining] == [artifacts[1]["id"]]
+    assert victim["id"] not in client.get(f"/api/courses/{cid}/organization").json()["assignments"]
+    assert client.delete(f"/api/courses/{cid}/artifacts/{victim['id']}").status_code == 404
+
+
 # --------------------------------------------------------------------------
 # G5 via HTTP: process every slide, then read the explanations back
 # --------------------------------------------------------------------------

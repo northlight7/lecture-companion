@@ -28,7 +28,12 @@ Frozen inputs verified at Capability Round 5:
 | Notebook UI | Source and computed result at both target sizes, no console error or overflow | done |
 | Workbook verification | Three real workbooks, exact precedents, cached-value separation, units, charts, rules, copy-only experiment | implemented, critic pending |
 | macOS app launcher and icon | Native bundle opens, pauses cleanly, and shows the blue icon in Finder | done |
-| Offline regression | 165 tests pass | done for current scope |
+| Slide teaching continuity | Previous completed slide is mandatory, future slides are excluded, related earlier decks are exact-linked | done foundation |
+| Concise learner language | 900-token cap, 100 to 180 word target, jargon definitions, punctuation normalization | done foundation |
+| Related-file context | Editable study folders and exact grouped-source links reach slide prompts | done foundation |
+| Native recursive folder upload | Built app imported five real files with all L1 to L3 paths preserved | done |
+| File and course deletion | Confirmed UI controls and scoped backend cleanup with shared-byte preservation | done |
+| Offline regression | 176 tests pass | done for current scope |
 | Resumable mixed-artifact model work | Slides and notebooks only | fail |
 | Subject-aware workflows | Spreadsheet foundation exists, broader teaching workflows remain | fail |
 
@@ -47,11 +52,17 @@ Frozen inputs verified at Capability Round 5:
 - Workbook checks keep source cached values separate from locally calculated values. Checks using cached formula precedents are not labeled independently verified.
 - Formula experiments run on course-scoped copies. Original workbook hashes are checked before and after inspection.
 - The macOS bundle uses one transparent-corner blue icon master for its native `.icns` resource and browser favicon.
+- Study folders are saved as course-local metadata. They do not rewrite source paths or original bytes.
+- DeepSeek folder proposals receive only current-course ids, names, paths, purposes, and bounded extracted samples. Proposed ids are validated against the current course before saving.
+- The previous completed slide is always supplied for continuity. Related vector hits must have a strictly earlier course reading rank.
+- Grouped non-slide context carries exact `object:<artifact-id>:<object-id>` provenance into stored explanations and clickable source links.
+- Normal slide bodies target 100 to 180 words. Dense technical slides may reach 240 words. Model output is normalized to remove em dashes and semicolons from learner-facing text.
+- The native app uses an `NSOpenPanel` folder bridge because `webkitdirectory` is unreliable in WKWebView. Browser fallback remains available.
 - True permission-enforced holdout separation is unavailable because all agents share the filesystem. Every round continues to report that protocol gate as failed.
 
 ## Work queue
 
-1. Run the fresh Round 5 critic against the frozen workbook implementation.
+1. From a clean checkout, smoke-test the latest commit, then run the fresh Round 5 critic against the workbook, teaching-continuity, folder, and deletion increment.
 2. Extend artifact-specific grounded explanations and schema validation to non-slide objects with adaptive DeepSeek budgets and duplicate-billing tests.
 3. Implement ER diagram validation, balanced ethics scaffolding, finance leakage checks, and practice workflows.
 4. Run the two-pass live DeepSeek sample within the remaining $5 cap, then clean-checkout, security, accessibility, and smoke gates.
@@ -74,7 +85,7 @@ Frozen inputs verified at Capability Round 5:
 
 ## CURRENT STATE
 
-Capability Round 5 is in progress. The full frozen product bar remains FAIL. Deterministic workbook verification passes local unit, real-course, browser, byte-preservation, staleness, resume, and course-isolation gates. A fresh independent critic remains required before the round can close. The native macOS launcher now uses the finished blue Lecture Companion icon in Finder and at runtime. Business Data Analytics was paused at 7 of 110 before the launcher was restarted, and it resumes from slide 8.
+Capability Round 5 is in progress. The full frozen product bar remains FAIL. A fresh independent critic remains required before the round can close. The latest increment adds concise continuity-aware slide teaching, exact earlier-slide and grouped-file links, editable model-assisted study folders, guarded file and course deletion, and a native recursive folder chooser. Business Data Analytics remains paused at 7 of 110 and resumes from slide 8. No live explanation run was started.
 
 Measured rerunnable commands:
 
@@ -82,10 +93,12 @@ Measured rerunnable commands:
 .venv/bin/python -m pytest -q
 uv lock --check
 ./launcher/build-app.sh
+swiftc launcher/LectureCompanion.swift -framework AppKit -framework WebKit -o /tmp/LectureCompanion-folder-test
+node --check web/app.js
 LC_COURSES_ROOT=.internal/workbook-courses LC_FAKE_MODEL=1 LC_PORT=45751 ./run.sh
 .venv/bin/python scripts/gate_workbook_inspection.py --base http://127.0.0.1:45751 --courses-root .internal/workbook-courses
 ```
 
-Measured results: 165 tests passed. All three released workbooks retained matching source hashes. The verifier independently reproduced `1 Comparison!C8` as 420.0 from 260.4, 113.4, and 46.2 with the source unit identified as HKD thousands. It distinguished the workbook's cached 419.99999999999994 value, exposed exact intermediate references, diagnosed the orientation exercise, retained both Stop If True rules, and passed both target viewport sizes without console errors or horizontal overflow. The rebuilt app bundle contains a valid 1024-pixel RGBA master and `AppIcon.icns`. Finder visibly rendered the blue Lecture Companion icon.
+Measured results: 176 tests passed. The frozen hashes still match. The rebuilt native app opened its folder chooser and recursively imported five released files from `Database Management Systems`, preserving paths from `L1` through `L3`. The temporary imported course was deleted after verification. The browser organization view had no console errors or horizontal overflow. All three released workbooks retained matching source hashes in the prior workbook gate. The verifier independently reproduced `1 Comparison!C8` as 420.0 from 260.4, 113.4, and 46.2 with the source unit identified as HKD thousands.
 
 No paid model call was made in this round.

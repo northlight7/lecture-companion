@@ -6,7 +6,7 @@ A local web app that turns mixed course material into a grounded, plain-language
 
 ## Status
 
-The slide pipeline remains green. Capability Round 5 now includes deterministic workbook verification and a native macOS launcher with the finished app icon. Local gates pass, and the workbook increment is waiting for its fresh critic. The expanded product bar still fails because subject-aware teaching workflows are incomplete.
+The slide pipeline remains green. Capability Round 5 now includes workbook verification, concise continuity-aware slide teaching, editable study folders, native recursive folder upload, and guarded deletion. Local gates pass. The Round 5 fresh critic is still pending, so the expanded product bar remains FAIL.
 
 ## Current progress
 
@@ -23,10 +23,15 @@ The slide pipeline remains green. Capability Round 5 now includes deterministic 
 - Done: all five real courses pass local typed search, exact result links, concept-to-file evidence, explicit notebook-to-dataset references, and responsive relationship views.
 - Done: source changes mark the course knowledge index stale. The next search rebuilds it atomically and removes superseded evidence.
 - Done: the browser accepts complete folder trees, groups the five-course parent folder correctly, preserves lecture subfolders, and skips unchanged repeat uploads without duplicate extraction.
+- Done: the native macOS app now opens a real folder chooser, recursively imports supported files, and preserves their paths. This was operated against a real five-file lecture folder in the built app.
+- Done: editable study folders group decks with tutorials, datasets, workbooks, notebooks, and supplements. DeepSeek can propose groupings from bounded within-course metadata and source samples.
+- Done: slide explanations target 100 to 180 words, define jargon in plain language, forbid em dashes and semicolons, always receive the previous completed slide, and exclude future slides during regeneration.
+- Done: explanations receive exact source objects from files grouped with their deck. Earlier slides and related files render as clickable exact links.
+- Done: files and courses can be deleted. File deletion removes every version at that source path plus orphaned derived data while preserving canonical bytes still referenced elsewhere.
 - Done: notebook viewers disclose the actual runtime and limits before confirmation, run all or selected code cells, capture computed stdout, tables, plots, warnings, errors, and diagnostics, and link every result to its exact source cell.
 - Done: the macOS sandbox denies network, child processes, foreign-course reads, and writes outside the run workspace. A stopped run resumes from its saved namespace without repeating completed cells, and source changes mark runs stale.
 - Done: workbook inspection independently checks supported formulas, exact precedents, cached values, units, chart inputs, formatting and filters without changing originals.
-- Next: run the fresh Round 5 workbook critic on the frozen implementation, then continue with cross-format subject-aware teaching.
+- Next: Claude Code should read this file, `.internal/STATE.md`, `.internal/RUNLOG.md`, the frozen assessment, model evaluation, `SPEC.md`, and git history. It should smoke-test commit HEAD, then run the fresh Round 5 critic before widening scope.
 
 ## Decisions
 
@@ -49,11 +54,16 @@ The slide pipeline remains green. Capability Round 5 now includes deterministic 
 - Notebook execution uses a fixed disclosed scientific Python environment. Every run receives copies of current-course files, writes to a course-scoped run directory, makes no model call, and is addressed by source hash, selected cells, policy version, and timeout.
 - Computed notebook results remain separate from saved source outputs. Runtime diagnostics are deterministic descriptions of observed exceptions and warnings, never modeled guesses.
 - The macOS launcher owns the backend process. Closing its window or pressing Command-Q stops the server cleanly.
+- Study folders are course-local metadata in `organization.json`. They never move or rewrite preserved originals.
+- Model-assisted organization sends only current-course file ids, names, imported paths, purposes, and short extracted samples. Deterministic validation rejects invented ids and duplicate assignments.
+- The previous completed slide is mandatory context. Similarity retrieval contributes only strictly earlier slides, even when regenerating from a fully built index.
+- Learner-facing model text is normalized after parsing so a model slip cannot leave an em dash or semicolon in the explanation.
 
 ## Notes
 
 - Double-click `Lecture Companion.app` for normal use. It starts the backend, opens the product in its own window, and stops the backend when the app quits. `./run.sh` remains available for development.
 - `.venv/bin/python -m pytest` runs the current offline suite.
+- The current offline suite contains 176 tests. `node --check web/app.js` and `swiftc launcher/LectureCompanion.swift -framework AppKit -framework WebKit -o /tmp/LectureCompanion-check` verify the browser and native launcher syntax.
 - Durable project rules remain unchanged. The DeepSeek key lives only in the OS keyring under service `lecture-companion` and account `deepseek-api-key`. `Courses/` is gitignored user data. Course isolation is structural.
 - Public repository: `northlight7/lecture-companion`.
 - Detailed backend research and test evidence lives at `.internal/model-backend-evaluation.md`.

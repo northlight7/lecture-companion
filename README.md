@@ -8,7 +8,8 @@ the left and, on the right, an explanation in ordinary language: what the slide
 means, a concrete example where one fits, and a small diagram when the material
 is worth drawing. Each explanation is written knowing the course overview and
 what the earlier slides already covered, so the sequence reads as one continuous
-text rather than a pile of disconnected answers.
+text rather than a pile of disconnected answers. Normal explanations target
+100 to 180 words. Technical terms are kept, then defined in plain language.
 
 Everything runs locally except requested explanation generation and connected selected-context questions.
 
@@ -81,6 +82,17 @@ You can also choose a complete folder tree. Selecting a parent `Courses` folder
 groups files by its immediate course folders and preserves paths such as
 `L1/` and `L2/`. Re-selecting the same folder later skips files whose relative
 path and bytes are unchanged, so they are not extracted or processed twice.
+The macOS app uses a native recursive folder chooser, so this works in its
+embedded web view as well as in Chromium browsers.
+
+Inside a course, editable study folders join each lecture with its tutorial,
+dataset, workbook, notebook, and supplements. **Organize with DeepSeek** sends
+only file names, imported paths, purposes, and short extracted samples from
+that course. Its proposed folders can be edited before or after saving. Slide
+explanations can then use exact source objects from files grouped with the deck.
+Files and courses have explicit delete controls. Deleting an upload also
+removes its derived objects, viewers, explanations, and stale indexes while
+preserving a shared original when another current path still uses those bytes.
 
 **Read.** The course list opens into a two-pane viewer: the rendered slide, and
 the explanation with its heading, body, a set-off example, and a mermaid diagram
@@ -135,13 +147,15 @@ the same as one that ran straight through.
 ## How a slide gets explained
 
 1. **Extract** — the page is rendered to an image and its text pulled out.
-2. **Assemble context** — the course overview, a running plain-language summary
-   of everything covered so far, and the most relevant earlier explanations
-   found by vector search. All three are scoped to this course alone.
-3. **Generate** — the slide image and that context go to a vision model, which
+2. **Assemble context**. The course overview, a running plain-language summary,
+   the immediately previous completed slide, related earlier slides, and exact
+   source objects from the same study folder are assembled. Future slides and
+   other courses are excluded.
+3. **Generate**. The slide image and that context go to a vision model, which
    returns a heading, body, example, and optionally a mermaid diagram. The
-   prompt tells it to describe only what the slide supports.
-4. **Remember** — the explanation is stored, embedded, indexed, and folded into
+   prompt tells it to describe only what the slide supports, avoid repetition,
+   define jargon, stay concise, and use neither em dashes nor semicolons.
+4. **Remember**. The explanation is stored, embedded, indexed, and folded into
    the running summary, so the next slide reasons from it.
 
 ## Models
@@ -189,7 +203,9 @@ It is gitignored and never leaves your machine by default. A slide image with
 its bounded context goes to DeepSeek when you request an explanation. A question
 and the bounded source objects you explicitly selected go to DeepSeek when you
 ask selected context. Original files, unselected objects, and other courses are
-not sent by the question workflow.
+not sent by the question workflow. Asking DeepSeek to organize a course sends
+bounded metadata and short extracted samples from that course, never originals
+or material from another course.
 
 ## Status, honestly
 

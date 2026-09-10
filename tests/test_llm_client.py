@@ -22,6 +22,7 @@ from app.contracts import (
     SlideContext,
 )
 from app.llm import (
+    MAX_TOKENS,
     TEMPERATURE,
     DeepSeekClient,
     FakeClient,
@@ -93,7 +94,7 @@ def test_the_request_body_matches_the_documented_deepseek_shape():
     body = captured["body"]
     assert body["model"] == DEEPSEEK_VISION_MODEL
     assert body["temperature"] == TEMPERATURE
-    assert isinstance(body["max_tokens"], int) and body["max_tokens"] > 0
+    assert body["max_tokens"] == MAX_TOKENS == 900
 
     system, user = body["messages"]
     assert system["role"] == "system"
@@ -137,6 +138,20 @@ def test_the_prompt_carries_the_labelled_context_blocks():
     # The grounding instruction is not optional.
     assert "only what this slide actually shows" in captured["system"]
     assert "Do NOT invent content" in captured["system"]
+    assert "between 100 and 180 words" in captured["system"]
+    assert "define it in plain words" in captured["system"]
+    assert "Do not use an em dash character" in captured["system"]
+
+
+def test_learner_facing_punctuation_is_normalized():
+    fields = parse_explanation_json(json.dumps({
+        "heading": "Risk—return",
+        "body": "Beta is technical; it measures market sensitivity—roughly.",
+        "example": "One stock; one comparison.",
+        "mermaid": "",
+    }))
+    assert "—" not in fields["heading"] + fields["body"] + fields["example"]
+    assert ";" not in fields["heading"] + fields["body"] + fields["example"]
 
 
 # --------------------------------------------------------------------------

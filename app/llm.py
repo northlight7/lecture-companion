@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from pathlib import Path
 from typing import Any, Callable, Iterable, Sequence
 
 import httpx
@@ -43,7 +44,8 @@ log = logging.getLogger(__name__)
 
 #: Generation is meant to be faithful, not creative.
 TEMPERATURE = 0.3
-MAX_TOKENS = 1600
+MAX_TOKENS = 900
+ORGANIZE_MAX_TOKENS = 700
 SUMMARY_MAX_TOKENS = 900
 
 
@@ -78,14 +80,24 @@ knowledge presented as if it were on the slide.
 3. Never state a fact that neither the slide nor the provided course context \
 supports. If something on the slide is ambiguous, say so plainly rather than \
 guessing.
-4. Connect this slide to earlier material when it genuinely follows from it \
-(you may refer to an earlier slide by its number, e.g. "as in slide 4"). If \
-the connection is not real, do not manufacture one.
-5. Give a concrete example only when one clarifies the slide. An empty string \
+4. Treat the immediately previous slide and related earlier sources as memory. \
+Do not teach the same point again. Use one short bridge sentence when the \
+current slide builds on earlier material. Name a supplied source only when the \
+connection is real.
+5. Keep the body between 100 and 180 words for a normal slide. A dense \
+technical slide may use up to 240 words. Keep the heading between 3 and 8 \
+words. Avoid scene-setting, recaps, and repeated conclusions.
+6. Prefer everyday language. When a technical term is needed, keep the \
+correct term and define it in plain words the first time it matters. Never \
+brush jargon aside or assume the student already knows it.
+7. Do not use an em dash character. Do not use semicolons. Use full stops, \
+commas, or parentheses instead.
+8. Give a concrete example only when one clarifies the slide. Keep it under \
+60 words. An empty string \
 is a correct answer for `example`.
-6. The diagram is optional. Return a mermaid diagram ONLY when the slide \
+9. The diagram is optional. Return a mermaid diagram ONLY when the slide \
 describes a structure, a flow, a sequence, or a relationship that is worth \
-drawing; otherwise return "" for `mermaid`. When you do return one, use plain \
+drawing. Otherwise return "" for `mermaid`. When you do return one, use plain \
 `graph TD`, `flowchart TD`, or `sequenceDiagram` syntax with no styling, no \
 classDef, no click handlers and no colour directives, because it is rendered \
 in both a light and a dark theme.
@@ -117,14 +129,22 @@ def _words(text: str, limit: int) -> str:
     return " ".join(parts[:limit]) + " ..."
 
 
-def render_retrieved(rows: Sequence[IndexRow]) -> str:
+def render_retrieved(
+    rows: Sequence[IndexRow],
+    deck_titles: dict[str, str] | None = None,
+    previous_chunk_id: str = "",
+) -> str:
     """Each retrieved chunk labelled with its slide number, so the model can
     refer back to it in the explanation ("as in slide 4")."""
     if not rows:
         return "(nothing earlier in this course is closely related.)"
     out: list[str] = []
     for row in rows:
-        out.append(f"- From slide {row.slide_index + 1}: {row.text.strip()}")
+        title = (deck_titles or {}).get(row.deck_id, row.deck_id)
+        relation = "Immediately previous" if row.chunk_id == previous_chunk_id else "Related earlier slide"
+        out.append(
+            f"- {relation}, {title}, slide {row.slide_index + 1}: {row.text.strip()}"
+        )
     return "\n".join(out)
 
 
@@ -142,6 +162,11 @@ def build_prompt_text(ctx: SlideContext) -> str:
     summary = (ctx.running_summary or "").strip() or (
         "(this is the beginning of the course; nothing has been covered yet.)"
     )
+    deck_titles = getattr(ctx, "_deck_titles", {})
+    previous_chunk_id = getattr(ctx, "_previous_chunk_id", "")
+    related_material = getattr(ctx, "_related_material", "").strip() or (
+        "(no related files have been grouped with this deck.)"
+    )
 
     return (
         "## Course overview\n"
@@ -149,13 +174,16 @@ def build_prompt_text(ctx: SlideContext) -> str:
         "## What this course has covered so far\n"
         f"{summary}\n\n"
         "## Relevant earlier material\n"
-        f"{render_retrieved(ctx.retrieved)}\n\n"
+        f"{render_retrieved(ctx.retrieved, deck_titles, previous_chunk_id)}\n\n"
+        "## Related files in this lecture folder\n"
+        f"{related_material}\n\n"
         f"## This slide ({ctx.deck_title}, {ctx.slide_index + 1} of {ctx.n_slides})\n"
         "Extracted text:\n"
         f"{slide_text}\n\n"
         "The slide image follows. Explain this slide, grounded in what it "
         "actually shows, for a student who has read everything above. Return "
-        "only the JSON object."
+        "Use earlier material to avoid repetition. Use related files only when "
+        "they directly clarify this slide. Return only the JSON object."
     )
 
 
@@ -279,11 +307,18 @@ def parse_explanation_json(text: str) -> dict[str, str]:
         mermaid = ""
 
     return {
-        "heading": _str("heading"),
-        "body": body,
-        "example": _str("example"),
+        "heading": _clean_learning_text(_str("heading")),
+        "body": _clean_learning_text(body),
+        "example": _clean_learning_text(_str("example")),
         "mermaid": mermaid,
     }
+
+
+def _clean_learning_text(text: str) -> str:
+    """Enforce the learner-facing punctuation rule if a model slips."""
+    cleaned = (text or "").replace("—", ",").replace(";", ".")
+    cleaned = re.sub(r"[ \t]+", " ", cleaned)
+    return cleaned.strip()
 
 
 _MERMAID_HEADS = (
@@ -472,7 +507,8 @@ class DeepSeekClient:
             mermaid=fields["mermaid"],
             heading=fields["heading"],
             model=self.model,
-            context_used=[r.chunk_id for r in ctx.retrieved],
+            context_used=[r.chunk_id for r in ctx.retrieved]
+            + list(getattr(ctx, "_related_source_ids", [])),
         )
 
     def summarise(self, prompt: str) -> str:
@@ -488,6 +524,35 @@ class DeepSeekClient:
             {"role": "user", "content": prompt},
         ]
         return self._post(self._payload(messages, SUMMARY_MAX_TOKENS)).strip()
+
+    def organize_files(self, files: list[dict[str, str]]) -> dict[str, Any]:
+        """Ask the model for editable teaching groups within one course."""
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "Group files from one course into useful study folders. "
+                    "A folder should normally join one lecture deck with its "
+                    "tutorial, dataset, workbook, notebook, and supplements. "
+                    "Use filenames, paths, declared purpose, and short source "
+                    "samples. Do not invent file ids. Put each file in at most "
+                    "one folder. Return strict JSON only as "
+                    '{"folders":[{"name":"Lecture 1","artifact_ids":[],"reason":""}]}.'
+                ),
+            },
+            {"role": "user", "content": json.dumps(files, ensure_ascii=False)},
+        ]
+        raw = self._post(self._payload(messages, ORGANIZE_MAX_TOKENS))
+        candidate = _outermost_object(raw)
+        if not candidate:
+            raise BadModelOutput("the model returned no folder JSON object")
+        try:
+            parsed = json.loads(candidate)
+        except ValueError:
+            raise BadModelOutput("the model returned invalid folder JSON") from None
+        if not isinstance(parsed, dict) or not isinstance(parsed.get("folders"), list):
+            raise BadModelOutput("the model returned no folder list")
+        return parsed
 
     def test_connection(self) -> tuple[bool, str]:
         """A cheap, text-only call. Never raises."""
@@ -666,7 +731,7 @@ class FakeClient:
         else:
             parts.append(
                 "The slide carries no extracted text. The offline stub cannot "
-                "see the image, so it has nothing to describe here; the real "
+                "see the image, so it has nothing to describe here. The real "
                 "model reads the image and would."
             )
         if overview_echo:
@@ -712,7 +777,8 @@ class FakeClient:
             mermaid=mermaid,
             heading=heading[:120],
             model=self.name,
-            context_used=[row.chunk_id for row in ctx.retrieved],
+            context_used=[row.chunk_id for row in ctx.retrieved]
+            + list(getattr(ctx, "_related_source_ids", [])),
         )
 
     def summarise(self, prompt: str) -> str:
@@ -730,6 +796,32 @@ class FakeClient:
             if ln.strip() and not ln.lstrip().startswith("###")
         ]
         return _words(" ".join(lines), 220)
+
+    def organize_files(self, files: list[dict[str, str]]) -> dict[str, Any]:
+        """Deterministic offline grouping from lecture and folder cues."""
+        buckets: dict[str, list[str]] = {}
+        for row in files:
+            haystack = f"{row.get('source_path', '')} {row.get('filename', '')}"
+            match = re.search(
+                r"(?i)(?:lecture|week|tutorial|lab|lec|wk)[ _-]*0*(\d{1,2})",
+                haystack,
+            )
+            if match:
+                name = f"Lecture {int(match.group(1))}"
+            else:
+                parent = Path(row.get("source_path", "")).parent.name
+                name = parent if parent and parent != "." else "Course resources"
+            buckets.setdefault(name, []).append(row["artifact_id"])
+        return {
+            "folders": [
+                {
+                    "name": name,
+                    "artifact_ids": ids,
+                    "reason": "Grouped from matching lecture or source-folder cues.",
+                }
+                for name, ids in sorted(buckets.items())
+            ]
+        }
 
     def test_connection(self) -> tuple[bool, str]:
         return True, "Fake model (LC_FAKE_MODEL): no network, no spend."
