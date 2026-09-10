@@ -160,6 +160,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
         chooseAndUploadFolder(mode: mode, courseId: courseId)
     }
 
+    // WebKit asks the UI delegate to put up `window.confirm` and `window.alert`.
+    // A delegate that does not implement these never answers, so the calling
+    // script waits forever and the click that triggered it does nothing. Both
+    // Delete buttons are behind a `confirm`, which made them dead in the app
+    // while working normally in a browser.
+    func webView(
+        _ webView: WKWebView,
+        runJavaScriptConfirmPanelWithMessage message: String,
+        initiatedByFrame frame: WKFrameInfo,
+        completionHandler: @escaping (Bool) -> Void
+    ) {
+        let alert = NSAlert()
+        alert.messageText = message
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "Cancel")
+        completionHandler(alert.runModal() == .alertFirstButtonReturn)
+    }
+
+    func webView(
+        _ webView: WKWebView,
+        runJavaScriptAlertPanelWithMessage message: String,
+        initiatedByFrame frame: WKFrameInfo,
+        completionHandler: @escaping () -> Void
+    ) {
+        let alert = NSAlert()
+        alert.messageText = message
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+        completionHandler()
+    }
+
     private func chooseAndUploadFolder(mode: String, courseId: String) {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false

@@ -143,6 +143,14 @@ a { color: inherit; }
    own marker: removing the ring here stranded keyboard users at the top. */
 main:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 
+/* The router moves focus to the new screen's heading so a screen reader
+   announces the page change. That heading is not a control and the focus was
+   not asked for, so drawing a ring round the page title reads as a bug. */
+h1[tabindex="-1"]:focus,
+h1[tabindex="-1"]:focus-visible,
+.viewer-title[tabindex="-1"]:focus,
+.viewer-title[tabindex="-1"]:focus-visible { outline: none; }
+
 .skip {
   position: absolute;
   left: -9999px;
