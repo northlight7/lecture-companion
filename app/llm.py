@@ -50,8 +50,14 @@ TEMPERATURE = 0.3
 #: unparseable output, so those slides were quietly skipped. The ceiling only
 #: costs anything if the model actually writes that much.
 MAX_TOKENS = 2400
-ORGANIZE_MAX_TOKENS = 700
-SUMMARY_MAX_TOKENS = 900
+#: A folder proposal is a JSON list of groups, each with a name and a reason,
+#: so it grows with the number of files in the course. 700 cut it off and the
+#: reader got a raw "cut off at the 700-token ceiling" error.
+ORGANIZE_MAX_TOKENS = 2000
+#: The running summary is rebuilt as the course goes and is trimmed to the
+#: prompt budget anyway. Cut off, it silently loses the most recent slides,
+#: which are the ones continuity depends on.
+SUMMARY_MAX_TOKENS = 2000
 
 
 #: Separates instructions from the source material inside a `summarise` prompt.
@@ -568,7 +574,14 @@ class DeepSeekClient:
             },
             {"role": "user", "content": json.dumps(files, ensure_ascii=False)},
         ]
-        raw = self._post(self._payload(messages, ORGANIZE_MAX_TOKENS))
+        try:
+            raw = self._post(self._payload(messages, ORGANIZE_MAX_TOKENS))
+        except OutputTruncated:
+            # Same ceiling would cut in the same place, so raise the ceiling.
+            bigger = ORGANIZE_MAX_TOKENS * 2
+            log.info("folder proposal ran past %d tokens, retrying with %d",
+                     ORGANIZE_MAX_TOKENS, bigger)
+            raw = self._post(self._payload(messages, bigger))
         candidate = _outermost_object(raw)
         if not candidate:
             raise BadModelOutput("the model returned no folder JSON object")
@@ -584,11 +597,15 @@ class DeepSeekClient:
         """A cheap, text-only call. Never raises."""
         messages = [{"role": "user", "content": "Reply with the single word: ok"}]
         try:
-            reply = self._post(self._payload(messages, 16))
+            reply = self._post(self._payload(messages, 64))
         except NoApiKey as exc:
             return False, _scrub(str(exc))
         except RateLimited as exc:
             return False, f"Connected, but rate limited: {_scrub(str(exc))}"
+        except OutputTruncated:
+            # The key worked and the model answered: it just spent the budget
+            # before saying "ok". A truncated probe is still a live connection.
+            return True, f"Connected to {self.model}"
         except (ModelUnavailable, BadModelOutput) as exc:
             return False, _scrub(str(exc))
         except Exception as exc:  # never raise out of a connection test

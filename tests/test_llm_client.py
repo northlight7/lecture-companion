@@ -109,6 +109,34 @@ def test_a_truncated_first_try_is_retried_with_a_larger_budget():
     assert seen[0] == MAX_TOKENS
 
 
+def test_a_truncated_folder_proposal_is_retried_with_a_larger_budget():
+    """The same trap on the organize call, which had its own smaller ceiling.
+
+    A truncated proposal used to surface to the reader as a raw error naming the
+    token ceiling. There is no deterministic fallback by design, so the call has
+    to get the room it needs.
+    """
+    from app.llm import ORGANIZE_MAX_TOKENS
+
+    seen: list[int] = []
+    good = {"folders": [{"name": "Lecture 1", "artifact_ids": ["a1"], "reason": "same deck"}]}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content.decode())
+        seen.append(body["max_tokens"])
+        if len(seen) == 1:
+            return reply('{"folders": [{"name": "Lec', finish_reason="length")
+        return reply(json.dumps(good))
+
+    out = client_for(handler).organize_files(
+        [{"artifact_id": "a1", "filename": "L1.pdf", "purpose": "slides", "path": "L1.pdf", "sample": ""}]
+    )
+
+    assert out == good
+    assert seen[0] == ORGANIZE_MAX_TOKENS
+    assert seen[1] > seen[0], "the retry must raise the ceiling, not repeat it"
+
+
 def test_a_genuinely_unparseable_answer_still_retries_once_at_the_same_budget():
     seen: list[int] = []
 
@@ -393,8 +421,10 @@ def test_test_connection_reports_ok_and_is_text_only():
     ok, detail = client_for(handler).test_connection()
     assert ok is True
     assert DEEPSEEK_VISION_MODEL in detail
-    # Cheap: no image part, a small token cap.
-    assert captured["body"]["max_tokens"] <= 32
+    # Cheap: no image part, and a cap small enough to be a rounding error. It is
+    # not 16 any more because a model that reasons first can spend a tiny budget
+    # before it says "ok", and a cut-off probe used to read as a failed key.
+    assert captured["body"]["max_tokens"] <= 64
     assert json.dumps(captured["body"]).count("image_url") == 0
 
 
