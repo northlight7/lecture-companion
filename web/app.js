@@ -785,8 +785,8 @@ async function renderCourse(cid, seq = routeSeq) {
   // survive that rebuild, so hold on to anything that differs from the saved value.
   const typedFolders = new Map();
   document.querySelectorAll("#file-list .folder-input").forEach((input) => {
-    if (input.value !== input.getAttribute("value")) {
-      if (input.value !== NEW_FOLDER) typedFolders.set(input.dataset.artifact, input.value);
+    if (input.value !== (input.dataset.saved ?? "") && input.value !== NEW_FOLDER) {
+      typedFolders.set(input.dataset.artifact, input.value);
     }
   });
 
@@ -801,7 +801,7 @@ async function renderCourse(cid, seq = routeSeq) {
           </a>
           <span class="file-facts">${esc((a.kind || "file").toUpperCase())} · ${esc((a.purpose ?? "").replaceAll("_", " "))} · ${plural(a.object_count, "source object", "source objects")}${(a.extraction_warnings ?? []).length ? " · extraction warning" : ""}</span>
           <label class="folder-field">Study folder
-            <select class="folder-input" data-artifact="${esc(a.id)}">${folderOptions(a.folder || "")}</select>
+            <select class="folder-input" data-artifact="${esc(a.id)}" data-saved="${esc(a.folder || "")}">${folderOptions(a.folder || "")}</select>
           </label>
           <button class="btn btn-danger file-delete" type="button" data-act="delete-file"
             data-course="${esc(cid)}" data-artifact="${esc(a.id)}" data-filename="${esc(a.filename)}"
@@ -815,7 +815,7 @@ async function renderCourse(cid, seq = routeSeq) {
     const typed = typedFolders.get(field.dataset.artifact);
     if (typed === undefined) continue;
     if (field.tagName === "SELECT" && ![...field.options].some((o) => o.value === typed)) {
-      field.replaceWith(newFolderField(field.dataset.artifact, typed));
+      field.replaceWith(newFolderField(field.dataset.artifact, typed, field.dataset.saved ?? ""));
     } else {
       field.value = typed;
     }
@@ -843,11 +843,12 @@ async function renderCourse(cid, seq = routeSeq) {
 }
 
 /// A free-text study-folder field, used when the reader picks "New folder...".
-function newFolderField(artifactId, value) {
+function newFolderField(artifactId, value, saved = "") {
   const input = document.createElement("input");
   input.type = "text";
   input.className = "folder-input";
   input.dataset.artifact = artifactId;
+  input.dataset.saved = saved;
   input.maxLength = 80;
   input.placeholder = "New folder name";
   input.value = value;
@@ -859,7 +860,7 @@ function newFolderField(artifactId, value) {
 $("file-list").addEventListener("change", (event) => {
   const select = event.target.closest("select.folder-input");
   if (!select || select.value !== NEW_FOLDER) return;
-  const field = newFolderField(select.dataset.artifact, "");
+  const field = newFolderField(select.dataset.artifact, "", select.dataset.saved ?? "");
   select.replaceWith(field);
   field.focus();
 });
