@@ -6,6 +6,7 @@ private let healthURL = URL(string: "http://127.0.0.1:8765/api/health")!
 
 final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScriptMessageHandler {
     private var backend: Process?
+    private var backendLog: FileHandle?
     private var window: NSWindow?
     private var webView: WKWebView?
     private var readinessTimer: Timer?
@@ -410,8 +411,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
         process.arguments = [projectRoot.appendingPathComponent("run.sh").path]
         process.currentDirectoryURL = projectRoot
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
+        // Keep the backend's output. Sending it to /dev/null threw away every
+        // line explaining why a slide was skipped, which is how a run can
+        // finish with unexplained gaps and nothing to diagnose it with.
+        let logURL = projectRoot.appendingPathComponent(".internal/launcher.log")
+        try? FileManager.default.createDirectory(
+            at: logURL.deletingLastPathComponent(), withIntermediateDirectories: true
+        )
+        // Truncate per launch: the log is for the run in front of you.
+        try? Data().write(to: logURL)
+        if let handle = try? FileHandle(forWritingTo: logURL) {
+            backendLog = handle
+            process.standardOutput = handle
+            process.standardError = handle
+        } else {
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
+        }
 
         do {
             try process.run()

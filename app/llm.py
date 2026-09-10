@@ -44,7 +44,12 @@ log = logging.getLogger(__name__)
 
 #: Generation is meant to be faithful, not creative.
 TEMPERATURE = 0.3
-MAX_TOKENS = 900
+#: A slide explanation is a heading, 100 to 180 words of body (240 on a dense
+#: slide), an example and sometimes a mermaid diagram. 900 tokens cut that off
+#: mid-answer on table-heavy slides, and the truncation was being read as
+#: unparseable output, so those slides were quietly skipped. The ceiling only
+#: costs anything if the model actually writes that much.
+MAX_TOKENS = 2400
 ORGANIZE_MAX_TOKENS = 700
 SUMMARY_MAX_TOKENS = 900
 
@@ -475,7 +480,16 @@ class DeepSeekClient:
             raise BadModelOutput(
                 f"DeepSeek returned non-JSON: {_scrub(_body_snippet(resp))}"
             ) from None
-        return _content_of(data)
+        text = _content_of(data)
+        if _finish_reason(data) == "length":
+            # Report this as truncation, not as a model that wrote nonsense.
+            # The answer is cut mid-object, which reads as unparseable and sent
+            # the retry back to the same ceiling to be cut in the same place.
+            raise OutputTruncated(
+                f"the answer was cut off at the {payload.get('max_tokens')}-token "
+                "ceiling before it finished"
+            )
+        return text
 
     # -- the protocol -----------------------------------------------------
 
@@ -488,14 +502,26 @@ class DeepSeekClient:
         }
 
     def explain_slide(self, ctx: SlideContext) -> Explanation:
-        text = self._post(self._payload(build_messages(ctx), MAX_TOKENS))
+        max_tokens = MAX_TOKENS
         try:
+            text = self._post(self._payload(build_messages(ctx), max_tokens))
             fields = parse_explanation_json(text)
+        except OutputTruncated:
+            # Same ceiling, same cut. This one needs room, not another go.
+            max_tokens *= 2
+            log.info("answer ran past %d tokens, retrying with %d",
+                     MAX_TOKENS, max_tokens)
+            retry_text = self._post(
+                self._payload(
+                    build_messages(ctx, reminder=RETRY_REMINDER), max_tokens
+                )
+            )
+            fields = parse_explanation_json(retry_text)
         except BadModelOutput as first:
             log.info("model output was not parseable, retrying once: %s", _scrub(first))
             retry_text = self._post(
                 self._payload(
-                    build_messages(ctx, reminder=RETRY_REMINDER), MAX_TOKENS
+                    build_messages(ctx, reminder=RETRY_REMINDER), max_tokens
                 )
             )
             fields = parse_explanation_json(retry_text)  # raises if it fails again
@@ -585,6 +611,26 @@ def _body_snippet(resp: httpx.Response, limit: int = 300) -> str:
         return resp.text[:limit]
     except Exception:  # pragma: no cover - defensive
         return "<unreadable body>"
+
+
+class OutputTruncated(BadModelOutput):
+    """The answer was cut off by the token ceiling, so its JSON never closed.
+
+    A subclass, so every existing `except BadModelOutput` still catches it. It
+    exists because retrying at the same ceiling truncates in exactly the same
+    place: this failure needs a larger budget, not a second attempt.
+    """
+
+
+def _finish_reason(data: Any) -> str:
+    choices = data.get("choices") if isinstance(data, dict) else None
+    if not isinstance(choices, list) or not choices:
+        return ""
+    choice = choices[0]
+    if not isinstance(choice, dict):
+        return ""
+    reason = choice.get("finish_reason")
+    return reason if isinstance(reason, str) else ""
 
 
 def _content_of(data: Any) -> str:

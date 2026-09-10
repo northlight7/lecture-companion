@@ -62,11 +62,67 @@ def client_for(handler, **kw) -> DeepSeekClient:
     )
 
 
-def reply(content: str, status: int = 200) -> httpx.Response:
+def reply(content: str, status: int = 200, finish_reason: str = "stop") -> httpx.Response:
     return httpx.Response(
         status,
-        json={"choices": [{"message": {"content": content}}]},
+        json={
+            "choices": [
+                {"message": {"content": content}, "finish_reason": finish_reason}
+            ]
+        },
     )
+
+
+def test_a_truncated_answer_is_reported_as_truncation_not_as_nonsense():
+    """A cut-off answer is a budget problem, and has to be recognised as one.
+
+    Regression, measured: a dense slide ran past the 900-token ceiling, the
+    answer stopped mid-object, and `parse_explanation_json` reported it as
+    unparseable. The retry went back to the same ceiling and was cut in the same
+    place, so the slide was skipped and the run carried on with a hole in it.
+    The reader saw explanations appear out of order with nothing to explain why.
+    """
+    truncated = GOOD_JSON["body"][:40]          # JSON that never closes
+    client = client_for(lambda request: reply(truncated, finish_reason="length"))
+
+    with pytest.raises(BadModelOutput) as info:
+        client.explain_slide(make_ctx())
+
+    assert "cut off" in str(info.value)
+    assert "900" not in str(info.value)         # reports the real ceiling
+
+
+def test_a_truncated_first_try_is_retried_with_a_larger_budget():
+    seen: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content.decode())
+        seen.append(body["max_tokens"])
+        if len(seen) == 1:
+            return reply(GOOD_JSON["body"][:40], finish_reason="length")
+        return reply(json.dumps(GOOD_JSON))
+
+    exp = client_for(handler).explain_slide(make_ctx())
+
+    assert exp.body == GOOD_JSON["body"]
+    assert seen[1] > seen[0], "the retry must raise the ceiling, not repeat it"
+    assert seen[0] == MAX_TOKENS
+
+
+def test_a_genuinely_unparseable_answer_still_retries_once_at_the_same_budget():
+    seen: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content.decode())
+        seen.append(body["max_tokens"])
+        if len(seen) == 1:
+            return reply("I am afraid I cannot help with that.")
+        return reply(json.dumps(GOOD_JSON))
+
+    exp = client_for(handler).explain_slide(make_ctx())
+
+    assert exp.body == GOOD_JSON["body"]
+    assert seen == [MAX_TOKENS, MAX_TOKENS]
 
 
 # --------------------------------------------------------------------------
@@ -94,7 +150,12 @@ def test_the_request_body_matches_the_documented_deepseek_shape():
     body = captured["body"]
     assert body["model"] == DEEPSEEK_VISION_MODEL
     assert body["temperature"] == TEMPERATURE
-    assert body["max_tokens"] == MAX_TOKENS == 900
+    # The ceiling has to hold a dense slide: a heading, up to 240 words of body,
+    # an example and sometimes a mermaid diagram. At 900 the answer was cut off
+    # mid-JSON on table-heavy slides, which read as unparseable output and got
+    # those slides skipped without explanation.
+    assert body["max_tokens"] == MAX_TOKENS
+    assert MAX_TOKENS >= 2000
 
     system, user = body["messages"]
     assert system["role"] == "system"
