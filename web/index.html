@@ -74,7 +74,12 @@
       <div class="page-head page-head-actions">
         <div>
           <h1 id="course-title">Course</h1>
-          <p class="lede" id="course-overview"></p>
+          <p class="lede clampable" id="course-overview"></p>
+          <p class="overview-tools">
+            <button class="overview-toggle" id="overview-toggle" type="button"
+                    aria-expanded="false" aria-controls="course-overview" hidden>Show more</button>
+            <button class="overview-toggle" id="overview-regen" type="button">Rewrite overview</button>
+          </p>
         </div>
         <button class="btn btn-danger" type="button" data-act="delete-course" id="delete-course">Delete course</button>
       </div>

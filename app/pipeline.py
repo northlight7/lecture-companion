@@ -334,15 +334,21 @@ def process_slide(
     slide_index: int,
     client,
     embedder,
+    *,
+    force: bool = False,
 ) -> Explanation:
     """Explain one slide, or return the stored explanation without spending.
 
     The stored-explanation check is FIRST, before context assembly and before
     any client call. That is the whole of invariant 5's idempotence half.
+
+    `force` is the human asking for a better answer for a slide they have
+    already read. It skips that check and spends, and only that.
     """
-    existing = store.load_explanation(course_id, deck_id, slide_index)
-    if existing is not None and (existing.body or "").strip():
-        return existing
+    if not force:
+        existing = store.load_explanation(course_id, deck_id, slide_index)
+        if existing is not None and (existing.body or "").strip():
+            return existing
 
     ctx = build_context(store, course_id, deck_id, slide_index, embedder)
     exp = client.explain_slide(ctx)
@@ -542,6 +548,7 @@ def process_course(
     deck_id: str | None = None,
     on_progress: ProgressCallback | None = None,
     should_stop: Callable[[], bool] | None = None,
+    force: bool = False,
 ) -> Progress:
     """Explain every unfinished slide in the course, checkpointing as it goes.
 
@@ -599,7 +606,8 @@ def process_course(
 
             try:
                 exp = process_slide(
-                    store, course_id, deck.id, slide.index, client, embedder
+                    store, course_id, deck.id, slide.index, client, embedder,
+                    force=force,
                 )
             except (RateLimited, ModelUnavailable) as exc:
                 # Invariant 5 / gate G8: a pause, with position intact.

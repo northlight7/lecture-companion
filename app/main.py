@@ -173,7 +173,9 @@ def _reap(cid: str) -> None:
             _workers.pop(cid, None)
 
 
-def _run_course(cid: str, deck_id: str | None, worker: Worker) -> None:
+def _run_course(
+    cid: str, deck_id: str | None, worker: Worker, force: bool = False
+) -> None:
     """Thread body. Everything it can raise becomes a stored Progress state."""
     from app.course import CourseStore
     from app.embed import get_embedder
@@ -198,6 +200,7 @@ def _run_course(cid: str, deck_id: str | None, worker: Worker) -> None:
             embedder,
             deck_id=deck_id,
             should_stop=worker.stop.is_set,
+            force=force,
         )
     except NoApiKey:
         _pause("No API key configured. Open Connect and paste your DeepSeek key.")
@@ -253,7 +256,7 @@ async def _lc_error(request: Request, exc: LectureCompanionError):
 # --------------------------------------------------------------------------
 
 
-from app import terms  # noqa: E402
+from app import notes, terms  # noqa: E402
 
 @app.get("/api/health")
 def health() -> dict[str, bool]:
@@ -966,6 +969,7 @@ def get_slide(cid: str, did: str, i: int):
         "slide": {"index": slide.index, "text": slide.text},
         "explanation": exp.to_dict() if exp else None,
         "terms": terms.terms_for_slide(store, cid, did, i),
+        "note": notes.note_for_slide(store, cid, did, i),
     }
 
 
@@ -1010,6 +1014,85 @@ def add_term_route(cid: str, payload: dict = Body(default={})):
     return {"terms": entries, "note": note}
 
 
+@app.post("/api/courses/{cid}/overview/regenerate")
+def regenerate_overview(cid: str):
+    """Distil the course overview again from its reference documents."""
+    from app.course import CourseStore
+    from app.llm import get_client
+    from app.overview import build_overview
+
+    store, course = _course_or_404(cid)
+    if course is None:
+        return _err(404, f"No course {cid!r}.")
+    if course.id in _running_ids():
+        return _err(409, "This course is being explained. Wait for it to pause first.")
+
+    fresh = (build_overview(store, cid, get_client()) or "").strip()
+    if not fresh:
+        return _err(400, "There is nothing to distil an overview from yet.")
+    course.overview = fresh
+    store.save_course(course)
+    return {"overview": fresh}
+
+
+@app.put("/api/courses/{cid}/notes")
+def save_note_route(cid: str, payload: dict = Body(default={})):
+    """The reader's own note on one slide. Never touches the explanation."""
+    from app.notes import save_note
+
+    store, course = _course_or_404(cid)
+    if course is None:
+        return _err(404, f"No course {cid!r}.")
+    did = str(payload.get("deck_id") or "")
+    if did not in {d.id for d in course.decks}:
+        return _err(404, f"No deck {did!r} in {cid!r}.")
+    try:
+        index = int(payload.get("slide_index"))
+    except (TypeError, ValueError):
+        return _err(400, "A slide index is required.")
+    try:
+        store.load_slide(cid, did, index)
+    except (KeyError, ValueError):
+        return _err(404, f"No slide {index} in deck {did!r}.")
+    return {"note": save_note(store, cid, did, index, str(payload.get("text") or ""))}
+
+
+@app.post("/api/courses/{cid}/decks/{did}/slides/{i}/regenerate")
+def regenerate_slide(cid: str, did: str, i: int):
+    """Explain one slide again, replacing what is stored.
+
+    Synchronous, because it is one model call and the reader is waiting on it.
+    Re-running a whole deck goes through `/process` with `force` instead, since
+    that is minutes of work and belongs in the background.
+    """
+    from app.course import CourseStore
+    from app.embed import get_embedder
+    from app.llm import get_client
+    from app.pipeline import process_slide
+
+    store, course = _course_or_404(cid)
+    if course is None:
+        return _err(404, f"No course {cid!r}.")
+    if did not in {d.id for d in course.decks}:
+        return _err(404, f"No deck {did!r} in {cid!r}.")
+    try:
+        store.load_slide(cid, did, i)
+    except (KeyError, ValueError):
+        return _err(404, f"No slide {i} in deck {did!r}.")
+    if course.id in _running_ids():
+        return _err(409, "This course is being explained. Wait for it to pause first.")
+
+    exp = process_slide(
+        CourseStore(config.courses_root()), cid, did, i,
+        get_client(), get_embedder(), force=True,
+    )
+    return {
+        "explanation": exp.to_dict(),
+        "terms": terms.terms_for_slide(store, cid, did, i),
+        "note": notes.note_for_slide(store, cid, did, i),
+    }
+
+
 @app.delete("/api/courses/{cid}/terms")
 def delete_term_route(cid: str, payload: dict = Body(default={})):
     from app.terms import remove_term
@@ -1043,6 +1126,10 @@ def start_process(cid: str, payload: dict = Body(default={})):
     if deck_id and deck_id not in {d.id for d in course.decks}:
         return _err(404, f"No deck {deck_id!r} in {cid!r}.")
 
+    # Re-running a deck the reader already has is a deliberate act, so it has to
+    # be asked for. Without this the run sees every slide as done and returns.
+    force = bool(payload.get("force")) if isinstance(payload, dict) else False
+
     if not config.fake_model():
         from app import keystore
 
@@ -1064,7 +1151,7 @@ def start_process(cid: str, payload: dict = Body(default={})):
     store.save_progress(cid, progress)
 
     worker.thread = threading.Thread(
-        target=_run_course, args=(cid, deck_id or None, worker), daemon=True,
+        target=_run_course, args=(cid, deck_id or None, worker, force), daemon=True,
         name=f"lc-worker-{cid}",
     )
     worker.thread.start()

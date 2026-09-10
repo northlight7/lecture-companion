@@ -40,6 +40,7 @@ const state = {
   execution: null,
   workbook: null,
   terms: [],            // glosses saved against the slide on screen
+  note: "",             // the reader's own note on the slide on screen
 };
 
 let executionTimer = null;
@@ -51,6 +52,9 @@ const NEW_FOLDER = "__new__";
 
 /* Must match MAX_TERM_CHARS in app/terms.py. */
 const MAX_TERM_CHARS = 200;
+
+/* Must match MAX_NOTE_CHARS in app/notes.py. */
+const MAX_NOTE_CHARS = 4000;
 
 /* Bumped on every route change. A render that started under an older token
  * must not paint, because its response can arrive after the reader moved on. */
@@ -741,10 +745,39 @@ async function renderCourse(cid, seq = routeSeq) {
 
   $("course-title").textContent = course.title;
   $("delete-course").dataset.course = cid;
-  $("course-overview").textContent =
-    course.overview ||
-    "No overview yet. Drop the syllabus or the programme requirements in and " +
-    "the app distils one, so every explanation knows what the course is for.";
+  const overview = (course.overview || "").trim();
+  const overviewEl = $("course-overview");
+  overviewEl.textContent = overview
+    || "No overview yet. Drop the syllabus or the programme requirements in and "
+      + "the app distils one, so every explanation knows what the course is for.";
+  // A short course description does not need four hundred words at the top of
+  // the page, so a long one is folded until the reader asks for it.
+  const toggleOverview = $("overview-toggle");
+  const foldable = overview.length > 260;
+  overviewEl.classList.toggle("is-clamped", foldable);
+  toggleOverview.hidden = !foldable;
+  toggleOverview.textContent = "Show more";
+  toggleOverview.setAttribute("aria-expanded", "false");
+  toggleOverview.onclick = () => {
+    const clamped = overviewEl.classList.toggle("is-clamped");
+    toggleOverview.textContent = clamped ? "Show more" : "Show less";
+    toggleOverview.setAttribute("aria-expanded", String(!clamped));
+  };
+  const regenOverview = $("overview-regen");
+  regenOverview.hidden = !overview;
+  regenOverview.onclick = async () => {
+    regenOverview.disabled = true;
+    regenOverview.textContent = "Rewriting";
+    try {
+      await postJSON(`/api/courses/${encodeURIComponent(cid)}/overview/regenerate`, {});
+      await renderCourse(cid);
+      toast("Overview rewritten.");
+    } catch (err) {
+      regenOverview.disabled = false;
+      regenOverview.textContent = "Rewrite overview";
+      handle(err);
+    }
+  };
 
   paintRunbar($("course-runbar"), cid, course.progress, null);
 
@@ -1196,9 +1229,54 @@ async function showSlide(index, seq = routeSeq) {
     parts.push(`<div class="drawn">Earlier slides and grouped sources connected to this topic:<ul>${links}</ul></div>`);
   }
   state.terms = Array.isArray(payload.terms) ? payload.terms : [];
+  state.note = typeof payload.note === "string" ? payload.note : "";
+  parts.push(readingActionsHtml(cid, did, index));
+  parts.push(notesHtml());
   parts.push(termsHtml(state.terms));
   reading.innerHTML = parts.join("\n");
   reading.querySelectorAll("[data-mermaid]").forEach(drawDiagram);
+}
+
+/* Regenerating is the reader saying the answer was not good enough. One slide
+   is one call and runs here. A whole deck is minutes of work and goes to the
+   background worker, so the page keeps working while it runs. */
+function readingActionsHtml(cid, did, index) {
+  const busy = state.course?.progress?.running || state.course?.progress?.state === "running";
+  return `<div class="reading-actions">
+    <button class="btn btn-quiet" type="button" data-act="regen-slide"
+      data-course="${esc(cid)}" data-deck="${esc(did)}" data-index="${index}">Explain this slide again</button>
+    <button class="btn btn-quiet" type="button" data-act="regen-deck"
+      data-course="${esc(cid)}" data-deck="${esc(did)}"${busy ? " disabled" : ""}>Explain this whole deck again</button>
+  </div>`;
+}
+
+function notesHtml() {
+  return `<section class="notes" aria-label="Your notes on this slide">
+    <h3>Your notes</h3>
+    <textarea id="slide-note" rows="4" maxlength="${MAX_NOTE_CHARS}"
+      placeholder="Anything worth keeping about this slide, in your own words.">${esc(state.note)}</textarea>
+    <div class="notes-foot">
+      <button class="btn btn-quiet" type="button" id="save-note">Save note</button>
+      <span class="help" id="note-status" aria-live="polite"></span>
+    </div>
+  </section>`;
+}
+
+async function saveNote() {
+  const { cid, did, index } = state.route;
+  const field = $("slide-note");
+  if (!field) return;
+  const status = $("note-status");
+  try {
+    const out = await putJSON(`/api/courses/${encodeURIComponent(cid)}/notes`, {
+      deck_id: did, slide_index: index, text: field.value,
+    });
+    state.note = out.note;
+    status.textContent = out.note ? "Saved." : "Cleared.";
+  } catch (err) {
+    status.textContent = "";
+    handle(err);
+  }
 }
 
 // ------------------------------------------------------- terms the reader asked about
@@ -1295,6 +1373,50 @@ async function askTerm(term) {
 }
 
 $("reading").addEventListener("click", async (event) => {
+  if (event.target.closest("#save-note")) {
+    await saveNote();
+    return;
+  }
+
+  const regen = event.target.closest("[data-act='regen-slide']");
+  if (regen) {
+    const cid = regen.dataset.course;
+    const did = regen.dataset.deck;
+    const index = Number(regen.dataset.index);
+    regen.disabled = true;
+    regen.textContent = "Explaining";
+    try {
+      await postJSON(
+        `/api/courses/${encodeURIComponent(cid)}/decks/${encodeURIComponent(did)}`
+        + `/slides/${index}/regenerate`,
+        {},
+      );
+      await showSlide(index);
+      toast(`Slide ${index + 1} explained again.`);
+    } catch (err) {
+      regen.disabled = false;
+      regen.textContent = "Explain this slide again";
+      handle(err);
+    }
+    return;
+  }
+
+  const regenDeck = event.target.closest("[data-act='regen-deck']");
+  if (regenDeck) {
+    const cid = regenDeck.dataset.course;
+    const did = regenDeck.dataset.deck;
+    try {
+      await postJSON(`/api/courses/${encodeURIComponent(cid)}/process`, {
+        deck_id: did, force: true,
+      });
+      startPolling(cid);
+      toast("Explaining this deck again. Every slide will be replaced.");
+    } catch (err) {
+      handle(err);
+    }
+    return;
+  }
+
   const button = event.target.closest(".term-remove");
   if (!button) return;
   const { cid, did, index } = state.route;

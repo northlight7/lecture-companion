@@ -22,32 +22,24 @@ log = logging.getLogger(__name__)
 #: Per-reference-document budget, in words. A syllabus is a few pages; a
 #: programme handbook can be fifty, and the tail of it is boilerplate.
 REF_WORD_BUDGET = 1800
-#: Total across all reference docs, so ten refs cannot blow the request.
+#: Ceiling across every reference document together.
 TOTAL_REF_WORD_BUDGET = 6000
-#: Slides consulted per deck when there are no reference docs at all.
-FALLBACK_SLIDES_PER_DECK = 3
-FALLBACK_SLIDE_WORDS = 60
 
 OVERVIEW_INSTRUCTIONS = """\
 Below are the reference documents for one university course (a syllabus, and \
-possibly programme requirements). Write a 200-400 word overview of this course \
-for a new MSc student who is about to work through its slides.
+possibly programme requirements). Write a short overview of this course for a \
+new MSc student who is about to work through its slides.
 
-Cover, in this order:
-1. What the course is about, in one or two plain sentences.
-2. The main topics, in the order the course covers them.
-3. What a student is expected to be able to do by the end.
-4. How the course is assessed.
+Write 90 to 140 words. Cover what the course is about and the main topics it \
+covers, and nothing else.
 
-Use ONLY what these documents say. Where they are silent, say so briefly \
-rather than inventing detail. Plain prose, no headings, no bullet list."""
+Use only what these documents say. If they are thin, write a short overview of \
+what they do say rather than a long one about what they do not. Never list \
+what is missing, never describe the documents themselves, and never speculate \
+about assessment or learning outcomes that are not stated. A three-sentence \
+overview of a course with a sparse syllabus is the correct answer.
 
-
-def _truncate_words(text: str, limit: int) -> str:
-    words = (text or "").split()
-    if len(words) <= limit:
-        return (text or "").strip()
-    return " ".join(words[:limit]) + " [...]"
+Plain prose, no headings, no bullet list."""
 
 
 def build_overview(store, course_id: str, client) -> str:
@@ -57,6 +49,13 @@ def build_overview(store, course_id: str, client) -> str:
     the model gives back nothing usable. Never returns an empty string.
     """
     return _build_overview(store, course_id, client)[0]
+
+
+def _truncate_words(text: str, limit: int) -> str:
+    words = (text or "").split()
+    if len(words) <= limit:
+        return (text or "").strip()
+    return " ".join(words[:limit]) + " [...]"
 
 
 def _build_overview(store, course_id: str, client) -> tuple[str, bool]:
@@ -126,71 +125,38 @@ def refresh_overview_if_needed(store, course_id: str, client) -> bool:
 
 
 def fallback_overview(store, course_id: str) -> str:
-    """A modest overview for a course with no reference documents.
+    """A short, honest note for a course with no reference documents.
 
     Hedged on purpose: it says where it came from, so neither the student nor
     the model mistakes it for a syllabus. It is never empty, because every
     explanation is meant to reference the overview.
+
+    It deliberately does NOT summarise the slides. That was tried, and it
+    produced 400 words of concatenated slide text at the top of the course
+    page, which is the slide content the reader is about to read anyway. The
+    deck list and the count are enough to orient them.
     """
     try:
         course = store.get_course(course_id)
     except KeyError:
-        return (
-            "No reference documents have been provided for this course, so no "
-            "overview could be built."
-        )
+        return "No reference documents have been provided for this course."
 
     title = (course.title or course_id).strip()
     decks = sorted(course.decks, key=lambda d: (d.order, d.id))
-
-    lines = [
-        f"This overview for “{title}” was derived from the uploaded "
-        "slide decks themselves, because no syllabus or programme document was "
-        "provided. Treat it as a rough map of the material rather than an "
-        "authoritative course description."
-    ]
-
     if not decks:
-        lines.append("No slide decks have been imported yet.")
-        return " ".join(lines)
+        return (
+            f"No reference documents have been provided for {title}, and no "
+            "slide decks have been imported yet."
+        )
 
     total = sum(d.n_slides for d in decks)
-    deck_names = ", ".join(d.title or d.id for d in decks)
-    lines.append(
-        f"The course currently holds {len(decks)} deck(s) covering roughly "
-        f"{total} slides, in this order: {deck_names}."
+    names = ", ".join(d.title or d.id for d in decks)
+    return (
+        f"No syllabus or programme document was provided for {title}, so this "
+        f"description is drawn from the imported material alone. The course "
+        f"holds {len(decks)} decks and about {total} slides, in this order: "
+        f"{names}. Drop the syllabus in and it can be described properly."
     )
-
-    openings: list[str] = []
-    for deck in decks:
-        try:
-            slides = store.load_slides(course_id, deck.id)
-        except (KeyError, ValueError, OSError):
-            continue
-        snippets: list[str] = []
-        for slide in slides[:FALLBACK_SLIDES_PER_DECK]:
-            text = " ".join((slide.text or "").split())
-            if text:
-                snippets.append(_truncate_words(text, FALLBACK_SLIDE_WORDS))
-        if snippets:
-            openings.append(f"{deck.title or deck.id}: " + " / ".join(snippets))
-
-    if openings:
-        lines.append(
-            "The opening slides of each deck indicate the following subject "
-            "matter — " + "; ".join(openings) + "."
-        )
-    else:
-        lines.append(
-            "The slides carry no extracted text, so the subject matter could "
-            "not be summarised from them."
-        )
-
-    lines.append(
-        "What a student is expected to end up able to do, and how the course "
-        "is assessed, are not stated anywhere in the imported material."
-    )
-    return " ".join(lines)
 
 
 __all__ = [
