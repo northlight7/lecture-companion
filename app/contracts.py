@@ -2,7 +2,7 @@
 
 READ-ONLY for builders. Every module in `app/` imports its shared types from
 here so parallel work cannot drift. Changing this file requires an orchestrator
-decision recorded in RUNLOG.md.
+decision recorded in `.internal/RUNLOG.md`.
 
 Layout on disk (all user data lives under COURSES_ROOT, which is gitignored):
 
