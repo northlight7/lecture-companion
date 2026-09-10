@@ -42,40 +42,6 @@ def _missing(names) -> list[str]:
     return out
 
 
-class _FakeKeyring:
-    """Stand-in for the `keyring` module inside app.keystore."""
-
-    def __init__(self) -> None:
-        self._d: dict[tuple[str, str], str] = {}
-
-    def get_password(self, service, account):
-        return self._d.get((service, account))
-
-    def set_password(self, service, account, value):
-        self._d[(service, account)] = value
-
-    def delete_password(self, service, account):
-        self._d.pop((service, account), None)
-
-
-@pytest.fixture
-def client(tmp_path, monkeypatch) -> TestClient:
-    root = tmp_path / "Courses"
-    root.mkdir(parents=True, exist_ok=True)
-    monkeypatch.setenv("LC_COURSES_ROOT", str(root))
-    monkeypatch.setenv("LC_FAKE_MODEL", "1")
-
-    from app import keystore
-
-    monkeypatch.setattr(keystore, "keyring", _FakeKeyring())
-    monkeypatch.setattr(keystore, "_memory", {})
-
-    from app.main import app
-
-    with TestClient(app) as c:
-        yield c
-
-
 # --------------------------------------------------------------------------
 # G1: boot + health
 # --------------------------------------------------------------------------

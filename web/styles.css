@@ -1212,6 +1212,69 @@ label {
 .graph-heading { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-4); flex-wrap: wrap; }
 .relationship-reason { color: var(--ink-2); font-size: .8125rem; margin: var(--sp-1) 0 0; }
 
+/* ------------------------------------------------- terms the reader asked about */
+
+/* Sits beside the selection, in document space. */
+.term-ask {
+  position: absolute;
+  z-index: 40;
+  font: inherit;
+  font-size: .8125rem;
+  font-weight: 550;
+  color: var(--accent-ink);
+  background: var(--accent);
+  border: 0;
+  border-radius: var(--r-pill);
+  padding: .3rem .7rem;
+  cursor: pointer;
+  box-shadow: var(--shadow-2);
+}
+.term-ask:hover { background: color-mix(in srgb, var(--accent) 88%, var(--ink)); }
+.term-ask:active { transform: translateY(1px); }
+
+.terms {
+  margin-top: var(--sp-7);
+  border-top: 1px solid var(--line);
+  padding-top: var(--sp-4);
+  font-family: var(--sans);
+  font-size: .9375rem;
+}
+.terms h3 {
+  font-size: .6875rem;
+  font-weight: 650;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 var(--sp-3);
+}
+.terms ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-4); }
+.terms li {
+  border-left: 2px solid var(--accent-line);
+  padding-left: var(--sp-4);
+}
+.terms .term {
+  font-weight: 640;
+  color: var(--ink);
+  margin: 0 0 var(--sp-1);
+}
+.term-note { color: var(--ink-2); }
+.term-note p { margin: 0; }
+.term-remove {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: .75rem;
+  color: var(--ink-3);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  margin-top: var(--sp-1);
+}
+.term-remove:hover { color: var(--warn); }
+.term-pending { margin-top: var(--sp-3); font-size: .875rem; }
+
 /* Skeleton, shaped like the text it replaces: a title line, body lines, and
    two short trailing lines. */
 .skel { font-family: var(--sans); }

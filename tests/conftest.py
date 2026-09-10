@@ -22,3 +22,40 @@ def tmp_courses(tmp_path, monkeypatch) -> Path:
 def store(tmp_courses: Path) -> CourseStore:
     """A CourseStore bound to the temp root."""
     return CourseStore(tmp_courses)
+
+
+class FakeKeyring:
+    """Stand-in for the `keyring` module inside app.keystore."""
+
+    def __init__(self) -> None:
+        self._d: dict[tuple[str, str], str] = {}
+
+    def get_password(self, service, account):
+        return self._d.get((service, account))
+
+    def set_password(self, service, account, value):
+        self._d[(service, account)] = value
+
+    def delete_password(self, service, account):
+        self._d.pop((service, account), None)
+
+
+@pytest.fixture
+def client(tmp_courses: Path, monkeypatch):
+    """The app under a TestClient, with the stub model and a fake keyring.
+
+    Shared, because any route can be reached from more than one test file.
+    """
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setenv("LC_FAKE_MODEL", "1")
+
+    from app import keystore
+
+    monkeypatch.setattr(keystore, "keyring", FakeKeyring())
+    monkeypatch.setattr(keystore, "_memory", {})
+
+    from app.main import app
+
+    with TestClient(app) as c:
+        yield c

@@ -49,6 +49,36 @@ func postMouse(x: Double, y: Double) {
     }
 }
 
+/// Press, move, release. Needed to select text: a click alone cannot.
+func postDrag(from start: CGPoint, to end: CGPoint) {
+    guard let down = CGEvent(
+        mouseEventSource: nil, mouseType: .leftMouseDown,
+        mouseCursorPosition: start, mouseButton: .left
+    ) else { return }
+    down.post(tap: .cghidEventTap)
+    usleep(90_000)
+
+    let steps = 12
+    for step in 1...steps {
+        let t = Double(step) / Double(steps)
+        let point = CGPoint(
+            x: start.x + (end.x - start.x) * t,
+            y: start.y + (end.y - start.y) * t
+        )
+        guard let moved = CGEvent(
+            mouseEventSource: nil, mouseType: .leftMouseDragged,
+            mouseCursorPosition: point, mouseButton: .left
+        ) else { continue }
+        moved.post(tap: .cghidEventTap)
+        usleep(14_000)
+    }
+    guard let up = CGEvent(
+        mouseEventSource: nil, mouseType: .leftMouseUp,
+        mouseCursorPosition: end, mouseButton: .left
+    ) else { return }
+    up.post(tap: .cghidEventTap)
+}
+
 func postKey(_ code: CGKeyCode, flags: CGEventFlags = []) {
     for down in [true, false] {
         guard let event = CGEvent(
@@ -125,8 +155,13 @@ case "click", "clickrel":
         py = rect.minY + y
     }
     activateApp()
-    postMouse(x: px, y: py)
-    print("clicked \(Int(px)) \(Int(py))")
+    if args.count >= 5, let x2 = Double(args[3]), let y2 = Double(args[4]) {
+        postDrag(from: CGPoint(x: px, y: py), to: CGPoint(x: x2, y: y2))
+        print("dragged")
+    } else {
+        postMouse(x: px, y: py)
+        print("clicked \(Int(px)) \(Int(py))")
+    }
 case "type":
     guard args.count >= 2 else { exit(2) }
     activateApp()

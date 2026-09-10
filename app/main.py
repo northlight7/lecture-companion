@@ -253,6 +253,8 @@ async def _lc_error(request: Request, exc: LectureCompanionError):
 # --------------------------------------------------------------------------
 
 
+from app import terms  # noqa: E402
+
 @app.get("/api/health")
 def health() -> dict[str, bool]:
     return {"ok": True}
@@ -963,7 +965,65 @@ def get_slide(cid: str, did: str, i: int):
     return {
         "slide": {"index": slide.index, "text": slide.text},
         "explanation": exp.to_dict() if exp else None,
+        "terms": terms.terms_for_slide(store, cid, did, i),
     }
+
+
+@app.post("/api/courses/{cid}/terms")
+def add_term_route(cid: str, payload: dict = Body(default={})):
+    """Explain one term the reader selected, and keep it on that slide."""
+    from app.llm import get_client
+    from app.terms import add_term
+
+    store, course = _course_or_404(cid)
+    if course is None:
+        return _err(404, f"No course {cid!r}.")
+
+    did = str(payload.get("deck_id") or "")
+    if did not in {d.id for d in course.decks}:
+        return _err(404, f"No deck {did!r} in {cid!r}.")
+    try:
+        index = int(payload.get("slide_index"))
+    except (TypeError, ValueError):
+        return _err(400, "A slide index is required.")
+    try:
+        store.load_slide(cid, did, index)
+    except (KeyError, ValueError):
+        return _err(404, f"No slide {index} in deck {did!r}.")
+
+    term = str(payload.get("term") or "").strip()
+    if not term:
+        return _err(400, "Select a word or phrase first.")
+
+    slide = store.load_slide(cid, did, index)
+    deck = next((d for d in course.decks if d.id == did), None)
+    note = get_client().explain_term(
+        term,
+        slide_text=slide.text,
+        deck_title=deck.title if deck else "",
+        course_title=course.title,
+    )
+    try:
+        entries = add_term(store, cid, did, index, term, note)
+    except ValueError as exc:
+        return _err(400, str(exc))
+    return {"terms": entries, "note": note}
+
+
+@app.delete("/api/courses/{cid}/terms")
+def delete_term_route(cid: str, payload: dict = Body(default={})):
+    from app.terms import remove_term
+
+    store, course = _course_or_404(cid)
+    if course is None:
+        return _err(404, f"No course {cid!r}.")
+    did = str(payload.get("deck_id") or "")
+    try:
+        index = int(payload.get("slide_index"))
+    except (TypeError, ValueError):
+        return _err(400, "A slide index is required.")
+    entries = remove_term(store, cid, did, index, str(payload.get("term") or ""))
+    return {"terms": entries}
 
 
 # --------------------------------------------------------------------------

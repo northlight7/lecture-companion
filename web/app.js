@@ -39,6 +39,7 @@ const state = {
   selectedObjects: new Map(),
   execution: null,
   workbook: null,
+  terms: [],            // glosses saved against the slide on screen
 };
 
 let executionTimer = null;
@@ -47,6 +48,9 @@ let executionFailures = 0;
 
 /* Sentinel option in the study-folder menu: choose it to type a new name. */
 const NEW_FOLDER = "__new__";
+
+/* Must match MAX_TERM_CHARS in app/terms.py. */
+const MAX_TERM_CHARS = 200;
 
 /* Bumped on every route change. A render that started under an older token
  * must not paint, because its response can arrive after the reader moved on. */
@@ -1190,9 +1194,121 @@ async function showSlide(index, seq = routeSeq) {
     }).join("");
     parts.push(`<div class="drawn">Earlier slides and grouped sources connected to this topic:<ul>${links}</ul></div>`);
   }
+  state.terms = Array.isArray(payload.terms) ? payload.terms : [];
+  parts.push(termsHtml(state.terms));
   reading.innerHTML = parts.join("\n");
   reading.querySelectorAll("[data-mermaid]").forEach(drawDiagram);
 }
+
+// ------------------------------------------------------- terms the reader asked about
+
+/* A gloss of one word or phrase, kept against the slide it was found on. The
+   notes live in the course as terms.json, so re-explaining a slide never
+   erases one. */
+function termsHtml(terms) {
+  if (!terms.length) return "";
+  const items = terms.map((t) => `<li>
+      <p class="term">${esc(t.term)}</p>
+      <div class="term-note">${renderMarkdown(t.note)}</div>
+      <button class="term-remove" type="button" data-term="${esc(t.term)}"
+        aria-label="Remove the explanation of ${esc(t.term)}">Remove</button>
+    </li>`).join("");
+  return `<section class="terms" aria-label="Terms you asked about" aria-live="polite">
+    <h3>Terms you asked about</h3><ul>${items}</ul></section>`;
+}
+
+/* Repaints just that section, so asking for a second term does not disturb the
+   explanation above it or the reader's scroll position. */
+function paintTerms(pendingTerm = "") {
+  const reading = $("reading");
+  reading.querySelector(".terms")?.remove();
+  reading.querySelector(".term-pending")?.remove();
+  if (state.terms.length) {
+    reading.insertAdjacentHTML("beforeend", termsHtml(state.terms));
+  }
+  if (pendingTerm) {
+    reading.insertAdjacentHTML(
+      "beforeend",
+      `<p class="muted term-pending">Explaining ${esc(pendingTerm)}...</p>`,
+    );
+  }
+}
+
+let termButton = null;
+
+function hideTermButton() {
+  if (termButton) { termButton.remove(); termButton = null; }
+}
+
+/// A small button next to the selection. Positioned in document space, not
+/// viewport space, so it does not drift when the pane scrolls under it.
+function showTermButton(rect, text) {
+  hideTermButton();
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "term-ask";
+  button.textContent = "AI explain";
+  document.body.appendChild(button);
+  button.style.top = `${Math.max(4, window.scrollY + rect.top - button.offsetHeight - 6)}px`;
+  button.style.left = `${Math.max(4, window.scrollX + rect.left + rect.width / 2 - button.offsetWidth / 2)}px`;
+  // mousedown would clear the selection before click ever fires.
+  button.addEventListener("mousedown", (event) => event.preventDefault());
+  button.addEventListener("click", () => askTerm(text));
+  termButton = button;
+}
+
+$("reading").addEventListener("mouseup", () => {
+  const selection = window.getSelection();
+  const text = (selection?.toString() || "").trim();
+  if (!text || text.length > MAX_TERM_CHARS || !selection.rangeCount) {
+    hideTermButton();
+    return;
+  }
+  const range = selection.getRangeAt(0);
+  if (!$("reading").contains(range.commonAncestorContainer)) {
+    hideTermButton();
+    return;
+  }
+  showTermButton(range.getBoundingClientRect(), text);
+});
+
+document.addEventListener("mousedown", (event) => {
+  if (termButton && !termButton.contains(event.target)) hideTermButton();
+});
+
+async function askTerm(term) {
+  const { cid, did, index } = state.route;
+  hideTermButton();
+  window.getSelection()?.removeAllRanges();
+  paintTerms(term);
+  try {
+    const out = await postJSON(`/api/courses/${encodeURIComponent(cid)}/terms`, {
+      deck_id: did, slide_index: index, term,
+    });
+    state.terms = out.terms || [];
+    paintTerms();
+  } catch (err) {
+    paintTerms();
+    handle(err);
+  }
+}
+
+$("reading").addEventListener("click", async (event) => {
+  const button = event.target.closest(".term-remove");
+  if (!button) return;
+  const { cid, did, index } = state.route;
+  try {
+    const out = await api(`/api/courses/${encodeURIComponent(cid)}/terms`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deck_id: did, slide_index: index, term: button.dataset.term }),
+    });
+    state.terms = out.terms || [];
+    paintTerms();
+  } catch (err) {
+    handle(err);
+  }
+});
 
 async function renderViewer(seq = routeSeq) {
   const { cid, did, index } = state.route;

@@ -54,6 +54,8 @@ MAX_TOKENS = 2400
 #: so it grows with the number of files in the course. 700 cut it off and the
 #: reader got a raw "cut off at the 700-token ceiling" error.
 ORGANIZE_MAX_TOKENS = 2000
+#: A term gloss is two or three sentences. This is generous for that.
+TERM_MAX_TOKENS = 500
 #: The running summary is rebuilt as the course goes and is trimmed to the
 #: prompt budget anyway. Cut off, it silently loses the most recent slides,
 #: which are the ones continuity depends on.
@@ -135,6 +137,23 @@ The object has exactly these keys:
  "body": "the plain-language explanation, markdown allowed",
  "example": "a concrete example, or an empty string",
  "mermaid": "mermaid source, or an empty string"}
+"""
+
+TERM_PROMPT = """\
+A student reading one lecture slide has asked what a single term on it means. \
+Explain just that term so they can carry on reading.
+
+Rules:
+
+1. Two or three sentences. Under 60 words.
+2. Say what the term means here, on this slide, rather than what it means in \
+general. Keep the correct term and explain it in plain words.
+3. Ground the explanation in this slide. When the slide uses the term in a \
+particular way, that use is the one to explain.
+4. Do not begin with a preamble such as "This term means" or "In this context". \
+Start with the meaning itself.
+5. Do not use an em dash character. Do not use semicolons.
+6. Reply with the explanation as plain text. No JSON, no heading, no markdown.
 """
 
 RETRY_REMINDER = (
@@ -610,6 +629,31 @@ class DeepSeekClient:
             raise BadModelOutput("the model returned no folder list")
         return parsed
 
+    def explain_term(
+        self,
+        term: str,
+        *,
+        slide_text: str = "",
+        deck_title: str = "",
+        course_title: str = "",
+    ) -> str:
+        """A short gloss of one term, as this slide uses it."""
+        messages = [
+            {"role": "system", "content": TERM_PROMPT},
+            {
+                "role": "user",
+                "content": (
+                    f"## Course\n{course_title or '(unnamed)'}\n\n"
+                    f"## Lecture\n{deck_title or '(unnamed)'}\n\n"
+                    "## The rest of the slide\n"
+                    f"{(slide_text or '(no extracted text)')[:PROMPT_MAX_SLIDE_TEXT_CHARS]}\n\n"
+                    f"## Explain this term\n{term}\n"
+                ),
+            },
+        ]
+        reply = self._post(self._payload(messages, TERM_MAX_TOKENS))
+        return _clean_learning_text(reply)
+
     def test_connection(self) -> tuple[bool, str]:
         """A cheap, text-only call. Never raises."""
         messages = [{"role": "user", "content": "Reply with the single word: ok"}]
@@ -902,6 +946,21 @@ class FakeClient:
                 for name, ids in sorted(buckets.items())
             ]
         }
+
+    def explain_term(
+        self,
+        term: str,
+        *,
+        slide_text: str = "",
+        deck_title: str = "",
+        course_title: str = "",
+    ) -> str:
+        # Derived from its input, like every other stub answer.
+        where = deck_title or course_title or "this lecture"
+        return (
+            f"{term} is used in {where}. Here it names what the slide is "
+            "discussing at that point."
+        )
 
     def test_connection(self) -> tuple[bool, str]:
         return True, "Fake model (LC_FAKE_MODEL): no network, no spend."
