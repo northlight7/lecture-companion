@@ -149,6 +149,7 @@ case "key":
     var flags: CGEventFlags = []
     if args.contains("cmd") { flags.insert(.maskCommand) }
     if args.contains("shift") { flags.insert(.maskShift) }
+    if args.contains("ctrl") { flags.insert(.maskControl) }
     activateApp()
     postKey(code, flags: flags)
     print("key \(args[1])\(args.contains("cmd") ? " cmd" : "")")

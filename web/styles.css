@@ -638,7 +638,7 @@ label {
 .preview-group ul { margin: var(--sp-2) 0 0; padding-left: 1.1rem; font-size: .875rem; color: var(--ink-2); }
 .preview-group li { overflow-wrap: break-word; }
 .preview-actions { display: flex; gap: var(--sp-2); margin-top: var(--sp-4); flex-wrap: wrap; }
-.folder-picker { margin-top: var(--sp-2); }
+.picker { margin-top: var(--sp-2); }
 
 /* ---------------------------------------------------------------- decks + files */
 

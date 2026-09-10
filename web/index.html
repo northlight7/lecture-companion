@@ -57,13 +57,12 @@
         <p class="lede">Drop everything here. The app proposes a grouping into
           courses, and nothing is written until you accept it.</p>
         <div class="drop" id="bulk-drop" tabindex="0" role="button"
-             aria-label="Drop a mixed pile of files to preview a grouping">
-          <p class="drop-main">Drop PDF, PPTX, Word, Excel, CSV, or notebook files</p>
-          <p class="drop-sub">or <span class="linky">choose files</span></p>
+             aria-label="Drop a mixed pile of files or folders to preview a grouping">
+          <p class="drop-main">Drop files or folders here</p>
+          <p class="drop-sub">or <span class="linky">choose what to add</span></p>
           <input type="file" id="bulk-input" multiple accept=".pdf,.pptx,.docx,.xlsx,.csv,.ipynb" hidden>
-          <input type="file" id="bulk-folder-input" multiple webkitdirectory directory hidden>
         </div>
-        <button class="btn btn-quiet folder-picker" id="bulk-folder-picker" type="button">Choose a whole folder</button>
+        <button class="btn btn-quiet picker" id="bulk-picker" type="button">Choose files or a folder</button>
         <div id="bulk-preview" class="preview" hidden></div>
       </section>
     </div>
@@ -109,13 +108,12 @@
         <section>
           <h2>Add files to this course</h2>
           <div class="drop" id="course-drop" tabindex="0" role="button"
-               aria-label="Drop course files into this course">
-            <p class="drop-main">Drop course files</p>
-            <p class="drop-sub">or <span class="linky">choose files</span></p>
+               aria-label="Drop files or folders into this course">
+            <p class="drop-main">Drop files or folders here</p>
+            <p class="drop-sub">or <span class="linky">choose what to add</span></p>
             <input type="file" id="course-input" multiple accept=".pdf,.pptx,.docx,.xlsx,.csv,.ipynb" hidden>
-            <input type="file" id="course-folder-input" multiple webkitdirectory directory hidden>
           </div>
-          <button class="btn btn-quiet folder-picker" id="course-folder-picker" type="button">Choose a whole folder</button>
+          <button class="btn btn-quiet picker" id="course-picker" type="button">Choose files or a folder</button>
           <div id="filed-report" class="filed" hidden></div>
           <div class="file-heading mt">
             <div>

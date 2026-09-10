@@ -600,32 +600,25 @@ async function previewBulkFiles(files) {
 
 wireDrop("bulk-drop", "bulk-input", previewBulkFiles);
 
-function wireFolderPicker(buttonId, inputId, mode, onFiles) {
-  const button = $(buttonId);
-  const input = $(inputId);
-  button.addEventListener("click", (event) => {
+// One button for files and for folders. The native panel accepts either, so the
+// reader never has to decide which kind of thing they are about to pick.
+function wirePicker(buttonId, inputId, mode) {
+  const report = $(mode === "bulk" ? "bulk-preview" : "filed-report");
+  $(buttonId).addEventListener("click", (event) => {
     event.stopPropagation();
     const nativePicker = window.webkit?.messageHandlers?.folderPicker;
     if (nativePicker) {
-      if (mode === "bulk") {
-        $("bulk-preview").hidden = false;
-        $("bulk-preview").innerHTML = `<p class="muted">Choose a folder to import.</p>`;
-      } else {
-        $("filed-report").hidden = false;
-        $("filed-report").innerHTML = `<p class="muted">Choose a folder to import into this course.</p>`;
-      }
+      report.hidden = false;
+      report.innerHTML = `<p class="muted">Choose files or a folder to add.</p>`;
       nativePicker.postMessage({ mode, courseId: mode === "course" ? state.route.cid : "" });
       return;
     }
-    input.click();
-  });
-  input.addEventListener("change", () => {
-    if (input.files.length) onFiles([...input.files]);
-    input.value = "";
+    // No native bridge: fall back to the same input the drop zone uses.
+    $(inputId).click();
   });
 }
 
-wireFolderPicker("bulk-folder-picker", "bulk-folder-input", "bulk", previewBulkFiles);
+wirePicker("bulk-picker", "bulk-input", "bulk");
 
 window.nativeFolderImportFinished = async ({ mode, ok, message }) => {
   if (!ok) {
@@ -692,7 +685,7 @@ async function uploadCourseFiles(files) {
 }
 
 wireDrop("course-drop", "course-input", uploadCourseFiles);
-wireFolderPicker("course-folder-picker", "course-folder-input", "course", uploadCourseFiles);
+wirePicker("course-picker", "course-input", "course");
 
 // ---------------------------------------------------------------- course screen
 

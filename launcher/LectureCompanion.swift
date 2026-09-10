@@ -89,6 +89,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
         editMenu.insertItem(.separator(), at: 2)
         editMenuItem.submenu = editMenu
 
+        // The standard Control-Command-F shortcut lives on this menu item, so
+        // without a View menu full screen has no keyboard route.
+        let viewMenuItem = NSMenuItem()
+        mainMenu.addItem(viewMenuItem)
+        let viewMenu = NSMenu(title: "View")
+        let fullScreen = NSMenuItem(
+            title: "Enter Full Screen",
+            action: #selector(NSWindow.toggleFullScreen(_:)),
+            keyEquivalent: "f"
+        )
+        fullScreen.keyEquivalentModifierMask = [.control, .command]
+        viewMenu.addItem(fullScreen)
+        viewMenuItem.submenu = viewMenu
+
         NSApp.mainMenu = mainMenu
     }
 
@@ -103,6 +117,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
         window.title = "Lecture Companion"
         window.center()
         window.setFrameAutosaveName("LectureCompanionMainWindow")
+        // Without this the green button zooms the window to fill the screen but
+        // stays windowed. `.fullScreenPrimary` is what actually enters the
+        // native full-screen space.
+        window.collectionBehavior.insert(.fullScreenPrimary)
 
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
@@ -157,7 +175,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
             notifyFolderImport(mode: mode, ok: false, message: "The course id is invalid.")
             return
         }
-        chooseAndUploadFolder(mode: mode, courseId: courseId)
+        chooseAndUpload(mode: mode, courseId: courseId)
     }
 
     // WebKit asks the UI delegate to put up `window.confirm` and `window.alert`.
@@ -192,58 +210,97 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
         completionHandler()
     }
 
-    private func chooseAndUploadFolder(mode: String, courseId: String) {
+    private static let supportedExtensions: Set<String> =
+        ["pdf", "pptx", "docx", "xlsx", "csv", "ipynb"]
+
+    /// One panel for both. Choosing files and choosing a folder were two buttons
+    /// that opened nearly the same browser, which made the reader decide
+    /// something the app can work out for itself.
+    private func chooseAndUpload(mode: String, courseId: String) {
         let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = false
+        panel.allowsMultipleSelection = true
+        panel.canChooseFiles = true
         panel.canChooseDirectories = true
-        panel.canChooseFiles = false
         panel.canCreateDirectories = false
         panel.resolvesAliases = true
-        panel.prompt = "Import folder"
+        panel.prompt = "Add"
 
         guard let window else { return }
         panel.beginSheetModal(for: window) { [weak self] response in
-            guard response == .OK, let root = panel.url else { return }
-            self?.uploadFolder(root, mode: mode, courseId: courseId)
+            guard response == .OK, !panel.urls.isEmpty else { return }
+            self?.uploadSelection(panel.urls, mode: mode, courseId: courseId)
         }
     }
 
-    private func uploadFolder(_ root: URL, mode: String, courseId: String) {
-        let supported = Set(["pdf", "pptx", "docx", "xlsx", "csv", "ipynb"])
+    /// Walk a chosen folder. Names keep the folder as a prefix so the server can
+    /// still group a mixed pile into courses.
+    private func collectFiles(in root: URL) -> [(URL, String)] {
         let keys: [URLResourceKey] = [.isRegularFileKey, .isHiddenKey]
         let enumerator = FileManager.default.enumerator(
             at: root,
             includingPropertiesForKeys: keys,
             options: [.skipsHiddenFiles, .skipsPackageDescendants]
         )
-        var files: [(URL, String)] = []
+        let prefix = root.standardizedFileURL.path.hasSuffix("/")
+            ? root.standardizedFileURL.path
+            : root.standardizedFileURL.path + "/"
+        var found: [(URL, String)] = []
         while let url = enumerator?.nextObject() as? URL {
             // `~$deck.pptx` is an Office lock file, not a document. It carries a
             // real extension and is not marked hidden, so it used to be uploaded
             // and then fail extraction on the server.
             guard !url.lastPathComponent.hasPrefix("~$") else { continue }
-            guard supported.contains(url.pathExtension.lowercased()),
+            guard Self.supportedExtensions.contains(url.pathExtension.lowercased()),
                   (try? url.resourceValues(forKeys: Set(keys)).isRegularFile) == true else { continue }
-            let prefix = root.standardizedFileURL.path.hasSuffix("/")
-                ? root.standardizedFileURL.path
-                : root.standardizedFileURL.path + "/"
             let relative = String(url.standardizedFileURL.path.dropFirst(prefix.count))
-            files.append((url, root.lastPathComponent + "/" + relative))
+            found.append((url, root.lastPathComponent + "/" + relative))
         }
+        return found
+    }
+
+    private func uploadSelection(_ selection: [URL], mode: String, courseId: String) {
+        var files: [(URL, String)] = []
+        var blocked: [URL] = []
+        for url in selection {
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
+                continue
+            }
+            if isDirectory.boolValue {
+                let found = collectFiles(in: url)
+                if found.isEmpty {
+                    blocked.append(url)
+                } else {
+                    files.append(contentsOf: found)
+                }
+            } else if Self.supportedExtensions.contains(url.pathExtension.lowercased()),
+                      !url.lastPathComponent.hasPrefix("~$") {
+                files.append((url, url.lastPathComponent))
+            }
+        }
+        let label = selection.count == 1
+            ? selection[0].lastPathComponent
+            : "\(selection.count) items"
+        // `root` stays the first selected item purely so the messages below can
+        // name something the reader recognises.
+        let root = selection[0]
         files.sort { $0.1.localizedStandardCompare($1.1) == .orderedAscending }
         guard !files.isEmpty else {
             // An empty result is not the same as an empty folder. If macOS
             // blocked the directory the enumerator yields nothing, and saying
             // "no supported files" sends the reader looking for the wrong thing.
-            if !FileManager.default.isReadableFile(atPath: root.path) {
+            let unreadable = blocked.first(where: {
+                !FileManager.default.isReadableFile(atPath: $0.path)
+            })
+            if unreadable != nil {
                 notifyFolderImport(
                     mode: mode,
                     ok: false,
-                    message: readFailureMessage(root: root, files: [], error: nil)
+                    message: readFailureMessage(root: root, label: label, files: [], error: nil)
                 )
                 return
             }
-            notifyFolderImport(mode: mode, ok: false, message: "No supported course files were found.")
+            notifyFolderImport(mode: mode, ok: false, message: "No supported course files were found in \(label).")
             return
         }
 
@@ -276,7 +333,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
             notifyFolderImport(
                 mode: mode,
                 ok: false,
-                message: readFailureMessage(root: root, files: unreadable, error: firstReadError)
+                message: readFailureMessage(
+                    root: root, label: label, files: unreadable, error: firstReadError)
             )
             return
         }
@@ -300,9 +358,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
                     mode: mode,
                     ok: true,
                     message: unreadable.isEmpty
-                        ? "Imported \(files.count) files from \(root.lastPathComponent)."
+                        ? "Imported \(files.count) files from \(label)."
                         : "Imported \(files.count - unreadable.count) files from "
-                            + "\(root.lastPathComponent). Could not read: "
+                            + "\(label). Could not read: "
                             + unreadable.prefix(3).joined(separator: ", ")
                             + (unreadable.count > 3 ? " and \(unreadable.count - 3) more." : ".")
                 )
@@ -320,7 +378,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
 
     /// A read that macOS blocked is a different problem from a read that failed
     /// for another reason, and only one of them is something the reader can fix.
-    private func readFailureMessage(root: URL, files: [String], error: Error?) -> String {
+    private func readFailureMessage(
+        root: URL, label: String, files: [String], error: Error?
+    ) -> String {
         let nsError = error as NSError?
         let blocked = nsError?.domain == NSCocoaErrorDomain
             && nsError?.code == NSFileReadNoPermissionError
@@ -331,7 +391,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
                 + "choose the folder again from inside the app."
         }
         let detail = nsError.map { "\($0.domain) \($0.code): \($0.localizedDescription)" } ?? "unknown"
-        return "Could not read \(files.count) file(s) in \(root.lastPathComponent) (\(detail)). "
+        return "Could not read \(files.count) file(s) in \(label) (\(detail)). "
             + "First: " + (files.first ?? "-")
     }
 
