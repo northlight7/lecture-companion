@@ -1,6 +1,6 @@
 # STATE: Lecture Companion capability gauntlet
 
-Overwritten each round. History lives in `RUNLOG.md`.
+Overwritten each round. History lives in `.internal/RUNLOG.md`.
 
 ## Goal and invariants
 

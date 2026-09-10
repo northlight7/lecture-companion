@@ -3,14 +3,14 @@
 Project state lives in `PROJECT.md` (the shared record any tool reads cold). This file is the
 tool-specific durable decisions.
 
-Read `SPEC.md` for the bar (frozen). Read `STATE.md` for where the loop is.
-`RUNLOG.md` is append-only history. `app/contracts.py` is the frozen interface
+Read `SPEC.md` for the bar (frozen). Read `.internal/STATE.md` for where the loop is.
+`.internal/RUNLOG.md` is append-only history. `app/contracts.py` is the frozen interface
 contract: every module imports its shared types from there.
 
 ## Hard rules
 
 - `app/contracts.py` is read-only for builders. Changing it is an orchestrator
-  decision, recorded in RUNLOG.md.
+  decision, recorded in `.internal/RUNLOG.md`.
 - The DeepSeek API key lives ONLY in the OS keyring
   (service `lecture-companion`, account `deepseek-api-key`). Never in a file,
   never in a log line, never in an HTTP response body. `/api/connection` returns
