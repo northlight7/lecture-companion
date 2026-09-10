@@ -145,10 +145,6 @@ def _progress_dict(store, course: Course) -> dict[str, Any]:
 # --------------------------------------------------------------------------
 
 
-class _Stopped(Exception):
-    """Raised inside the worker's progress callback to request a checkpoint."""
-
-
 class Worker:
     def __init__(self, course_id: str) -> None:
         self.course_id = course_id
@@ -186,10 +182,6 @@ def _run_course(cid: str, deck_id: str | None, worker: Worker) -> None:
 
     store = CourseStore(config.courses_root())
 
-    def on_progress(*args: Any, **kwargs: Any) -> None:
-        if worker.stop.is_set():
-            raise _Stopped()
-
     def _pause(reason: str, state: str = "paused") -> None:
         p = store.load_progress(cid)
         p.state = state  # type: ignore[assignment]
@@ -200,10 +192,13 @@ def _run_course(cid: str, deck_id: str | None, worker: Worker) -> None:
         client = get_client()
         embedder = get_embedder()
         process_course(
-            store, cid, client, embedder, deck_id=deck_id, on_progress=on_progress
+            store,
+            cid,
+            client,
+            embedder,
+            deck_id=deck_id,
+            should_stop=worker.stop.is_set,
         )
-    except _Stopped:
-        _pause("Paused. It will resume from the first slide that is not explained yet.")
     except NoApiKey:
         _pause("No API key configured. Open Connect and paste your DeepSeek key.")
     except RateLimited as exc:

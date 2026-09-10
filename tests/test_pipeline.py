@@ -305,6 +305,53 @@ def test_reprocessing_a_finished_course_calls_the_model_zero_times(store, course
     assert len(store.load_explanations(course, "w1")) == len(SLIDE_TEXTS)
 
 
+def test_should_stop_halts_at_a_slide_boundary_and_buys_no_more_slides(store, course):
+    """A pause lands between slides and costs nothing after it.
+
+    Regression, measured: the stop used to be signalled by raising out of
+    `on_progress`, and the pipeline deliberately swallows anything that callback
+    raises so a faulty UI callback cannot break a course. The stop was therefore
+    never observed, `/pause` blocked until the worker finished the whole deck,
+    and every remaining slide was billed. Covered at this level rather than over
+    HTTP because the six-slide fixture finishes faster than a pause can arrive,
+    so an endpoint test cannot tell a working stop from a broken one.
+    """
+    client = FakeClient()
+    embedder = HashingEmbedder()
+    stopping = False
+
+    def on_progress(_deck_id, index, _heading):
+        nonlocal stopping
+        if index >= 1:
+            stopping = True
+
+    progress = process_course(
+        store,
+        course,
+        client,
+        embedder,
+        on_progress=on_progress,
+        should_stop=lambda: stopping,
+    )
+
+    assert progress.state == "paused"
+    assert progress.pause_reason
+    # Slides 0 and 1 were explained; slide 2 was never requested.
+    assert [index for _deck, index in client.calls] == [0, 1]
+    assert len(store.load_explanations(course, "w1")) == 2
+    assert next_unfinished(store, course) == ("w1", 2)
+
+
+def test_should_stop_at_the_first_slide_explains_nothing(store, course):
+    client = FakeClient()
+    progress = process_course(
+        store, course, client, HashingEmbedder(), should_stop=lambda: True
+    )
+    assert client.calls == []
+    assert progress.state == "paused"
+    assert next_unfinished(store, course) == ("w1", 0)
+
+
 # --------------------------------------------------------------------------
 # Guards claimed by the modules, checked rather than assumed
 # --------------------------------------------------------------------------

@@ -541,12 +541,19 @@ def process_course(
     *,
     deck_id: str | None = None,
     on_progress: ProgressCallback | None = None,
+    should_stop: Callable[[], bool] | None = None,
 ) -> Progress:
     """Explain every unfinished slide in the course, checkpointing as it goes.
 
     Returns the Progress it leaves behind. It does not raise for a rate limit
     or an unreachable model: those set `state = "paused"` with the cursor on
     the slide that failed, which is gate G8.
+
+    `should_stop` is polled at every slide boundary. A stop is therefore honoured
+    between slides, never mid-slide, so the checkpoint stays truthful and no
+    already-explained slide is thrown away. It is deliberately a polled predicate
+    rather than an exception from `on_progress`: the callback is wrapped so a
+    faulty UI callback cannot break a course, which would also swallow a stop.
     """
     course = store.get_course(course_id)
     progress = store.load_progress(course_id)
@@ -573,6 +580,19 @@ def process_course(
                 if not progress.is_done(deck.id, slide.index):
                     progress.mark_done(deck.id, slide.index)
                 continue
+
+            # Checked before any model work, so a pause never buys one more
+            # billed slide.
+            if should_stop is not None and should_stop():
+                progress.state = "paused"
+                progress.pause_reason = (
+                    "Paused. It will resume from the first slide that is not "
+                    "explained yet."
+                )
+                store.save_progress(course_id, progress)
+                log.info("stopped %s at %s:%d on request",
+                         course_id, deck.id, slide.index)
+                return progress
 
             progress.cursor_deck_id = deck.id
             progress.cursor_slide_index = slide.index
