@@ -18,6 +18,11 @@ let keyCodes: [String: CGKeyCode] = [
     "return": 36, "enter": 36, "tab": 48, "space": 49, "escape": 53,
     "delete": 51, "left": 123, "right": 124, "down": 125, "up": 126,
     "home": 115, "end": 119, "pageup": 116, "pagedown": 121,
+    // Letters, so the standard editing equivalents can be posted.
+    "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7,
+    "c": 8, "v": 9, "b": 11, "q": 12, "w": 13, "e": 14, "r": 15, "y": 16,
+    "t": 17, "o": 31, "u": 32, "i": 34, "p": 35, "l": 37, "j": 38, "k": 40,
+    "n": 45, "m": 46,
 ]
 
 /// Bring the app forward. Events posted to a background window are dropped.
@@ -133,13 +138,18 @@ case "scroll":
     postScroll(lines: amount * 40)
     print("scrolled \(amount)")
 case "key":
-    guard args.count >= 2, let code = keyCodes[args[1].lowercased()] else {
+    guard args.count >= 2,
+          let code = keyCodes[args[1].lowercased()]
+            ?? keyCodes[args[1].lowercased() == " " ? "space" : args[1].lowercased()]
+    else {
         FileHandle.standardError.write("unknown key\n".data(using: .utf8)!)
         exit(2)
     }
+    // Trailing "cmd" posts the equivalent the menu bar is listening for.
+    let flags: CGEventFlags = args.contains("cmd") ? .maskCommand : []
     activateApp()
-    postKey(code)
-    print("key \(args[1])")
+    postKey(code, flags: flags)
+    print("key \(args[1])\(args.contains("cmd") ? " cmd" : "")")
 default:
     exit(2)
 }

@@ -46,9 +46,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
 
     private func installMenu() {
         let mainMenu = NSMenu()
+
         let appMenuItem = NSMenuItem()
         mainMenu.addItem(appMenuItem)
-
         let appMenu = NSMenu()
         let quit = NSMenuItem(
             title: "Quit Lecture Companion",
@@ -57,6 +57,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
         )
         appMenu.addItem(quit)
         appMenuItem.submenu = appMenu
+
+        // AppKit dispatches the standard editing key equivalents through the
+        // menu bar, so a web view with no Edit menu cannot paste. That made the
+        // API key field type-only, which is how a key gets mistyped.
+        let fileMenuItem = NSMenuItem()
+        mainMenu.addItem(fileMenuItem)
+        let fileMenu = NSMenu(title: "File")
+        fileMenu.addItem(
+            withTitle: "Close Window",
+            action: #selector(NSWindow.performClose(_:)),
+            keyEquivalent: "w"
+        )
+        fileMenuItem.submenu = fileMenu
+
+        let editMenuItem = NSMenuItem()
+        mainMenu.addItem(editMenuItem)
+        let editMenu = NSMenu(title: "Edit")
+        for (title, selector, key) in [
+            ("Undo", "undo:", "z"),
+            ("Redo", "redo:", "Z"),
+            ("Cut", "cut:", "x"),
+            ("Copy", "copy:", "c"),
+            ("Paste", "paste:", "v"),
+            ("Select All", "selectAll:", "a"),
+        ] {
+            editMenu.addItem(
+                withTitle: title, action: Selector((selector)), keyEquivalent: key
+            )
+        }
+        editMenu.insertItem(.separator(), at: 2)
+        editMenuItem.submenu = editMenu
+
         NSApp.mainMenu = mainMenu
     }
 
