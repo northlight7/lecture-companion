@@ -20,6 +20,7 @@ const els = {
   },
   connBadge: $("conn-badge"),
   connLabel: $("conn-label"),
+  navCourses: document.querySelector('.navlink[href="#/"]'),
   toast: $("toast"),
 };
 
@@ -27,8 +28,8 @@ const state = {
   route: { name: "courses" },
   connection: null,
   course: null,          // the full GET /api/courses/{cid} payload
-  deckId: null,
   slides: [],            // [{index, has_explanation, heading}]
+  slidesError: null,     // set when the slide list fetch failed
   index: 0,
   poll: null,
   artifact: null,
@@ -41,6 +42,12 @@ const state = {
 };
 
 let executionTimer = null;
+let progressFailures = 0;
+let executionFailures = 0;
+
+/* Bumped on every route change. A render that started under an older token
+ * must not paint, because its response can arrive after the reader moved on. */
+let routeSeq = 0;
 
 // ---------------------------------------------------------------- utilities
 
@@ -89,8 +96,10 @@ function postFiles(path, fileList) {
 
 let toastTimer = null;
 function toast(message) {
-  els.toast.textContent = message;
+  // Unhide first: a node that is still hidden is out of the accessibility tree,
+  // so setting the text while hidden often announces nothing.
   els.toast.hidden = false;
+  els.toast.textContent = message;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { els.toast.hidden = true; }, 4200);
 }
@@ -264,7 +273,11 @@ function openConnect() {
   $("connect-dialog").showModal();
 }
 
-$("conn-badge").addEventListener("click", openConnect);
+$("conn-badge").addEventListener("click", async () => {
+  // The boot check may have run before the server was up; clicking re-checks.
+  await refreshConnection();
+  openConnect();
+});
 
 $("connect-form").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -365,8 +378,9 @@ document.addEventListener("click", async (event) => {
     } else if (act === "delete-course") {
       if (!confirm("Delete this course and everything filed into it?")) return;
       await api(`/api/courses/${encodeURIComponent(course)}`, { method: "DELETE" });
-      location.hash = "#/";
-      await renderCourses();
+      location.hash = "#/";   // the route refetches the list; do not fetch it twice
+    } else if (act === "retry-progress") {
+      startPolling(course);
     } else if (act === "delete-file") {
       if (!confirm(`Delete ${filename || "this file"} and its generated data?`)) return;
       await api(
@@ -387,6 +401,7 @@ document.addEventListener("click", async (event) => {
 
 function stopPolling() {
   if (state.poll) { clearInterval(state.poll); state.poll = null; }
+  progressFailures = 0;
 }
 
 function startPolling(courseId) {
@@ -399,8 +414,13 @@ async function refreshProgress(courseId) {
   let progress;
   try {
     progress = await getJSON(`/api/courses/${encodeURIComponent(courseId)}/progress`);
+    progressFailures = 0;
   } catch (err) {
+    progressFailures += 1;
+    console.error(err);
+    if (progressFailures < 3) return;   // a blip: the next tick may still succeed
     stopPolling();
+    paintRunbarLost(courseId, err.message);
     return;
   }
   paintRunbars(courseId, progress);
@@ -418,23 +438,65 @@ async function refreshProgress(courseId) {
   }
 }
 
+/* What each bar last rendered, so an unchanged bar is left alone. Rebuilding it
+ * would throw focus out of the Pause button it contains. */
+const runbarSignatures = new WeakMap();
+
+function paintRunbar(bar, courseId, progress, deckId) {
+  const total = progress.n_slides || 0;
+  const done = progress.n_explained || 0;
+  const running = progress.running || progress.state === "running";
+  const signature = [progress.state, running, total, courseId, deckId || "",
+    progress.pause_reason || "", running ? "" : done].join("\u0000");
+  const meter = bar.querySelector(".meter");
+  const count = bar.querySelector(".count");
+  if (runbarSignatures.get(bar) === signature && meter && count) {
+    // Only the counts moved: patch the meter and the counter in place.
+    const fill = meter.querySelector("span");
+    if (fill) fill.style.width = `${total ? Math.round((done / total) * 100) : 0}%`;
+    meter.setAttribute("aria-valuenow", String(done));
+    count.textContent = `${done} of ${total} explained`;
+    return;
+  }
+  runbarSignatures.set(bar, signature);
+  bar.dataset.state = progress.state;
+  bar.innerHTML = runbarHtml(progress, courseId, deckId);
+}
+
 function paintRunbars(courseId, progress) {
+  if (state.route.cid !== courseId) return;   // these counts belong to another course
   for (const bar of [$("course-runbar"), $("viewer-runbar")]) {
     if (!bar || bar.closest(".screen").hidden) continue;
-    bar.dataset.state = progress.state;
-    bar.innerHTML = runbarHtml(progress, courseId, null);
+    paintRunbar(bar, courseId, progress,
+      state.route.name === "viewer" ? state.route.did : null);
+  }
+}
+
+/* The poll gave up. Say so in the bar that was showing the run, and offer a
+ * way back rather than leaving a frozen "running" screen with a live Stop. */
+function paintRunbarLost(courseId, message) {
+  if (state.route.cid !== courseId) return;   // the reader is looking at something else
+  for (const bar of [$("course-runbar"), $("viewer-runbar")]) {
+    if (!bar || bar.closest(".screen").hidden) continue;
+    runbarSignatures.delete(bar);
+    bar.dataset.state = "error";
+    bar.innerHTML = `<span class="status">Lost contact with the server</span>
+      <p class="why">${esc(message || "The last status check failed.")}</p>
+      <div class="acts"><button class="btn btn-quiet" data-act="retry-progress"
+        data-course="${esc(courseId)}">Try again</button></div>`;
   }
 }
 
 // ---------------------------------------------------------------- courses screen
 
-async function renderCourses() {
+async function renderCourses(seq = routeSeq) {
   const list = $("course-list");
   let courses;
   try {
     courses = await getJSON("/api/courses");
   } catch (err) { handle(err); return; }
 
+  if (seq !== routeSeq) return;
   if (!courses.length) {
     list.innerHTML =
       `<p class="empty">No courses yet. Create one above, then drop its course files in.
@@ -634,15 +696,17 @@ wireFolderPicker("course-folder-picker", "course-folder-input", "course", upload
 
 // ---------------------------------------------------------------- course screen
 
-async function renderCourse(cid) {
+async function renderCourse(cid, seq = routeSeq) {
   let course;
   try {
     course = await getJSON(`/api/courses/${encodeURIComponent(cid)}`);
   } catch (err) {
+    if (seq !== routeSeq) return;
     if (err.status === 404) { location.hash = "#/"; return; }
     handle(err);
     return;
   }
+  if (seq !== routeSeq) return;
   state.course = course;
 
   $("course-title").textContent = course.title;
@@ -652,9 +716,7 @@ async function renderCourse(cid) {
     "No overview yet. Drop the syllabus or the programme requirements in and " +
     "the app distils one, so every explanation knows what the course is for.";
 
-  const bar = $("course-runbar");
-  bar.dataset.state = course.progress.state;
-  bar.innerHTML = runbarHtml(course.progress, cid, null);
+  paintRunbar($("course-runbar"), cid, course.progress, null);
 
   $("deck-list").innerHTML = course.decks.length
     ? course.decks.map((d) => `<a class="deck-row"
@@ -675,6 +737,16 @@ async function renderCourse(cid) {
   }
   const groupRows = [...groups.entries()].sort(([a], [b]) =>
     a === "Unfiled" ? 1 : b === "Unfiled" ? -1 : a.localeCompare(b));
+
+  // A run finishing re-renders this list. Names typed but not yet saved must
+  // survive that rebuild, so hold on to anything that differs from the saved value.
+  const typedFolders = new Map();
+  document.querySelectorAll("#file-list .folder-input").forEach((input) => {
+    if (input.value !== input.getAttribute("value")) {
+      typedFolders.set(input.dataset.artifact, input.value);
+    }
+  });
+
   $("file-list").innerHTML = artifacts.length
     ? groupRows.map(([folder, rows]) => {
       const reason = rows.find((item) => item.folder_reason)?.folder_reason || "";
@@ -683,18 +755,23 @@ async function renderCourse(cid) {
         ${rows.map((a) => `<div class="file-row-wrap">
           <a class="file-row" href="#/c/${encodeURIComponent(cid)}/a/${encodeURIComponent(a.id)}">
             <span class="name">${esc(a.source_path || a.filename)}</span>
-            <span class="meta">${esc(a.kind.toUpperCase())} · ${esc(a.purpose.replaceAll("_", " "))}</span>
-            <span class="why">${plural(a.object_count, "source object", "source objects")}${a.extraction_warnings.length ? " · extraction warning" : ""}</span>
           </a>
+          <span class="file-facts">${esc((a.kind || "file").toUpperCase())} · ${esc((a.purpose ?? "").replaceAll("_", " "))} · ${plural(a.object_count, "source object", "source objects")}${(a.extraction_warnings ?? []).length ? " · extraction warning" : ""}</span>
           <label class="folder-field">Study folder
             <input class="folder-input" data-artifact="${esc(a.id)}" list="folder-options" maxlength="80" value="${esc(a.folder || "")}" placeholder="Unfiled">
           </label>
           <button class="btn btn-danger file-delete" type="button" data-act="delete-file"
-            data-course="${esc(cid)}" data-artifact="${esc(a.id)}" data-filename="${esc(a.filename)}">Delete</button>
+            data-course="${esc(cid)}" data-artifact="${esc(a.id)}" data-filename="${esc(a.filename)}"
+            aria-label="Delete ${esc(a.filename || a.source_path || "this file")}">Delete</button>
         </div>`).join("")}
       </section>`;
     }).join("")
     : `<p class="empty">Nothing uploaded yet.</p>`;
+
+  for (const input of $("file-list").querySelectorAll(".folder-input")) {
+    const typed = typedFolders.get(input.dataset.artifact);
+    if (typed !== undefined) input.value = typed;
+  }
 
   $("organization-status").textContent = artifacts.length
     ? "DeepSeek receives file names, imported paths, purposes, and short extracted samples only from this course."
@@ -703,10 +780,14 @@ async function renderCourse(cid) {
   $("search-results").innerHTML = "";
   $("concept-graph").hidden = true;
   $("concept-graph").innerHTML = "";
+  $("show-relationships").setAttribute("aria-expanded", "false");
+  $("show-relationships").textContent = "Show relationships";
   try {
     const knowledge = await getJSON(`/api/courses/${encodeURIComponent(cid)}/knowledge/status`);
+    if (seq !== routeSeq) return;
     paintKnowledgeStatus(knowledge, false);
   } catch (err) {
+    if (seq !== routeSeq) return;
     $("knowledge-status").textContent = "Search status is unavailable.";
   }
 
@@ -773,7 +854,7 @@ function searchResultHtml(row, cid) {
     </a>
     <p>${esc(row.snippet || "Structured source object")}</p>
     ${row.relationship_reason ? `<p class="relationship-reason">Why related: ${esc(row.relationship_reason)}</p>` : ""}
-    <p class="help">Version ${esc(row.artifact_version)} · ${esc(row.artifact_purpose.replaceAll("_", " "))}</p>
+    <p class="help">Version ${esc(row.artifact_version)} · ${esc((row.artifact_purpose ?? "").replaceAll("_", " "))}</p>
   </article>`;
 }
 
@@ -840,10 +921,22 @@ $("show-relationships").addEventListener("click", async () => {
   const cid = state.route.cid;
   if (!cid) return;
   const graph = $("concept-graph");
+  const toggle = $("show-relationships");
+  if (!graph.hidden) {          // second click closes the panel again
+    graph.hidden = true;
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.textContent = "Show relationships";
+    return;
+  }
+  const seq = routeSeq;
+  toggle.setAttribute("aria-expanded", "true");
+  // The label has to match what the click will now do.
+  toggle.textContent = "Hide relationships";
   graph.hidden = false;
   graph.innerHTML = SKELETON;
   try {
     const payload = await getJSON(`/api/courses/${encodeURIComponent(cid)}/concepts?limit=24`);
+    if (seq !== routeSeq) return;
     paintKnowledgeStatus(payload.index, payload.rebuilt);
     graph.innerHTML = graphHtml(payload, cid);
   } catch (err) {
@@ -860,16 +953,25 @@ $("concept-graph").addEventListener("click", (event) => {
 
 // ---------------------------------------------------------------- viewer
 
-async function loadSlideList() {
+async function loadSlideList(seq = routeSeq) {
   const { cid, did } = state.route;
+  state.slidesError = null;
+  let slides;
   try {
-    state.slides = await getJSON(
+    slides = await getJSON(
       `/api/courses/${encodeURIComponent(cid)}/decks/${encodeURIComponent(did)}/slides`);
   } catch (err) {
+    if (seq !== routeSeq) return;
+    // An empty list would be read as "this deck has no slides", which is a
+    // different fact from "this deck could not be fetched".
     state.slides = [];
+    state.slidesError = err;
+    $("slide-strip").innerHTML = "";
     handle(err);
     return;
   }
+  if (seq !== routeSeq) return;
+  state.slides = slides;
   const strip = $("slide-strip");
   strip.innerHTML = state.slides.map((s) => `<button class="chip" type="button"
       data-index="${s.index}" data-done="${s.has_explanation ? 1 : 0}"
@@ -904,7 +1006,7 @@ document.addEventListener("keydown", (event) => {
 const SKELETON = `<div class="skel" aria-hidden="true">
   <i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>`;
 
-async function showSlide(index) {
+async function showSlide(index, seq = routeSeq) {
   const { cid, did } = state.route;
   state.index = index;
 
@@ -913,16 +1015,35 @@ async function showSlide(index) {
   const img = $("slide-img");
   const emptyLine = $("slide-empty");
 
-  document.querySelectorAll(".chip").forEach((chip) =>
-    chip.setAttribute("aria-current", String(Number(chip.dataset.index) === index)));
+  // A deck runs past a hundred slides, so the current chip is usually off
+  // screen. Scroll the strip itself rather than calling scrollIntoView, which
+  // would also drag the reading pane back up the page.
+  const strip = $("slide-strip");
+  document.querySelectorAll(".chip").forEach((chip) => {
+    const current = Number(chip.dataset.index) === index;
+    chip.setAttribute("aria-current", String(current));
+    if (!current) return;
+    const centred = chip.offsetLeft - strip.offsetLeft
+      - (strip.clientWidth - chip.offsetWidth) / 2;
+    strip.scrollLeft = Math.max(0, centred);
+  });
 
   if (!state.slides.length) {
     counter.textContent = "no slides";
     img.hidden = true;
     emptyLine.hidden = false;
+    $("slide-text-wrap").hidden = true;
+    $("prev-slide").disabled = true;
+    $("next-slide").disabled = true;
+    if (state.slidesError) {
+      emptyLine.textContent = "This deck could not be loaded.";
+      reading.innerHTML = `<div class="blank">
+        <h3>Could not load this deck</h3>
+        <p>${esc(state.slidesError.message)}</p></div>`;
+      return;
+    }
     emptyLine.textContent =
       "This deck has no rendered slides. Open another artifact from the course file list.";
-    $("slide-text-wrap").hidden = true;
     reading.innerHTML = `<div class="blank">
       <h3>Nothing to read yet</h3>
       <p>A deck needs slides before it can be explained.</p></div>`;
@@ -944,11 +1065,13 @@ async function showSlide(index) {
   try {
     payload = await getJSON(base);
   } catch (err) {
+    if (seq !== routeSeq) return;
     reading.innerHTML = `<div class="blank"><h3>Could not load this slide</h3>
       <p>${esc(err.message)}</p></div>`;
     return;
   }
-  if (state.index !== index) return;   // the reader moved on while we fetched
+  // The reader moved on, or on to another deck, while we fetched.
+  if (seq !== routeSeq || state.index !== index) return;
 
   const slideText = (payload.slide.text || "").trim();
   $("slide-text-wrap").hidden = !slideText;
@@ -1005,28 +1128,31 @@ async function showSlide(index) {
   reading.querySelectorAll("[data-mermaid]").forEach(drawDiagram);
 }
 
-async function renderViewer() {
+async function renderViewer(seq = routeSeq) {
   const { cid, did, index } = state.route;
   if (!state.course || state.course.id !== cid) {
+    let course;
     try {
-      state.course = await getJSON(`/api/courses/${encodeURIComponent(cid)}`);
+      course = await getJSON(`/api/courses/${encodeURIComponent(cid)}`);
     } catch (err) {
+      if (seq !== routeSeq) return;
       if (err.status === 404) { location.hash = "#/"; return; }
       handle(err);
       return;
     }
+    if (seq !== routeSeq) return;
+    state.course = course;
   }
   const deck = state.course.decks.find((d) => d.id === did);
   $("viewer-back").href = `#/c/${encodeURIComponent(cid)}`;
   $("viewer-back").textContent = state.course.title;
   $("viewer-title").textContent = deck ? deck.title : "Deck";
 
-  const bar = $("viewer-runbar");
-  bar.dataset.state = state.course.progress.state;
-  bar.innerHTML = runbarHtml(state.course.progress, cid, did);
+  paintRunbar($("viewer-runbar"), cid, state.course.progress, did);
 
-  await loadSlideList();
-  await showSlide(Math.min(Math.max(index, 0), Math.max(state.slides.length - 1, 0)));
+  await loadSlideList(seq);
+  if (seq !== routeSeq) return;
+  await showSlide(Math.min(Math.max(index, 0), Math.max(state.slides.length - 1, 0)), seq);
 
   if (state.course.progress.running || state.course.progress.state === "running") {
     startPolling(cid);
@@ -1056,10 +1182,14 @@ function sourceHash(cid, aid, oid = "") {
   return oid ? `${base}/${encodeURIComponent(oid)}` : base;
 }
 
-function tableHtml(rows) {
+/* `header` marks the first row as the field-name row, which only holds where the
+ * caller built that row itself (dataset previews, execution value previews). */
+function tableHtml(rows, { header = false } = {}) {
   if (!rows?.length) return "";
-  return `<div class="native-table-wrap"><table class="native-table"><tbody>${rows.map((row) =>
-    `<tr>${row.map((cell) => `<td>${esc(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+  return `<div class="native-table-wrap"><table class="native-table"><tbody>${rows.map((row, rowIndex) =>
+    `<tr>${row.map((cell) => (header && rowIndex === 0)
+      ? `<th scope="col">${esc(cell)}</th>`
+      : `<td>${esc(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
 }
 
 function objectCard(obj, artifact, cid, currentOid) {
@@ -1090,7 +1220,7 @@ function objectCard(obj, artifact, cid, currentOid) {
   } else if (obj.object_type === "dataset") {
     const fields = obj.data.fields || [];
     const rows = [fields, ...(obj.data.sample_rows || []).map((row) => fields.map((field) => row[field] ?? ""))];
-    body = `<p>${obj.data.row_count} rows, ${obj.data.column_count} columns. Bounded local preview.</p>${tableHtml(rows)}`;
+    body = `<p>${obj.data.row_count} rows, ${obj.data.column_count} columns. Bounded local preview.</p>${tableHtml(rows, { header: true })}`;
   } else if (obj.object_type === "sheet") {
     body = `<dl class="sheet-metadata">
       <dt>Dimensions</dt><dd>${esc(obj.data.dimensions || obj.locator.cell_range || "unknown")}</dd>
@@ -1229,6 +1359,7 @@ async function loadWorkbookPanel() {
     return;
   }
   panel.hidden = false;
+  $("workbook-error").hidden = true;
   const status = await getJSON(`${workbookBase()}/status`);
   $("workbook-state").textContent = status.exists ? (status.stale ? "Stale" : "Ready") : "Not inspected";
   if (status.exists && !status.stale) {
@@ -1243,7 +1374,7 @@ async function loadWorkbookPanel() {
 function executionValueHtml(value) {
   if (!value) return "";
   if (value.kind === "table") {
-    return tableHtml([value.columns || [], ...(value.rows || [])]);
+    return tableHtml([value.columns || [], ...(value.rows || [])], { header: true });
   }
   return `<pre class="execution-output">${esc(value.text || "")}</pre>`;
 }
@@ -1287,7 +1418,7 @@ function paintExecution(run = null) {
   stateLabel.textContent = run.stale ? "Stale" : run.state;
   stop.hidden = run.state !== "running";
   resume.hidden = run.stale || !["paused", "error"].includes(run.state);
-  const progress = `${run.completed_cells.length} of ${run.selected_cells.length} selected code cells completed.`;
+  const progress = `${(run.completed_cells ?? []).length} of ${(run.selected_cells ?? []).length} selected code cells completed.`;
   const pause = run.pause_reason ? `<p class="${run.state === "error" ? "field-error" : "help"}">${esc(run.pause_reason)}</p>` : "";
   results.innerHTML = `<p class="help">${esc(progress)} Source version ${esc(run.artifact_version)}.</p>${pause}` +
     (run.results || []).map((result) => executionResultHtml(result, run)).join("");
@@ -1296,20 +1427,36 @@ function paintExecution(run = null) {
 function stopExecutionPolling() {
   clearTimeout(executionTimer);
   executionTimer = null;
+  executionFailures = 0;
 }
 
 async function pollExecution() {
   const run = state.execution?.current;
   if (!run || state.route.name !== "artifact") return;
+  // A timer that fires just after the reader opened another artifact would
+  // poll the wrong URL and paint its failure into the new notebook.
+  if (run.artifact_id && run.artifact_id !== state.route.aid) return;
   try {
     const fresh = await getJSON(`${executionBase()}/${encodeURIComponent(run.run_id)}`);
+    executionFailures = 0;
     paintExecution(fresh);
     if (["queued", "running"].includes(fresh.state)) {
       executionTimer = setTimeout(pollExecution, 250);
     }
   } catch (err) {
+    executionFailures += 1;
+    console.error(err);
+    if (executionFailures < 3) {
+      executionTimer = setTimeout(pollExecution, 400 * executionFailures);
+      return;
+    }
+    // Out of attempts. The run may well still be going on the server, so leave
+    // the run itself alone and only say that we stopped hearing about it.
+    stopExecutionPolling();
+    $("execution-state").textContent = "Lost contact";
+    $("execution-error").textContent =
+      `Lost contact with the server: ${err.message}`;
     $("execution-error").hidden = false;
-    $("execution-error").textContent = err.message;
   }
 }
 
@@ -1322,13 +1469,14 @@ async function loadExecutionPanel() {
     return;
   }
   panel.hidden = false;
+  $("execution-error").hidden = true;
   const payload = await getJSON(`${executionBase()}/environment`);
-  state.execution = { info: payload, current: payload.executions[0] || null };
+  state.execution = { current: payload.executions[0] || null };
   const env = payload.environment;
   $("execution-disclosure").textContent = "Runs locally without DeepSeek. Network is denied. Code reads copies of current-course files and writes only its execution workspace.";
   $("execution-environment").innerHTML = [
     ["Runtime", `${env.implementation} ${env.python}`],
-    ["Packages", Object.entries(env.packages).map(([name, version]) => `${name} ${version}`).join(", ")],
+    ["Packages", Object.entries(env.packages ?? {}).map(([name, version]) => `${name} ${version}`).join(", ")],
     ["Network", env.network],
     ["Files", env.filesystem],
     ["Limits", `${env.cell_timeout_seconds}s per cell, ${env.output_char_limit_per_stream.toLocaleString()} characters per stream, ${Math.round(env.memory_limit_bytes / 1073741824)} GiB data segment`],
@@ -1378,16 +1526,19 @@ function paintSelected() {
     : "Nothing selected.";
 }
 
-async function loadArtifactPage({ append = false } = {}) {
+async function loadArtifactPage({ append = false, sheet = "", seq = routeSeq } = {}) {
   const { cid, aid, oid } = state.route;
   const params = new URLSearchParams({ offset: String(append ? state.artifactOffset : 0), limit: "300" });
   let exact = null;
   if (oid) {
     exact = await getJSON(`/api/courses/${encodeURIComponent(cid)}/artifacts/${encodeURIComponent(aid)}/objects/${encodeURIComponent(oid)}`);
+    if (seq !== routeSeq) return;
   }
-  const requestedSheet = exact?.locator?.sheet || state.artifactSheet;
+  const requestedSheet = sheet || exact?.locator?.sheet || state.artifactSheet;
   if (requestedSheet) params.set("sheet", requestedSheet);
   const payload = await getJSON(`/api/courses/${encodeURIComponent(cid)}/artifacts/${encodeURIComponent(aid)}/view?${params}`);
+  // The reader may have opened another artifact while this was in flight.
+  if (seq !== routeSeq) return;
   state.artifact = payload.artifact;
   state.artifactSheet = payload.selected_sheet || "";
   state.artifactOffset = payload.offset + payload.objects.length;
@@ -1395,19 +1546,21 @@ async function loadArtifactPage({ append = false } = {}) {
   if (exact && !state.artifactObjects.some((obj) => obj.id === oid)) {
     state.artifactObjects.unshift(exact);
   }
+  if (sheet) state.selectedObjects.clear();   // the selection belonged to the sheet we left
   const artifact = payload.artifact;
   $("artifact-title").textContent = artifact.filename;
   $("artifact-original").href = `/api/courses/${encodeURIComponent(cid)}/artifacts/${encodeURIComponent(aid)}/original`;
   $("source-location").textContent = oid
     ? `${artifact.source_path} · ${locatorText(state.artifactObjects.find((obj) => obj.id === oid))}`
     : artifact.source_path;
+  const warnings = artifact.extraction_warnings ?? [];
   const warning = $("artifact-warning");
-  warning.hidden = !artifact.extraction_warnings.length;
-  warning.textContent = artifact.extraction_warnings.join(" ");
-  const sheet = $("artifact-sheet");
+  warning.hidden = !warnings.length;
+  warning.textContent = warnings.join(" ");
+  const sheetNode = $("artifact-sheet");
   $("sheet-label").hidden = !payload.sheets.length;
-  sheet.hidden = !payload.sheets.length;
-  sheet.innerHTML = payload.sheets.map((name) => `<option${name === payload.selected_sheet ? " selected" : ""}>${esc(name)}</option>`).join("");
+  sheetNode.hidden = !payload.sheets.length;
+  sheetNode.innerHTML = payload.sheets.map((name) => `<option${name === payload.selected_sheet ? " selected" : ""}>${esc(name)}</option>`).join("");
   const content = artifact.kind === "xlsx"
     ? spreadsheetHtml(state.artifactObjects, artifact, cid, oid)
     : state.artifactObjects.map((obj) => objectCard(obj, artifact, cid, oid)).join("");
@@ -1415,17 +1568,44 @@ async function loadArtifactPage({ append = false } = {}) {
   $("native-viewer").dataset.artifactId = artifact.id;
   $("artifact-more").hidden = !payload.has_more;
   paintSelected();
-  await loadExecutionPanel();
-  await loadWorkbookPanel();
+  // A side panel that fails must not take the notebook down with it.
+  try { await loadExecutionPanel(); }
+  catch (err) {
+    state.execution = null;
+    paintExecution(null);
+    $("execution-state").textContent = "Unavailable";
+    showPanelError("execution-error", err);
+  }
+  try { await loadWorkbookPanel(); }
+  catch (err) {
+    state.workbook = null;
+    $("workbook-results").innerHTML = "";
+    $("workbook-state").textContent = "Unavailable";
+    showPanelError("workbook-error", err);
+  }
   if (artifact.kind === "xlsx") $("experiment-sheet").value = state.artifactSheet || payload.sheets[0] || "";
   if (oid) requestAnimationFrame(() => document.getElementById(`source-${oid}`)?.scrollIntoView({ block: "center" }));
 }
 
-async function renderArtifact() {
+function showPanelError(id, err) {
+  const line = $(id);
+  line.textContent = err.message || String(err);
+  line.hidden = false;
+}
+
+async function renderArtifact(seq = routeSeq) {
   const { cid, aid } = state.route;
   if (!state.course || state.course.id !== cid) {
-    try { state.course = await getJSON(`/api/courses/${encodeURIComponent(cid)}`); }
-    catch (err) { handle(err); location.hash = "#/"; return; }
+    let course;
+    try { course = await getJSON(`/api/courses/${encodeURIComponent(cid)}`); }
+    catch (err) {
+      if (seq !== routeSeq) return;
+      handle(err);
+      location.hash = "#/";
+      return;
+    }
+    if (seq !== routeSeq) return;
+    state.course = course;
   }
   if (!state.artifact || state.artifact.id !== aid) {
     state.artifactSheet = "";
@@ -1435,8 +1615,12 @@ async function renderArtifact() {
   }
   $("artifact-back").href = `#/c/${encodeURIComponent(cid)}`;
   $("artifact-back").textContent = state.course.title;
-  try { await loadArtifactPage(); }
-  catch (err) { handle(err); location.hash = `#/c/${encodeURIComponent(cid)}`; }
+  try { await loadArtifactPage({ seq }); }
+  catch (err) {
+    if (seq !== routeSeq) return;
+    handle(err);
+    location.hash = `#/c/${encodeURIComponent(cid)}`;
+  }
 }
 
 $("native-viewer").addEventListener("change", (event) => {
@@ -1455,10 +1639,14 @@ $("native-viewer").addEventListener("change", (event) => {
 });
 
 $("artifact-sheet").addEventListener("change", async (event) => {
-  state.artifactSheet = event.target.value;
-  state.artifactOffset = 0;
-  state.selectedObjects.clear();
-  try { await loadArtifactPage(); } catch (err) { handle(err); }
+  const requested = event.target.value;
+  try {
+    // The new sheet is committed inside the load, once the pane really shows it.
+    await loadArtifactPage({ sheet: requested });
+  } catch (err) {
+    if (state.artifactSheet !== requested) event.target.value = state.artifactSheet || "";
+    handle(err);
+  }
 });
 
 $("load-more-objects").addEventListener("click", async () => {
@@ -1466,8 +1654,10 @@ $("load-more-objects").addEventListener("click", async () => {
 });
 
 $("copy-source-link").addEventListener("click", async () => {
+  const { cid, aid, oid } = state.route;
+  const link = new URL(sourceHash(cid, aid, oid), location.href).href;
   try {
-    await navigator.clipboard.writeText(location.href);
+    await navigator.clipboard.writeText(link);
     toast("Exact source link copied.");
   } catch (_err) { toast("Copy the current address to share this source location."); }
 });
@@ -1573,13 +1763,40 @@ function parseHash() {
 
 function showScreen(name) {
   for (const [key, node] of Object.entries(els.screens)) node.hidden = key !== name;
+  if (els.navCourses) {
+    if (name === "courses") els.navCourses.setAttribute("aria-current", "page");
+    else els.navCourses.removeAttribute("aria-current");
+  }
+}
+
+/* The screen that just appeared has no focus of its own. Move focus to its
+ * heading so the reader is not left on <body> after a route change. */
+function focusScreen() {
+  const screen = els.screens[state.route.name];
+  if (!screen) return;
+  const heading = screen.querySelector("h1") || screen.querySelector(".viewer-title");
+  if (!heading) return;
+  if (!heading.hasAttribute("tabindex")) heading.setAttribute("tabindex", "-1");
+  heading.focus();
+}
+
+function routeFailed(err) {
+  handle(err);
+  // A throw before the screen swap would leave nothing on screen at all.
+  if (!Object.values(els.screens).some((node) => !node.hidden)) {
+    state.route = { name: "courses" };
+    showScreen("courses");
+    renderCourses().catch(() => {});
+  }
 }
 
 async function route() {
   const next = parseHash();
+  const seq = ++routeSeq;
   const sameDeck =
     state.route.name === "viewer" && next.name === "viewer" &&
     state.route.cid === next.cid && state.route.did === next.did;
+  const screenChanged = state.route.name !== next.name;
   state.route = next;
   if (next.name !== "artifact") stopExecutionPolling();
   showScreen(next.name);
@@ -1587,22 +1804,25 @@ async function route() {
   if (next.name === "courses") {
     stopPolling();
     state.course = null;
-    await renderCourses();
+    await renderCourses(seq);
   } else if (next.name === "course") {
     stopPolling();
-    await renderCourse(next.cid);
+    await renderCourse(next.cid, seq);
   } else if (sameDeck) {
-    // Only the slide index moved: do not refetch the whole deck.
-    await showSlide(next.index);
+    // Only the slide index moved: do not refetch the whole deck. Focus stays
+    // where the reader put it, or the arrow keys would be unusable.
+    await showSlide(next.index, seq);
   } else if (next.name === "viewer") {
     stopPolling();
-    await renderViewer();
+    await renderViewer(seq);
   } else {
     stopPolling();
-    await renderArtifact();
+    await renderArtifact(seq);
   }
+
+  if (seq === routeSeq && screenChanged) focusScreen();
 }
 
-window.addEventListener("hashchange", route);
+window.addEventListener("hashchange", () => { route().catch(routeFailed); });
 
-refreshConnection().then(route);
+refreshConnection().then(() => route().catch(routeFailed));
