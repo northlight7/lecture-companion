@@ -224,12 +224,24 @@ def test_the_prompt_carries_the_labelled_context_blocks():
         "## This slide (Week 1, 2 of 6)",
     ):
         assert header in text, f"missing {header!r}"
+    system = captured["system"]
     # The grounding instruction is not optional.
-    assert "only what this slide actually shows" in captured["system"]
-    assert "Do NOT invent content" in captured["system"]
-    assert "between 100 and 180 words" in captured["system"]
-    assert "define it in plain words" in captured["system"]
-    assert "Do not use an em dash character" in captured["system"]
+    assert "only what the slide actually shows" in system
+    assert "Do not invent content" in system
+    assert "define it in plain words" in system
+    assert "Do not use an em dash character" in system
+
+    # These four carry the difference between an explanation and a description
+    # of the slide. Each was added because the prompt was producing the wrong
+    # one: a title slide padded to a word count, a table narrated by column,
+    # and a bridge sentence connecting two slides that said nothing.
+    assert "LENGTH FOLLOWS SUBSTANCE" in system
+    assert "Never describe the slide as an object" in system
+    assert "never bridge to the previous slide" in system
+    assert "each bullet on its own" in system
+    # A ceiling, not a target: the old wording set a floor a title slide was
+    # padded up to meet.
+    assert "Up to 180 words" in system
 
 
 def test_learner_facing_punctuation_is_normalized():
