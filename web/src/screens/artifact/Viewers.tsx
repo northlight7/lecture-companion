@@ -269,7 +269,13 @@ function CellGrid({
 
   return (
     <div className="min-w-0">
-      <table className="w-full border-collapse">
+      {/* The wrapper scrolls and the table may exceed it. A row of cells each
+          holding a long unbroken value sets a min-content width that
+          `break-word` does not reduce, so `w-full` alone let the grid grow to
+          1648px inside a 696px column that clips: the right third of every
+          workbook was unreachable, at every window size. */}
+      <div className="w-full min-w-0 overflow-x-auto">
+      <table className="w-max min-w-full border-collapse">
         <tbody>
           {ordered.map(([rowNumber, items]) => (
             <tr key={rowNumber}>
@@ -303,11 +309,11 @@ function CellGrid({
                         className="font-code text-meta"
                       />
                     </div>
-                    <div className="mt-1 break-words whitespace-pre-wrap text-ui text-ink tabular-nums">
+                    <div className="mt-1 wrap-anywhere whitespace-pre-wrap text-ui text-ink tabular-nums">
                       {str(cell.text)}
                     </div>
                     {cell.data.formula ? (
-                      <div className="mt-1 break-words font-code text-meta text-ink-muted">
+                      <div className="mt-1 wrap-anywhere font-code text-meta text-ink-muted">
                         Formula {str(cell.data.formula)} · Cached{" "}
                         {str(cell.data.cached_value) || "none"}
                       </div>
@@ -318,6 +324,7 @@ function CellGrid({
           ))}
         </tbody>
       </table>
+      </div>
       {unplaced.length ? (
         <div className="mt-3">
           {unplaced.map((object) => (

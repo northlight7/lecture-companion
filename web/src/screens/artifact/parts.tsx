@@ -272,7 +272,16 @@ export function ReadingText({ children, className }: { children: ReactNode; clas
   );
 }
 
-/** A table of extracted data. Full width: the measure is for prose only. */
+/**
+ * A table of extracted data. Full width: the measure is for prose only.
+ *
+ * The wrapper scrolls, and the table is allowed to exceed it. `w-full` on the
+ * table is not enough on its own: a cell holding one long unbroken token sets a
+ * min-content width that `overflow-wrap: break-word` does not reduce, so the
+ * table grows past its column. The column clips, nothing scrolls, and the right
+ * third of a workbook or a dataset becomes unreachable. That was a real defect
+ * on this screen. A real scorer's data has long unbroken tokens in it.
+ */
 export function DataTable({
   rows,
   header = false,
@@ -284,7 +293,8 @@ export function DataTable({
 }) {
   if (!rows.length) return null;
   return (
-    <table className={cn("w-full border-collapse font-ui text-ui", className)}>
+    <div className="w-full min-w-0 overflow-x-auto">
+    <table className={cn("w-max min-w-full border-collapse font-ui text-ui", className)}>
       <tbody>
         {rows.map((row, rowIndex) => (
           <tr key={rowIndex}>
@@ -300,7 +310,7 @@ export function DataTable({
               ) : (
                 <td
                   key={cellIndex}
-                  className="border-b border-hair px-3 py-2 align-top break-words whitespace-pre-wrap text-ink"
+                  className="border-b border-hair px-3 py-2 align-top wrap-anywhere whitespace-pre-wrap text-ink"
                 >
                   {cell}
                 </td>
@@ -310,6 +320,7 @@ export function DataTable({
         ))}
       </tbody>
     </table>
+    </div>
   );
 }
 

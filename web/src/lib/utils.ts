@@ -11,6 +11,13 @@ const twMerge = extendTailwindMerge({
   extend: {
     classGroups: {
       rounded: [{ rounded: ["ctl", "srf", "pnl"] }],
+      // Without this, `text-ui` is classified as a text COLOUR, because
+      // tailwind-merge cannot know `ui` is a font size. It then "wins" the
+      // conflict against `text-on-accent` and deletes it, so every primary
+      // button rendered --ink on --accent: 2.33:1 in light theme, on every
+      // screen. Dark theme hid it because --ink and --on-accent are the same
+      // cream there. `.internal/gate_merge.mjs` pins this.
+      "font-size": [{ text: ["meta", "ui", "body"] }],
     },
   },
 });
