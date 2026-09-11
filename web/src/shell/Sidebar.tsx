@@ -2,6 +2,7 @@ import { Library } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { hash, type Route } from "@/lib/router";
+import { ACCENT_FILL, courseAccent } from "@/lib/accents";
 import { useStore } from "@/state/store";
 import { NavRow, SectionLabel, SidebarFoot, SidebarFrame, SidebarScroll } from "@/shell/Chrome";
 
@@ -35,6 +36,7 @@ export function Sidebar({ route, onOpenConnect }: { route: Route; onOpenConnect:
                 key={row.id}
                 href={hash.course(row.id)}
                 current={route.name !== "courses" && "cid" in route && route.cid === row.id}
+                accent={ACCENT_FILL[courseAccent(row.id)]}
                 className="pl-7"
               >
                 {row.title}

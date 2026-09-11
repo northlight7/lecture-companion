@@ -16,6 +16,7 @@ export function Screen({
   lede,
   actions,
   meta,
+  titleClassName,
   children,
   className,
 }: {
@@ -24,6 +25,10 @@ export function Screen({
   lede?: ReactNode;
   actions?: ReactNode;
   meta?: ReactNode;
+  /** Merged onto the `h1`. A course screen tints its own title with its
+   *  course's accent; the heading belongs to this frame, so the class is
+   *  passed in rather than reached for from outside. */
+  titleClassName?: string;
   children: ReactNode;
   className?: string;
 }) {
@@ -43,7 +48,10 @@ export function Screen({
         <div className="min-w-0 flex-1">
           <h1
             tabIndex={-1}
-            className="font-reading text-[30px] leading-[1.15] font-semibold text-ink focus-target"
+            className={cn(
+              "font-reading text-[30px] leading-[1.15] font-semibold text-ink focus-target",
+              titleClassName,
+            )}
           >
             {title}
           </h1>

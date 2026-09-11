@@ -14,6 +14,7 @@
  */
 
 import { useState, type JSX } from "react";
+import type { CourseAccent } from "@/lib/accents";
 import type { PipelineState, ProgressRow } from "@/lib/types";
 
 import { Button } from "@/components/ui/button";
@@ -43,7 +44,31 @@ function plural(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`;
 }
 
+/**
+ * The bar's fill in the course's hue, instead of the app's single accent.
+ *
+ * `Progress` draws its own fill from `bg-accent`, and the fill is the one part
+ * of the bar a caller cannot reach through props, so the accent is applied to
+ * it as a descendant variant on the bar's className. The `data-slot` is the
+ * component's own hook. Six literal class names: a name built at runtime would
+ * compile to no CSS at all.
+ *
+ * The track is untouched. A sunken well reads as a track in both themes, and
+ * only the fill is asked to say which course this is.
+ */
+const PROGRESS_FILL: Record<CourseAccent, string> = {
+  blue: "[&_[data-slot=progress-indicator]]:bg-course-blue-fill",
+  teal: "[&_[data-slot=progress-indicator]]:bg-course-teal-fill",
+  green: "[&_[data-slot=progress-indicator]]:bg-course-green-fill",
+  amber: "[&_[data-slot=progress-indicator]]:bg-course-amber-fill",
+  rose: "[&_[data-slot=progress-indicator]]:bg-course-rose-fill",
+  violet: "[&_[data-slot=progress-indicator]]:bg-course-violet-fill",
+};
+
 export interface ProgressPanelProps {
+  /** The course's accent, from its id. Colours the bar's fill only: no state
+   *  word and no control takes it, because the hue means "this course". */
+  accent: CourseAccent;
   progress: ProgressRow | null;
   /** Set when the poll gave up. The message the last status check failed with. */
   lost: string | null;
@@ -54,6 +79,7 @@ export interface ProgressPanelProps {
 }
 
 export function ProgressPanel({
+  accent,
   progress,
   lost,
   busy,
@@ -93,7 +119,12 @@ export function ProgressPanel({
 
       {!lost && progress && total > 0 ? (
         <>
-          <Progress value={done} max={total} aria-label="Slides explained" />
+          <Progress
+            value={done}
+            max={total}
+            aria-label="Slides explained"
+            className={PROGRESS_FILL[accent]}
+          />
           <p className="text-ui tabular-nums text-ink-muted">
             {done} of {total} explained
           </p>

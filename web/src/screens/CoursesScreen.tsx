@@ -1,10 +1,15 @@
 /**
- * The courses screen: every course, the way to make one, and the pile-of-files
- * import.
+ * The courses screen: every course as a tile on a board, the way to make one,
+ * and the pile-of-files import.
  *
  * Ported from `renderCourses` and the bulk drop zone in the previous frontend
  * (`web/app.js`). Same copy, same counts, same empty state, same rule that
  * nothing is written until the reader accepts the proposed grouping.
+ *
+ * The full-width rows became a board of tiles grouped by state
+ * (`.internal/DESIGN.md`, "Course tiles" and "More colour"). The board and the
+ * tile are their own files, under `./courses/`; the form and the drop sit
+ * below the board.
  *
  * Two deliberate changes, both required:
  *
@@ -26,12 +31,13 @@ import {
   type InputHTMLAttributes,
   type JSX,
 } from "react";
-import { LibraryBig, Trash2 } from "lucide-react";
+import { LibraryBig } from "lucide-react";
 
 import * as api from "@/lib/api";
 import { hash, navigate } from "@/lib/router";
-import type { CourseRow, CourseState, ImportGroup } from "@/lib/types";
+import type { CourseRow, ImportGroup } from "@/lib/types";
 import { useErrorHandler, useStore } from "@/state/store";
+import { CourseBoard } from "@/screens/courses/CourseBoard";
 import { Screen, Section } from "@/shell/Screen";
 import {
   AlertDialog,
@@ -43,7 +49,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
@@ -61,29 +66,8 @@ const WEBKIT_DIRECTORY = {
   webkitdirectory: "",
 } as unknown as InputHTMLAttributes<HTMLInputElement>;
 
-type BadgeTone = "neutral" | "accent" | "good" | "warn" | "bad";
-
-/** `idle` gets no chip, as it did before: there is nothing to say about a
- *  course nobody has touched. Everything else is a state worth a word. */
-const STATE_TONE: Record<CourseState, BadgeTone> = {
-  idle: "neutral",
-  running: "accent",
-  paused: "warn",
-  partial: "neutral",
-  done: "good",
-  error: "bad",
-};
-
 function plural(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`;
-}
-
-/** The row's right-hand measurement, word for word from the old screen. */
-function counts(course: CourseRow): string {
-  const slides = course.n_slides
-    ? `${course.n_explained} of ${course.n_slides} slides explained`
-    : "no slides yet";
-  return `${plural(course.n_decks, "deck", "decks")} · ${slides}`;
 }
 
 /** Expand a drop into files. A dropped folder arrives as a directory entry, and
@@ -121,56 +105,6 @@ async function filesFromDrop(dataTransfer: DataTransfer | null): Promise<File[]>
   };
   for (const entry of entries) await walk(entry, "");
   return out;
-}
-
-/**
- * The list. One row per course: the title takes the column, the counts sit on
- * the right with the state between them, and the row itself is the link.
- */
-function CourseList({
-  courses,
-  onDelete,
-}: {
-  courses: CourseRow[];
-  onDelete: (course: CourseRow) => void;
-}): JSX.Element {
-  return (
-    <ul className="flex flex-col">
-      {courses.map((course, index) => (
-        <li key={course.id} className="-mx-2 flex flex-col">
-          {index > 0 ? <Separator className="my-1" /> : null}
-          <div className="flex h-[var(--row-h)] items-center gap-1 rounded-srf px-2 transition-colors duration-[120ms] ease-[var(--ease)] hover:bg-hover">
-            <a
-              href={hash.course(course.id)}
-              className="flex h-full min-w-0 flex-1 items-center gap-3 text-ink"
-            >
-              <span className="min-w-0 flex-1 truncate text-ui font-medium">
-                {course.title}
-              </span>
-              {course.state === "idle" ? null : (
-                <Badge variant={STATE_TONE[course.state]} className="uppercase tracking-wide">
-                  {course.state}
-                </Badge>
-              )}
-              <span className="shrink-0 text-meta tabular-nums text-ink-muted">
-                {counts(course)}
-              </span>
-            </a>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label={`Delete ${course.title}`}
-              onClick={() => onDelete(course)}
-              className="text-ink-faint hover:text-ink"
-            >
-              <Trash2 size={16} strokeWidth={1.75} aria-hidden />
-            </Button>
-          </div>
-        </li>
-      ))}
-    </ul>
-  );
 }
 
 /**
@@ -469,9 +403,9 @@ export function CoursesScreen(): JSX.Element {
       title="Your courses"
       lede="Each course is a sealed container. Slides, reference documents and everything the model remembers stay inside it."
     >
-      <NewCourseForm />
-
-      <div aria-live="polite" className="mt-8">
+      {/* The board is what a live region has to announce: it is what changes
+          when a course is made, imported or deleted. */}
+      <div aria-live="polite">
         {coursesError ? (
           <p className="py-6 text-ui text-bad">{coursesError}</p>
         ) : null}
@@ -486,14 +420,18 @@ export function CoursesScreen(): JSX.Element {
           <EmptyState
             icon={<LibraryBig size={16} strokeWidth={1.75} aria-hidden />}
             title="No courses yet"
-            description="Create one above, then drop its course files in. Or drop a whole pile below and let the app propose the split."
+            description="Create one below, then drop its course files in. Or drop a whole pile and let the app propose the split."
             className="-mx-2 px-2 py-8"
           />
         ) : null}
 
         {courses !== null && courses.length > 0 ? (
-          <CourseList courses={courses} onDelete={setPendingDelete} />
+          <CourseBoard courses={courses} onDelete={setPendingDelete} />
         ) : null}
+      </div>
+
+      <div className="mt-10">
+        <NewCourseForm />
       </div>
 
       <AlertDialog

@@ -44,12 +44,16 @@ export function NavRow({
   current,
   children,
   trailing,
+  accent,
   className,
 }: {
   href: string;
   current?: boolean;
   children: ReactNode;
   trailing?: ReactNode;
+  /** A course accent class for the row's mark. The sidebar agrees with the
+   *  board: a course is the same colour in both. */
+  accent?: string;
   className?: string;
 }) {
   return (
@@ -62,6 +66,12 @@ export function NavRow({
         className,
       )}
     >
+      {accent ? (
+        <span
+          aria-hidden
+          className={cn("h-3.5 w-[3px] shrink-0 rounded-ctl", accent)}
+        />
+      ) : null}
       <span className="min-w-0 flex-1 truncate">{children}</span>
       {trailing ? <span className="shrink-0 text-ink-faint">{trailing}</span> : null}
     </a>

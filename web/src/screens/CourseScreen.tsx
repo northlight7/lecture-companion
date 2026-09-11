@@ -20,14 +20,22 @@
  * The rail beside the overview is the reason the overview uses `prose-rail`:
  * at 1440 the progress state and the study-folder summary sit there, so no part
  * of the column is empty margin.
+ *
+ * The course's accent colour reaches three things here: the title, the progress
+ * bar and the deck list. All three take it from `courseAccent(cid)`, never from
+ * anything the reader has done, so the course looks the same on every visit. It
+ * is deliberately not used on any state or destructive control: a colour that
+ * means "this course" must not also mean "careful".
  */
 
 import { useCallback, useEffect, useRef, useState, type JSX } from "react";
 import { Trash2 } from "lucide-react";
 
 import * as api from "@/lib/api";
+import { ACCENT_INK, courseAccent, type CourseAccent } from "@/lib/accents";
 import { hash, navigate } from "@/lib/router";
 import type { ProgressRow } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import { useErrorHandler, useStore } from "@/state/store";
 import { Screen, Section } from "@/shell/Screen";
 import {
@@ -59,6 +67,32 @@ const PROGRESS_FAILURE_LIMIT = 3;
 
 /** Above this many characters the overview is folded. The old screen's number. */
 const OVERVIEW_FOLD_AT = 260;
+
+/**
+ * The course's hue on its own title, as `ACCENT_INK` on the `h1`.
+ *
+ * The rule above the title was the other candidate. The ink was chosen because
+ * it is the stronger signal that this is *this* course: the title is the one
+ * piece of the screen a reader reads before anything else, and a 30px serif in
+ * the course's own hue carries further than a 3px rule does. Every `-ink` value
+ * is derived at or above 4.5:1 as text on both grounds, in both themes, so the
+ * title stays a title rather than becoming decoration.
+ *
+ * The `h1` is drawn by `Screen`, whose `title` is a string, so the accent
+ * reaches it as a descendant variant on the screen's own className rather than
+ * by wrapping it. Six literal class names, because Tailwind only emits a
+ * utility it can see written out.
+ */
+/** The course's own hue on its own title. Every `-ink` is derived at or above
+ *  4.5:1 on both grounds, so this is a legal text colour and not decoration. */
+const TITLE_INK: Record<CourseAccent, string> = {
+  blue: "text-course-blue-ink",
+  teal: "text-course-teal-ink",
+  green: "text-course-green-ink",
+  amber: "text-course-amber-ink",
+  rose: "text-course-rose-ink",
+  violet: "text-course-violet-ink",
+};
 
 function plural(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`;
@@ -254,9 +288,15 @@ export function CourseScreen({ cid }: { cid: string }): JSX.Element {
   const groups = detail ? groupArtifacts(detail.artifacts, assignments) : [];
   const shown: ProgressRow | null = progress ?? detail?.progress ?? null;
 
+  // The course's own hue, from its id: the same value the sidebar and the
+  // course list show, so the screen and the navigation agree on what colour
+  // this course is.
+  const accent = courseAccent(cid);
+
   return (
     <Screen
       title={detail?.title ?? "Course"}
+      titleClassName={TITLE_INK[accent]}
       back={{ href: hash.courses(), label: "All courses" }}
       meta={
         detail
@@ -304,6 +344,7 @@ export function CourseScreen({ cid }: { cid: string }): JSX.Element {
 
             <div className="flex flex-col gap-8">
               <ProgressPanel
+                accent={accent}
                 progress={shown}
                 lost={lost}
                 busy={busy}
@@ -327,6 +368,17 @@ export function CourseScreen({ cid }: { cid: string }): JSX.Element {
                       href={hash.deck(cid, deck.id, 0)}
                       className="flex h-[var(--row-h)] items-center gap-3 rounded-srf px-2 text-ui text-ink transition-colors duration-[120ms] ease-[var(--ease)] hover:bg-hover"
                     >
+                      {/* One mark per row, in the course's hue: the deck list
+                          belongs to the colour without the row becoming a
+                          filled block. `rounded-ctl` on a 6px box clamps to a
+                          true circle and keeps the radius scale closed. */}
+                      <span
+                        aria-hidden
+                        className={cn(
+                          "size-1.5 shrink-0 rounded-ctl bg-current",
+                          ACCENT_INK[accent],
+                        )}
+                      />
                       <span className="min-w-0 flex-1 truncate font-medium">{deck.title}</span>
                       <span className="shrink-0 text-meta tabular-nums text-ink-muted">
                         {deck.n_explained} / {plural(deck.n_slides, "slide", "slides")}

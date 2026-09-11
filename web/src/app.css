@@ -53,6 +53,23 @@
   --text-ui: var(--fs-ui);
   --text-body: var(--fs-body);
 
+
+  /* The six course accents. Enumerated, not generated: Tailwind only emits
+   * a utility it can see written out, so a class name built at runtime would
+   * silently produce nothing. */
+  --color-course-blue-fill: var(--course-blue-fill);
+  --color-course-blue-ink: var(--course-blue-ink);
+  --color-course-teal-fill: var(--course-teal-fill);
+  --color-course-teal-ink: var(--course-teal-ink);
+  --color-course-green-fill: var(--course-green-fill);
+  --color-course-green-ink: var(--course-green-ink);
+  --color-course-amber-fill: var(--course-amber-fill);
+  --color-course-amber-ink: var(--course-amber-ink);
+  --color-course-rose-fill: var(--course-rose-fill);
+  --color-course-rose-ink: var(--course-rose-ink);
+  --color-course-violet-fill: var(--course-violet-fill);
+  --color-course-violet-ink: var(--course-violet-ink);
+
   --color-accent-hover: var(--accent-hover);
   --color-scrim: var(--scrim);
 }

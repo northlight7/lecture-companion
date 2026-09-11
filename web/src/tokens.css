@@ -118,6 +118,25 @@
   --meaning-bad: #e08b7a;
 
   --shadow-lift: 0 18px 48px -18px rgb(0 0 0 / 0.55), 0 2px 8px rgb(0 0 0 / 0.28);
+
+  /* ---- course accents -------------------------------------------------- */
+  /* Six hues, derived by `.internal/derive_accents.py` rather than picked by
+   * eye, so every value is the one that satisfies the floors in DESIGN.md: a
+   * fill is >= 3:1 against every ground as a graphic and carries --on-accent
+   * at >= 4.5:1, and an ink is >= 4.5:1 as text on every ground. A course is
+   * assigned one from its id, so its colour never changes. */
+  --course-blue-fill: #3562de;  /* worst pair 3.09:1 */
+  --course-blue-ink: #6483d8;  /* worst pair 4.52:1 */
+  --course-teal-fill: #15757f;  /* worst pair 3.04:1 */
+  --course-teal-ink: #28939f;  /* worst pair 4.51:1 */
+  --course-green-fill: #147b3a;  /* worst pair 3.07:1 */
+  --course-green-ink: #279b51;  /* worst pair 4.61:1 */
+  --course-amber-fill: #8c6117;  /* worst pair 3.00:1 */
+  --course-amber-ink: #af7f2c;  /* worst pair 4.61:1 */
+  --course-rose-fill: #ce222d;  /* worst pair 3.04:1 */
+  --course-rose-ink: #d76068;  /* worst pair 4.51:1 */
+  --course-violet-fill: #a424db;  /* worst pair 3.01:1 */
+  --course-violet-ink: #b564d8;  /* worst pair 4.52:1 */
 }
 
 /* ====================================================================== */
@@ -148,6 +167,25 @@
   --meaning-bad: #96382a;
 
   --shadow-lift: 0 18px 48px -20px rgb(60 50 35 / 0.28), 0 2px 8px rgb(60 50 35 / 0.10);
+
+  /* ---- course accents -------------------------------------------------- */
+  /* Six hues, derived by `.internal/derive_accents.py` rather than picked by
+   * eye, so every value is the one that satisfies the floors in DESIGN.md: a
+   * fill is >= 3:1 against every ground as a graphic and carries --on-accent
+   * at >= 4.5:1, and an ink is >= 4.5:1 as text on every ground. A course is
+   * assigned one from its id, so its colour never changes. */
+  --course-blue-fill: #426de0;  /* worst pair 3.93:1 */
+  --course-blue-ink: #3b62ce;  /* worst pair 4.62:1 */
+  --course-teal-fill: #167d88;  /* worst pair 4.09:1 */
+  --course-teal-ink: #20757e;  /* worst pair 4.52:1 */
+  --course-green-fill: #15843e;  /* worst pair 4.01:1 */
+  --course-green-ink: #1f7a40;  /* worst pair 4.51:1 */
+  --course-amber-fill: #9a6a19;  /* worst pair 3.97:1 */
+  --course-amber-ink: #876222;  /* worst pair 4.65:1 */
+  --course-rose-fill: #dd2c38;  /* worst pair 3.93:1 */
+  --course-rose-ink: #c4313b;  /* worst pair 4.59:1 */
+  --course-violet-fill: #ad3adf;  /* worst pair 3.97:1 */
+  --course-violet-ink: #a037cd;  /* worst pair 4.51:1 */
 }
 
 @media (prefers-color-scheme: light) {
@@ -175,5 +213,24 @@
     --meaning-bad: #96382a;
 
     --shadow-lift: 0 18px 48px -20px rgb(60 50 35 / 0.28), 0 2px 8px rgb(60 50 35 / 0.10);
+
+  /* ---- course accents -------------------------------------------------- */
+  /* Six hues, derived by `.internal/derive_accents.py` rather than picked by
+   * eye, so every value is the one that satisfies the floors in DESIGN.md: a
+   * fill is >= 3:1 against every ground as a graphic and carries --on-accent
+   * at >= 4.5:1, and an ink is >= 4.5:1 as text on every ground. A course is
+   * assigned one from its id, so its colour never changes. */
+    --course-blue-fill: #426de0;  /* worst pair 3.93:1 */
+    --course-blue-ink: #3b62ce;  /* worst pair 4.62:1 */
+    --course-teal-fill: #167d88;  /* worst pair 4.09:1 */
+    --course-teal-ink: #20757e;  /* worst pair 4.52:1 */
+    --course-green-fill: #15843e;  /* worst pair 4.01:1 */
+    --course-green-ink: #1f7a40;  /* worst pair 4.51:1 */
+    --course-amber-fill: #9a6a19;  /* worst pair 3.97:1 */
+    --course-amber-ink: #876222;  /* worst pair 4.65:1 */
+    --course-rose-fill: #dd2c38;  /* worst pair 3.93:1 */
+    --course-rose-ink: #c4313b;  /* worst pair 4.59:1 */
+    --course-violet-fill: #ad3adf;  /* worst pair 3.97:1 */
+    --course-violet-ink: #a037cd;  /* worst pair 4.51:1 */
   }
 }
