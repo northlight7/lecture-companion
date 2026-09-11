@@ -129,11 +129,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
         let frame = NSRect(x: 0, y: 0, width: 1280, height: 820)
         let window = NSWindow(
             contentRect: frame,
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.title = "Lecture Companion"
+        // The design direction puts the window chrome inside the sidebar: the
+        // traffic lights sit in the sidebar's top-left, in line with its nav,
+        // and there is no toolbar anywhere. That needs the web view to extend
+        // under the title bar rather than start below it, which is what
+        // `.fullSizeContentView` above buys. The title stays set for the
+        // Window menu and Mission Control; it is just not drawn.
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.isMovableByWindowBackground = false
         window.setFrameAutosaveName("LectureCompanionMainWindow")
         // A saved frame can name a screen that is no longer attached, or a
         // sliver off the edge. That leaves a real window somewhere the reader
@@ -144,6 +153,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
         // stays windowed. `.fullScreenPrimary` is what actually enters the
         // native full-screen space.
         window.collectionBehavior.insert(.fullScreenPrimary)
+        // The layout gate measures at 1024x640, so that is the smallest window
+        // the app must survive. Stopping the reader from dragging it smaller is
+        // honest: below this the reading column and the sidebar cannot both hold.
+        window.minSize = NSSize(width: 1024, height: 640)
 
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()

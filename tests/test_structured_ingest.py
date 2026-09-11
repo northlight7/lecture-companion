@@ -310,9 +310,53 @@ def test_selected_context_question_is_grounded_cited_and_course_scoped(store, mo
 
 
 def test_frontend_exposes_native_view_and_selected_question_controls():
-    html = (Path(__file__).parents[1] / "web" / "index.html").read_text("utf-8")
-    script = (Path(__file__).parents[1] / "web" / "app.js").read_text("utf-8")
-    for marker in ("data-native-viewer", "source-location", "copy-source-link", "ask-selected-context"):
-        assert marker in html
-    assert "/questions" in script and "/artifacts/" in script
-    assert "sheet-metadata" in script and "native-embedded" in script
+    """The native viewers and the selected-context question survive the rebuild.
+
+    This test used to read `web/index.html` and `web/app.js`, the hand-written
+    frontend, and assert markers in its markup and its script. That frontend was
+    replaced by the TypeScript app under `web/src/`, so the same capability is
+    asserted where it now lives. What is being protected is the capability, not
+    the file it happened to be written in: six native viewers, an exact source
+    locator on every object, the copy-source-link action, and the question asked
+    over the objects the reader selected.
+    """
+    web = Path(__file__).parents[1] / "web" / "src"
+    screen = (web / "screens" / "ArtifactScreen.tsx").read_text("utf-8")
+    viewers = (web / "screens" / "artifact" / "Viewers.tsx").read_text("utf-8")
+    ask = (web / "screens" / "artifact" / "AskPanel.tsx").read_text("utf-8")
+    api = (web / "lib" / "api.ts").read_text("utf-8")
+
+    # Six formats, each with its own renderer rather than a text fallback.
+    for renderer in (
+        "RenderedObject",      # pdf and pptx pages
+        "SpeakerNote",         # pptx speaker notes, never merged into slide content
+        "DocumentBlock",       # docx
+        "DocumentTable",       # docx tables
+        "EmbeddedImage",       # docx and ipynb embedded media
+        "CellGrid",            # xlsx cells
+        "SheetObject",         # xlsx sheet metadata, charts, ranges, rules
+        "ChartObject",
+        "DatasetObject",       # csv dataset and its fields
+        "DatasetFieldObject",
+        "NotebookSource",      # ipynb source, grouped with its own outputs
+        "NotebookOutput",
+        "NotebookMetadata",
+    ):
+        assert f"function {renderer}" in viewers, f"{renderer} is gone"
+
+    # Every object shows its exact locator, and the reader can copy a link to it.
+    assert "locatorText" in viewers
+    assert "hash.source(" in screen
+    assert "copyLink" in screen
+    assert "artifactOriginalUrl" in screen  # the byte-preserved original stays downloadable
+
+    # The question is asked over the selected objects, and discloses what left the machine.
+    assert "askQuestion" in ask
+    assert "remote_disclosure" in ask
+    assert "citations" in ask
+
+    # The client builds every path through one encoder, so the route segments
+    # are asserted as segments rather than as assembled strings.
+    assert '/api/courses' not in api, "paths must go through the encoder, not be written out"
+    for segment in ('"api", "courses"', '"questions"', '"artifacts"', '"objects"'):
+        assert segment in api, f"the client no longer reaches {segment}"

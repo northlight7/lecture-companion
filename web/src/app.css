@@ -1,0 +1,330 @@
+@import "tailwindcss";
+@import "./tokens.css";
+
+/* Tailwind reads its design decisions from here. Every value on the right is a
+ * token from tokens.css, so the token file stays the only place a colour is
+ * written and there is exactly one scale for space, radius and motion.
+ *
+ * `inline` matters: it makes Tailwind emit `var(--token)` into the utility
+ * rather than copying a literal, which is what lets both themes swap under
+ * every generated class. */
+@theme inline {
+  --spacing: 4px;
+
+  --color-ground: var(--ground);
+  --color-chrome: var(--ground-chrome);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
+  --color-line: var(--line-control);
+  --color-hair: var(--line-hair);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-on-accent: var(--on-accent);
+  --color-focus: var(--focus);
+  --color-good: var(--meaning-good);
+  --color-warn: var(--meaning-warn);
+  --color-bad: var(--meaning-bad);
+  --color-hover: var(--surface-hover);
+  --color-selected: var(--surface-selected);
+  --color-raised: var(--surface-raised);
+  --color-chrome-hover: var(--surface-chrome-hover);
+  --color-chrome-selected: var(--surface-chrome-selected);
+  --color-sunken: var(--surface-sunken);
+
+  --font-reading: var(--font-serif);
+  --font-ui: var(--font-sans);
+  --font-code: var(--font-mono);
+
+  --radius-ctl: var(--radius-control);
+  --radius-srf: var(--radius-surface);
+  --radius-pnl: var(--radius-panel);
+
+  --shadow-float: var(--shadow-lift);
+
+  --container-measure: var(--measure);
+  --container-chrome: var(--chrome-w);
+
+  /* Named `text-ui`, not `text-chrome`: a theme key `--text-chrome` would
+   * generate a `text-chrome` utility that collides with the colour utility of
+   * the same name, and the colour wins. `text-chrome` means the sidebar ground
+   * and nothing else. The sizes themselves live in tokens.css. */
+  --text-meta: var(--fs-meta);
+  --text-ui: var(--fs-ui);
+  --text-body: var(--fs-body);
+
+  --color-accent-hover: var(--accent-hover);
+  --color-scrim: var(--scrim);
+}
+
+@layer base {
+  /* The window never scrolls. The app is a fixed frame and every scrolling
+   * region is a named child of it. `overflow: hidden` here is the enforcement,
+   * and a gate measures document.scrollHeight against clientHeight. */
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  html {
+    background: var(--ground);
+  }
+
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--ink);
+    background: var(--ground);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* The traffic lights are drawn over the sidebar by the window server, so the
+   * top of the sidebar is a drag handle and its first row starts below them. */
+  .titlebar-drag {
+    -webkit-app-region: drag;
+  }
+
+  /* The skip link the previous frontend had. Off screen until focused, then
+   * the first stop in the tab order, so the keyboard does not have to walk the
+   * whole sidebar to reach the content. */
+  .skip-link {
+    position: fixed;
+    top: var(--space-2);
+    left: var(--space-2);
+    z-index: 60;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-control);
+    border: 1px solid var(--line-control);
+    background: var(--surface-raised);
+    color: var(--ink);
+    font-size: var(--fs-ui);
+    transform: translateY(calc(-100% - var(--space-4)));
+    transition: transform var(--dur-state) var(--ease);
+  }
+
+  .skip-link:focus-visible {
+    transform: none;
+  }
+
+  /* Focus: one rule, everywhere. The ring is always drawn 2px outside the
+   * control, so it lands on a ground and never on the control's own fill.
+   * Anything that overrides this is a bug. */
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: inherit;
+  }
+
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* A focus target that is not a control: the main region and a screen
+   * heading. Focus moves there so a screen reader is not left on <body> after
+   * a route change. Drawing the ring around the whole main region is the
+   * defect this replaces, so these opt out by name and by nothing else. */
+  .focus-target:focus-visible {
+    outline: none;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--accent) 40%, transparent);
+  }
+
+  * {
+    scrollbar-width: none;
+  }
+
+  *::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 1ms !important;
+      transition-duration: 1ms !important;
+    }
+  }
+}
+
+/* The page frame every screen shares. Same left edge, same right edge, same
+ * vertical rhythm, so no screen looks like it was built by someone else. */
+@utility page-column {
+  width: 100%;
+  max-width: var(--column-max);
+  margin-inline: auto;
+  padding-inline: var(--space-6);
+}
+
+/* Lifted surfaces arrive. Opacity and a 2% scale only, at --dur-enter, and
+ * nothing else in the app animates on mount. */
+@keyframes lc-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+@keyframes lc-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Prose measure. Never chrome, never lists, never tables. */
+@utility reading-column {
+  width: 100%;
+  max-width: var(--measure);
+  margin-inline: auto;
+  padding-inline: var(--space-6);
+}
+
+/* Prose beside a rail. Below CONTENT_RAIL_MIN the rail is dropped and the
+ * prose keeps the whole column, because a 336px rail next to a 720px measure
+ * does not fit in a 744px content area and must not be squeezed into one. */
+@utility prose-rail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-6);
+  max-width: var(--column-max);
+  margin-inline: auto;
+  padding-inline: var(--space-6);
+
+  /* 280 chrome + 720 measure + 24 gap + 336 rail = 1360. Below that the rail
+   * would have to squeeze the measure, and the measure is not negotiable. */
+  @media (min-width: 1360px) {
+    grid-template-columns: minmax(0, var(--measure)) minmax(0, 1fr);
+    justify-content: center;
+  }
+}
+
+/* The one prose style. Applied to the reading column's text and nothing else. */
+@utility prose-reading {
+  font-family: var(--font-serif);
+  font-size: var(--fs-body);
+  line-height: 1.62;
+  color: var(--ink);
+
+  & p {
+    margin-block: 0 var(--space-4);
+  }
+
+  & > :last-child {
+    margin-block-end: 0;
+  }
+
+  & strong {
+    font-weight: 600;
+  }
+
+  & em {
+    font-style: italic;
+  }
+
+  & ul,
+  & ol {
+    margin-block: 0 var(--space-4);
+    padding-inline-start: var(--space-5);
+  }
+
+  & ul {
+    list-style: disc;
+  }
+
+  & ol {
+    list-style: decimal;
+  }
+
+  & li {
+    margin-block-end: var(--space-2);
+  }
+
+  & li::marker {
+    color: var(--ink-faint);
+  }
+
+  & h1,
+  & h2,
+  & h3,
+  & h4 {
+    font-weight: 600;
+    line-height: 1.3;
+    margin-block: var(--space-5) var(--space-3);
+  }
+
+  & h1 {
+    font-size: 1.35em;
+  }
+
+  & h2 {
+    font-size: 1.2em;
+  }
+
+  & h3,
+  & h4 {
+    font-size: 1.05em;
+  }
+
+  & code {
+    font-family: var(--font-mono);
+    font-size: 0.86em;
+    background: var(--surface-sunken);
+    border-radius: var(--radius-control);
+    padding: 0.1em 0.35em;
+  }
+
+  & pre {
+    font-family: var(--font-mono);
+    font-size: 0.86em;
+    background: var(--surface-sunken);
+    border-radius: var(--radius-surface);
+    padding: var(--space-3) var(--space-4);
+    overflow-x: auto;
+    margin-block: 0 var(--space-4);
+  }
+
+  & pre code {
+    background: none;
+    padding: 0;
+  }
+
+  & a {
+    color: var(--accent-ink);
+    text-underline-offset: 2px;
+  }
+
+  & blockquote {
+    margin: var(--space-4) 0;
+    padding-inline-start: var(--space-4);
+    border-inline-start: 2px solid var(--line-hair);
+    color: var(--ink-muted);
+  }
+
+  & table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    margin-block: 0 var(--space-4);
+  }
+
+  & th,
+  & td {
+    text-align: left;
+    padding: var(--space-2) var(--space-3);
+    border-block-end: 1px solid var(--line-hair);
+  }
+
+  & th {
+    font-weight: 600;
+    color: var(--ink-muted);
+  }
+}

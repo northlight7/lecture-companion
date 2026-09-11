@@ -18,6 +18,11 @@ venv/
 dist/
 build/
 
+# Frontend dependencies. The BUILT output in web/assets and web/index.html is
+# committed on purpose: the backend serves web/ directly and app/ is frozen, so
+# a checkout without a build would serve nothing.
+node_modules/
+
 # Test / coverage
 .pytest_cache/
 .coverage

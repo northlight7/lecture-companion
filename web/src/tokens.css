@@ -1,0 +1,179 @@
+/* Lecture Companion design tokens.
+ *
+ * THE ONLY FILE IN THE APP THAT MAY CONTAIN A HEX COLOUR.
+ * Every other stylesheet and every component reads var(--token).
+ *
+ * Direction: warm dark reading app. Sidebar owns the window chrome, two
+ * grounds separated by a value step and never by a border, a centred serif
+ * reading column against sans chrome, one accent used almost nowhere.
+ * Extracted from the user's references at .internal/reference/extracted.md.
+ *
+ * GROUNDS. Exactly two opaque ground colours exist in this file:
+ *   --ground          the content ground
+ *   --ground-chrome   the sidebar ground
+ * Every other background in the app is a color-mix() of one of those two with
+ * one of the theme's ink tokens, at a percentage from the SURFACE table at the
+ * bottom of this file. There is no third ground, and no border is ever drawn
+ * between the two.
+ */
+
+/* ====================================================================== */
+/* Theme-independent tokens.                                              */
+/* ====================================================================== */
+:root {
+  /* ---- typography ------------------------------------------------------ */
+  --font-serif: ui-serif, "New York", "Iowan Old Style", Charter, Palatino,
+    "Palatino Linotype", Georgia, serif;
+  --font-sans: ui-sans-serif, -apple-system, "SF Pro Text", "Helvetica Neue",
+    Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* ---- spacing scale (one scale, 4px base) ----------------------------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* ---- radius scale (three values, one role each) ---------------------- */
+  --radius-control: 6px;  /* buttons, inputs, selects, chips, badges */
+  --radius-surface: 10px; /* rows, list selection, raised list surfaces */
+  --radius-panel: 14px;   /* dialogs, the composer, the slide stage */
+
+  /* ---- density --------------------------------------------------------- */
+  --control-h: 32px;
+  --field-h: 38px;
+  --row-h: 34px;
+  --measure: 720px;       /* the prose measure. Prose only, never chrome. */
+  --chrome-w: 280px;      /* the sidebar. */
+  /* The widest the content column is allowed to get, and the width of the rail
+   * beside a prose column. The measure alone would strand 38% of the content
+   * column at 1440, so prose screens put real material in the rail: source
+   * links, the slide's position, its terms and notes. */
+  --column-max: 1120px;
+  --rail-w: 336px;
+
+  /* ---- motion ---------------------------------------------------------- */
+  --dur-state: 120ms;
+  --dur-enter: 180ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ---- type scale ------------------------------------------------------ */
+  /* Named --fs-*, not --text-*. Tailwind's `@theme inline` does not emit its
+   * own custom properties, so a `var(--text-body)` written by hand would
+   * resolve to nothing, and a `--text-chrome` theme key would generate a
+   * `text-chrome` utility that collides with the colour of the same name and
+   * loses. The utilities `text-meta`, `text-ui` and `text-body` are mapped to
+   * these in app.css. */
+  --fs-meta: 12px;
+  --fs-ui: 13px;
+  --fs-body: 17px;
+
+  /* ---- SURFACE table --------------------------------------------------- */
+  /* The only percentages the app may mix. Each is a ground plus an ink. */
+  --surface-hover: color-mix(in oklab, var(--ground) 94%, var(--ink));
+  --surface-selected: color-mix(in oklab, var(--ground) 90%, var(--ink));
+  --surface-raised: color-mix(in oklab, var(--ground) 96%, var(--ink));
+  --surface-chrome-hover: color-mix(in oklab, var(--ground-chrome) 92%, var(--ink));
+  --surface-chrome-selected: color-mix(in oklab, var(--ground-chrome) 87%, var(--ink));
+  --surface-sunken: color-mix(in oklab, var(--ground) 92%, var(--ground-chrome));
+
+  /* State of the accent itself, and the dialog scrim. Neither is a ground:
+   * both are the accent or the ground at a stated mix, so the two-ground rule
+   * still holds and no ad-hoc alpha appears anywhere else in the app. */
+  --accent-hover: color-mix(in oklab, var(--accent) 88%, var(--ink));
+  --scrim: color-mix(in oklab, var(--ground) 78%, transparent);
+}
+
+/* ====================================================================== */
+/* Dark. The direction's home. Warm neutrals: the red channel is at or     */
+/* above blue in every neutral token, so the surface reads as paper rather */
+/* than as a terminal.                                                     */
+/* ====================================================================== */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --ground: #1a1816;
+  --ground-chrome: #100f0e;
+
+  --ink: #f0eee9;
+  --ink-muted: #a8a29a;
+  --ink-faint: #8e887f;
+
+  --line-control: #6b655d;
+  --line-hair: #2c2925;
+
+  --accent: #3f66c9;
+  --accent-ink: #93b0f0;
+  --on-accent: #f0eee9;
+
+  --focus: #93b0f0;
+
+  --meaning-good: #7fbf8a;
+  --meaning-warn: #d8a55f;
+  --meaning-bad: #e08b7a;
+
+  --shadow-lift: 0 18px 48px -18px rgb(0 0 0 / 0.55), 0 2px 8px rgb(0 0 0 / 0.28);
+}
+
+/* ====================================================================== */
+/* Light. Warm paper. The sidebar is still the darker of the two grounds,   */
+/* so the value step reads in the same direction in both themes.            */
+/* ====================================================================== */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --ground: #f9f6f0;
+  --ground-chrome: #efebe4;
+
+  --ink: #1b1915;
+  --ink-muted: #5c554b;
+  --ink-faint: #6e675c;
+
+  --line-control: #8a8175;
+  --line-hair: #ded8cd;
+
+  --accent: #2b4fa8;
+  --accent-ink: #2b4fa8;
+  --on-accent: #fdfbf7;
+
+  --focus: #2b4fa8;
+
+  --meaning-good: #3f6b46;
+  --meaning-warn: #7a5314;
+  --meaning-bad: #96382a;
+
+  --shadow-lift: 0 18px 48px -20px rgb(60 50 35 / 0.28), 0 2px 8px rgb(60 50 35 / 0.10);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    color-scheme: light;
+
+    --ground: #f9f6f0;
+    --ground-chrome: #efebe4;
+
+    --ink: #1b1915;
+    --ink-muted: #5c554b;
+    --ink-faint: #6e675c;
+
+    --line-control: #8a8175;
+    --line-hair: #ded8cd;
+
+    --accent: #2b4fa8;
+    --accent-ink: #2b4fa8;
+    --on-accent: #fdfbf7;
+
+    --focus: #2b4fa8;
+
+    --meaning-good: #3f6b46;
+    --meaning-warn: #7a5314;
+    --meaning-bad: #96382a;
+
+    --shadow-lift: 0 18px 48px -20px rgb(60 50 35 / 0.28), 0 2px 8px rgb(60 50 35 / 0.10);
+  }
+}
