@@ -26,7 +26,7 @@ dependencies = [
 # Local retrieval model. Heavy (pulls torch); the app falls back to a
 # deterministic hashing embedder when this is not installed.
 embed = ["sentence-transformers>=3.0"]
-dev = ["pytest>=8.0", "pytest-asyncio>=0.24", "reportlab>=4.2", "playwright>=1.49"]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.24", "reportlab>=4.2"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

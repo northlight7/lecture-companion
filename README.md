@@ -227,8 +227,8 @@ Verified against the **live DeepSeek API**, not only the stub:
 
 Also verified with the stub, free and offline: import, filing, extraction,
 retrieval, per-course isolation, checkpointing, pause on a 429, and the viewer
-in both themes. `pytest` is green, and `scripts/gate_g2.py` drives a real
-headless browser to prove the viewer does not overflow at 1440px.
+in both themes. `pytest` is green, and `.internal/gate_layout.py` proves the
+viewer does not overflow at any of the four target window sizes.
 
 The six-format corpus gate imports all 29 current course files without writing
 to the source folders, checks every preserved original by SHA-256, and verifies
@@ -236,34 +236,6 @@ that every artifact has typed objects with matching source locators:
 
 ```bash
 .venv/bin/python scripts/verify_real_corpus.py
-```
-
-With a fake-model server running against a project-internal course root, this
-gate measures all five courses, exact search links, concept relationships,
-course isolation, warm-search latency, and the browser UI at both target sizes:
-
-```bash
-.venv/bin/python scripts/gate_course_knowledge.py --base http://127.0.0.1:45711 --courses-root .internal/knowledge-courses
-```
-
-This gate executes a released Business Data Analytics notebook cell against
-its relative `Airbnb.csv` path, forces and resumes an interruption, checks
-computed provenance, and operates all-cell and selected-cell controls at both
-target viewport sizes:
-
-```bash
-LC_COURSES_ROOT=.internal/notebook-courses LC_FAKE_MODEL=1 LC_PORT=45729 ./run.sh
-.venv/bin/python scripts/gate_notebook_execution.py --base http://127.0.0.1:45729 --courses-root .internal/notebook-courses
-```
-
-This gate checks all three released workbooks, independently reproduces the
-real `SUMIFS` result and its HKD-thousands unit, diagnoses the orientation
-exercise, verifies formatting and filter semantics, operates a copy-only
-formula experiment, and checks exact links at both target sizes:
-
-```bash
-LC_COURSES_ROOT=.internal/workbook-courses LC_FAKE_MODEL=1 LC_PORT=45751 ./run.sh
-.venv/bin/python scripts/gate_workbook_inspection.py --base http://127.0.0.1:45751 --courses-root .internal/workbook-courses
 ```
 
 Known limits:
