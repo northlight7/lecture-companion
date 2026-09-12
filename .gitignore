@@ -1,5 +1,8 @@
-# Course content and per-course memory (user data, not source)
-Courses/
+# Course content and per-course memory (user data, not source).
+# ANCHORED: an unanchored `Courses/` matches at any depth, so it also swallowed
+# web/src/screens/courses/ — the entire courses screen, silently, for the whole
+# project. Three source files were never in version control.
+/Courses/
 
 # Python
 __pycache__/
