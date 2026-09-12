@@ -4,6 +4,7 @@ import { ChevronLeft, RefreshCw } from "lucide-react";
 
 import * as api from "@/lib/api";
 import { ApiError } from "@/lib/api";
+import { ACCENT_FILL, courseAccent } from "@/lib/accents";
 import { hash, navigate } from "@/lib/router";
 import type { SlideDetail, SlideRegeneration, SlideSummary, Term } from "@/lib/types";
 import { useConnect, useErrorHandler, useStore } from "@/state/store";
@@ -462,7 +463,12 @@ export function ViewerScreen({ cid, did, index }: { cid: string; did: string; in
 
       {count > 0 ? (
         <div className="mt-4 w-full shrink-0 px-[var(--space-6)]">
-          <SlideStrip slides={slides ?? []} index={current} onJump={goTo} />
+          <SlideStrip
+            slides={slides ?? []}
+            index={current}
+            onJump={goTo}
+            markerFill={ACCENT_FILL[courseAccent(cid)]}
+          />
         </div>
       ) : null}
 

@@ -34,10 +34,15 @@ export function SlideStrip({
   slides,
   index,
   onJump,
+  markerFill,
 }: {
   slides: SlideSummary[];
   index: number;
   onJump: (index: number) => void;
+  /** The course's accent class for the current-slide marker. DESIGN.md names
+   *  this marker as a home for the course hue: the deck viewer belongs to a
+   *  course, and its position marker is one of the places that says which. */
+  markerFill: string;
 }) {
   const track = useRef<HTMLDivElement | null>(null);
   const [scrub, setScrub] = useState<number | null>(null);
@@ -139,7 +144,7 @@ export function SlideStrip({
               className={cn(
                 "min-w-0 flex-1",
                 slide.index === shown
-                  ? "bg-accent"
+                  ? markerFill
                   : slide.has_explanation
                     ? "bg-ink-faint"
                     : "bg-transparent",

@@ -180,6 +180,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
             modifiedSince: .distantPast
         ) { }
         configuration.websiteDataStore = store
+        // Tab reaches text fields and nothing else, unless the reader has
+        // turned Full Keyboard Access on. That is macOS policy, off by default,
+        // and it made every link and button in this app unreachable from the
+        // keyboard in the shipped bundle: eight Tab presses produced a
+        // byte-identical window, and the skip link never appeared. A direction
+        // that promises a keyboard path has to deliver one.
+        configuration.preferences.tabFocusesLinks = true
         configuration.setURLSchemeHandler(schemeHandler, forURLScheme: AppServer.scheme)
         configuration.userContentController.add(self, name: "folderPicker")
         let webView = WKWebView(frame: frame, configuration: configuration)
