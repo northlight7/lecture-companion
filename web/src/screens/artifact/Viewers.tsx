@@ -234,9 +234,16 @@ function parseCell(reference: string): { row: number; column: number } | null {
 }
 
 /**
- * The cell grid. Rows are spreadsheet rows in order, and each cell keeps its
- * own 34px row: selection box, exact locator, value, then the formula the file
- * stores and the value it cached for it.
+ * The cell grid. Rows are spreadsheet rows in order, and each cell is its own
+ * small block: the selection box and the exact locator on a 34px row, then the
+ * value, then the formula the file stores and the value it cached for it.
+ *
+ * The cells wrap instead of running to the right. A ten-column grid laid out
+ * 2215px inside a 696px pane, and the pane's scroller is not in the
+ * accessibility tree, so that overflow existed only as numbers: a grid that is
+ * wider than its pane and a grid that is clipped and unreachable read the same.
+ * A wrapping grid is always exactly as wide as its column, at every window
+ * size, so every rect it reports is a rect the reader can reach.
  */
 function CellGrid({
   cid,
@@ -269,62 +276,55 @@ function CellGrid({
 
   return (
     <div className="min-w-0">
-      {/* The wrapper scrolls and the table may exceed it. A row of cells each
-          holding a long unbroken value sets a min-content width that
-          `break-word` does not reduce, so `w-full` alone let the grid grow to
-          1648px inside a 696px column that clips: the right third of every
-          workbook was unreachable, at every window size. */}
-      <div className="w-full min-w-0 overflow-x-auto">
-      <table className="w-max min-w-full border-collapse">
-        <tbody>
-          {ordered.map(([rowNumber, items]) => (
-            <tr key={rowNumber}>
-              <th
-                scope="row"
-                className="w-10 border-b border-hair px-2 py-2 text-right align-top font-ui text-meta font-normal text-ink-faint tabular-nums"
-              >
-                {rowNumber}
-              </th>
-              {[...items]
-                .sort((a, b) => a.column - b.column)
-                .map(({ object: cell }) => (
-                  <td
-                    key={cell.id}
-                    data-oid={cell.id}
-                    className={cn(
-                      "min-w-0 border-b border-hair px-3 py-2 align-top",
-                      cell.id === focusOid && "bg-selected",
-                    )}
-                  >
-                    <div className="flex h-[var(--row-h)] min-w-0 items-center gap-3">
-                      <Checkbox
-                        checked={selectedIds.has(cell.id)}
-                        onCheckedChange={(value) => onToggle(cell, value === true)}
-                        aria-label={`Select ${locatorText(cell)}`}
-                      />
-                      <LocatorLink
-                        cid={cid}
-                        aid={aid}
-                        object={cell}
-                        className="font-code text-meta"
-                      />
+      {ordered.map(([rowNumber, items]) => (
+        <section key={rowNumber} className="mt-4 min-w-0 first:mt-0">
+          <h3 className="mb-1 font-ui text-meta font-medium text-ink-faint tabular-nums">
+            Row {rowNumber}
+          </h3>
+          {/* `minmax(min(168px, 100%), 1fr)` and not a bare `168px`: in a
+              column narrower than the floor the floor would win and the grid
+              would overflow, which is the defect this replaced. The 16px gap
+              is part of the count, so 168px tracks are two across in a 360px
+              pane and three in a 696px one. */}
+          <div className="grid min-w-0 grid-cols-[repeat(auto-fill,minmax(min(168px,100%),1fr))] gap-x-4 gap-y-3">
+            {[...items]
+              .sort((a, b) => a.column - b.column)
+              .map(({ object: cell }) => (
+                <div
+                  key={cell.id}
+                  data-oid={cell.id}
+                  className={cn(
+                    "min-w-0 border-t border-hair pt-2",
+                    cell.id === focusOid && "rounded-srf bg-selected px-2 pb-2",
+                  )}
+                >
+                  <div className="flex h-[var(--row-h)] min-w-0 items-center gap-3">
+                    <Checkbox
+                      checked={selectedIds.has(cell.id)}
+                      onCheckedChange={(value) => onToggle(cell, value === true)}
+                      aria-label={`Select ${locatorText(cell)}`}
+                    />
+                    <LocatorLink
+                      cid={cid}
+                      aid={aid}
+                      object={cell}
+                      className="font-code text-meta"
+                    />
+                  </div>
+                  <div className="mt-1 wrap-anywhere whitespace-pre-wrap text-ui text-ink tabular-nums">
+                    {str(cell.text)}
+                  </div>
+                  {cell.data.formula ? (
+                    <div className="mt-1 wrap-anywhere font-code text-meta text-ink-muted">
+                      Formula {str(cell.data.formula)} · Cached{" "}
+                      {str(cell.data.cached_value) || "none"}
                     </div>
-                    <div className="mt-1 wrap-anywhere whitespace-pre-wrap text-ui text-ink tabular-nums">
-                      {str(cell.text)}
-                    </div>
-                    {cell.data.formula ? (
-                      <div className="mt-1 wrap-anywhere font-code text-meta text-ink-muted">
-                        Formula {str(cell.data.formula)} · Cached{" "}
-                        {str(cell.data.cached_value) || "none"}
-                      </div>
-                    ) : null}
-                  </td>
-                ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      </div>
+                  ) : null}
+                </div>
+              ))}
+          </div>
+        </section>
+      ))}
       {unplaced.length ? (
         <div className="mt-3">
           {unplaced.map((object) => (

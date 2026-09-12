@@ -136,7 +136,13 @@ export function ProgressPanel({
               banner was a block four times this tall, and it outranked both the
               title and the overview. */}
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-2">
-            <p className="min-w-0 flex-1 truncate text-ui">
+            {/* No `truncate` here. It was there and it clipped the state word
+                to "Not explaine…" on every course with nothing explained yet,
+                at every size, in both themes: `flex-1 min-w-0` means shrinking
+                always beats wrapping, so the state word was the only thing in
+                the row that could lose. A minimum width instead, and the row
+                wraps its control to the next line when it has to. */}
+            <p className="min-w-[10rem] flex-1 text-ui">
               <span className={cn("font-medium", STATE_TONE[state])}>
                 {stateWord(state, done, total)}
               </span>

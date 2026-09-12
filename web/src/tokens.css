@@ -104,7 +104,10 @@
   --ink-muted: #a8a29a;
   --ink-faint: #8e887f;
 
-  --line-control: #6b655d;
+  /* Chosen so it clears 3:1 on the raised surface as well as both grounds:
+   * a text input inside a dialog sits on --surface-raised, and the darker
+   * value this replaces measured 2.85:1 there. */
+  --line-control: #706a62;
   --line-hair: #2c2925;
 
   --accent: #3f66c9;
