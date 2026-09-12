@@ -49,19 +49,19 @@ export function Screen({
           <h1
             tabIndex={-1}
             className={cn(
-              "font-reading text-[30px] leading-[1.15] font-semibold text-ink focus-target",
+              "font-reading text-display leading-[1.15] font-semibold text-ink focus-target",
               titleClassName,
             )}
           >
             {title}
           </h1>
-          {meta ? <div className="mt-2 text-ui text-ink-faint">{meta}</div> : null}
+          {meta ? <div className="mt-2 text-meta text-ink-faint">{meta}</div> : null}
         </div>
         {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
       </div>
 
       {lede ? (
-        <p className="mt-3 max-w-[60ch] text-ui text-ink-muted">{lede}</p>
+        <p className="mt-3 max-w-[60ch] text-lead text-ink-muted">{lede}</p>
       ) : null}
 
       <div className="mt-8">{children}</div>
@@ -82,9 +82,9 @@ export function Section({
   className?: string;
 }) {
   return (
-    <section className={cn("mt-10 first:mt-0", className)}>
-      <div className="mb-1 flex items-center justify-between gap-4">
-        <h2 className="font-ui text-ui font-semibold text-ink">{title}</h2>
+    <section className={cn("mt-8 first:mt-0", className)}>
+      <div className="mb-3 flex items-center justify-between gap-4">
+        <h2 className="font-ui text-lead font-semibold text-ink">{title}</h2>
         {action}
       </div>
       {children}

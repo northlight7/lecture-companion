@@ -39,7 +39,7 @@ export function SidebarFoot({ children }: { children: ReactNode }) {
 /** A muted, all-caps label above a run of rows. Not a link and not a heading. */
 export function SectionLabel({ children }: { children: ReactNode }) {
   return (
-    <div className="px-2 pt-5 pb-1 text-meta font-medium tracking-[0.06em] text-ink-faint uppercase">
+    <div className="px-2 pt-6 pb-2 text-meta font-medium tracking-[0.06em] text-ink-faint uppercase">
       {children}
     </div>
   );

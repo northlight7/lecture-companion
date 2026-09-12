@@ -187,7 +187,7 @@ function ComputedCell({
           <div className="text-meta text-ink-faint">
             {plural(result.plots.length, "computed plot", "computed plots")}
           </div>
-          <div className="mt-1 rounded-srf bg-sunken p-3">
+          <div className="mt-1 rounded-srf bg-well p-3">
             {result.plots.map((name) => (
               <img
                 key={name}

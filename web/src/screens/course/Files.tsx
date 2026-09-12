@@ -514,9 +514,12 @@ export function FilesSection({
                 <p className="mt-1 text-meta text-ink-muted">{group.reason}</p>
               ) : null}
 
-              <ul className="mt-1 flex flex-col">
+              {/* One folder is one grouped block, so it is level 1: raised
+                  fill, hairline boundary, surface radius. The rows inside keep
+                  their own hover step, which is a state of this same level. */}
+              <ul className="mt-1 flex flex-col rounded-srf border border-hair bg-raised p-2">
                 {group.rows.map((artifact, index) => (
-                  <li key={artifact.id} className="-mx-2 flex flex-col px-2">
+                  <li key={artifact.id} className="flex flex-col px-2">
                     {index > 0 ? <Separator className="my-2" /> : null}
                     <FileRow
                       cid={cid}

@@ -4,8 +4,11 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { slideImageUrl } from "@/lib/api";
 
 /**
- * The slide itself, on `--surface-sunken`, the well the design reserves for the
- * slide stage. Not a card: a well, with no border and no shadow.
+ * The slide itself, resting on `--surface-well`, the well the design reserves
+ * for the slide stage. The well is level 0: it is the ground moved away from
+ * the reader, so it carries no border and no shadow. The slide is the object on
+ * top of it, and an object has a boundary: one hairline and a radius, which is
+ * all that separates it from the well it rests in. It casts nothing.
  *
  * The well is the whole of the left pane above the extracted text, and the
  * image is fitted inside it, so the slide is as large as the window allows and
@@ -42,19 +45,21 @@ export function SlideStage({
     /* The slide and its extracted text are one group, centred in the pane. The
      * stage is the image's own box, so it hugs the slide instead of stretching
      * to the pane and leaving the slide adrift in a field of empty well. */
-    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3">
-      {missing ? (
-        <div className="flex min-h-0 items-center justify-center rounded-pnl bg-sunken p-8">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      {/* The stage. A well takes every pixel the extracted text is not using,
+       *  and the slide sits centred inside it as an object with a boundary. */}
+      <div className="flex min-h-0 flex-1 items-center justify-center rounded-pnl bg-well p-6">
+        {missing ? (
           <p className="font-ui text-ui text-ink-faint">No rendered image for this slide.</p>
-        </div>
-      ) : (
-        <img
-          src={slideImageUrl(cid, did, index)}
-          alt={`Slide ${index + 1}`}
-          onError={() => setMissing(true)}
-          className="block min-h-0 max-h-full max-w-full rounded-pnl bg-sunken object-contain p-3"
-        />
-      )}
+        ) : (
+          <img
+            src={slideImageUrl(cid, did, index)}
+            alt={`Slide ${index + 1}`}
+            onError={() => setMissing(true)}
+            className="block min-h-0 max-h-full max-w-full rounded-srf border border-hair object-contain"
+          />
+        )}
+      </div>
 
       {extracted ? (
         <details
@@ -69,7 +74,9 @@ export function SlideStage({
             )}
             Text extracted from this slide
           </summary>
-          <pre className="mt-2 max-h-[32vh] overflow-y-auto rounded-srf bg-sunken p-3 font-code text-meta whitespace-pre-wrap text-ink-muted">
+          {/* A code block is a well too, and this one sits on the ground, not
+           *  inside the stage: two wells never share an edge. */}
+          <pre className="mt-2 max-h-[32vh] overflow-y-auto rounded-srf bg-well p-3 font-code text-meta whitespace-pre-wrap text-ink-muted">
             {extracted}
           </pre>
         </details>

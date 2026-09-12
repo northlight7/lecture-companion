@@ -39,7 +39,7 @@ export function Sidebar({
         </NavRow>
 
         {courses && courses.length > 0 ? (
-          <div className="mt-0.5 flex flex-col">
+          <div className="mt-1 flex flex-col">
             {courses.map((row) => (
               <NavRow
                 key={row.id}

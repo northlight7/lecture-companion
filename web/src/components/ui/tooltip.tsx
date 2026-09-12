@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * A tooltip. Flush with the page unless it is open, then lifted:
- * `--surface-raised` and `--shadow-lift`.
+ * `--surface-float` and `--shadow-lift`.
  *
  * `rounded-ctl` rather than `rounded-pnl`: a tooltip is chip-sized, and the
  * small radius belongs to the small element. One short line of chrome text,
@@ -48,7 +48,7 @@ function TooltipContent({
         data-slot="tooltip-content"
         sideOffset={sideOffset}
         className={cn(
-          "z-50 w-fit max-w-[18rem] rounded-ctl bg-raised px-2 py-1 font-ui text-ui text-ink shadow-float",
+          "z-50 w-fit max-w-[18rem] rounded-pnl border border-hair bg-float px-2 py-1 font-ui text-ui text-ink shadow-float",
           className,
         )}
         {...props}

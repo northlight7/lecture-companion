@@ -4,11 +4,12 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
 import { cn } from "@/lib/utils";
 
 /**
- * A popover. Level 1: `--radius-panel`, `--surface-raised`, `--shadow-lift`.
+ * A popover. Level 2 (float): `--radius-panel`, `--surface-float`, `--shadow-lift`.
  *
- * `bg-raised` is `--surface-raised`, the same surface a card uses, so a
- * floating panel is the same colour family as a grouped surface and only the
- * shadow says it is above the page.
+ * `bg-float` is `--surface-float`: one step above the panel, the surface a card
+ * uses. A popover is the only kind of surface that carries `--shadow-lift`, and
+ * it is the shadow plus that step that say it is above the page rather than
+ * resting on it.
  */
 const Popover = PopoverPrimitive.Root;
 const PopoverTrigger = PopoverPrimitive.Trigger;
@@ -29,7 +30,7 @@ function PopoverContent({
         side={side}
         sideOffset={sideOffset}
         className={cn(
-          "z-50 w-72 rounded-pnl bg-raised p-4 text-ink animate-[lc-enter_var(--dur-enter)_var(--ease)] shadow-float",
+          "z-50 w-72 rounded-pnl border border-hair bg-float p-4 text-ink animate-[lc-enter_var(--dur-enter)_var(--ease)] shadow-float",
           className,
         )}
         {...props}

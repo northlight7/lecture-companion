@@ -51,7 +51,7 @@ const PAGE = 300;
  * panes are bounded, so the object list scrolls inside its own region, the rail
  * scrolls inside its own, and the page column itself never has to.
  */
-const PANE = "h-[calc(100dvh-22rem)]";
+const PANE = "h-[calc(100dvh-24rem)]";
 
 function message(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -248,7 +248,15 @@ export function ArtifactScreen({
       ) : null}
 
       <div className="grid min-w-0 gap-6 min-[1360px]:grid-cols-[minmax(0,1fr)_var(--rail-w)]">
-        <section ref={viewerRef} className="min-w-0">
+        {/* Two panels resting on the ground: the source objects on the left,
+         *  the tools that act on the selection on the right. Each is level 1,
+         *  so each carries a hairline and the surface radius and casts
+         *  nothing. The `PANE` height is reduced by the padding they add, so
+         *  the pair occupies exactly what it did before. */}
+        <section
+          ref={viewerRef}
+          className="min-w-0 rounded-srf border border-hair bg-raised p-4"
+        >
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
             <h2 className="font-ui text-ui font-semibold text-ink">Source</h2>
             <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
@@ -324,7 +332,7 @@ export function ArtifactScreen({
           </ScrollArea>
         </section>
 
-        <aside className="min-w-0">
+        <aside className="min-w-0 rounded-srf border border-hair bg-raised p-4">
           <ScrollArea className={PANE}>
             <div className="flex min-w-0 flex-col gap-8 pb-2">
               {artifact?.kind === "xlsx" ? (

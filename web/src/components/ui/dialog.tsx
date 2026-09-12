@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 /**
  * A modal dialog. One of the two things in the app allowed to be lifted.
  *
- * Level 1: `--radius-panel`, `--surface-raised` and `--shadow-lift`. The
+ * Level 2 (float): `--radius-panel`, `--surface-float` and `--shadow-lift`. The
  * scrim is the content ground at 80 percent, which is a mix of an existing
  * ground rather than a new colour, and nothing is frosted: softening the page
  * behind a panel is banned everywhere in this app.
@@ -48,7 +48,7 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "fixed left-1/2 top-1/2 z-50 grid max-h-[calc(100dvh-64px)] w-full max-w-[32rem] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-pnl bg-raised p-6 text-ink animate-[lc-fade_var(--dur-enter)_var(--ease)] shadow-float",
+          "fixed left-1/2 top-1/2 z-50 grid max-h-[calc(100dvh-64px)] w-full max-w-[32rem] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-pnl border border-hair bg-float p-6 text-ink animate-[lc-fade_var(--dur-enter)_var(--ease)] shadow-float",
           className,
         )}
         {...props}

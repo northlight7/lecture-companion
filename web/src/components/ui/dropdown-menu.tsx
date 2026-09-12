@@ -5,7 +5,7 @@ import { Check, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
- * A dropdown menu. A menu is lifted: `--radius-panel`, `--surface-raised`,
+ * A dropdown menu. A menu is lifted: `--radius-panel`, `--surface-float`,
  * `--shadow-lift`. Its rows are the same rows as everywhere else in the app:
  * `rounded-srf`, chrome text, `--surface-hover` on highlight.
  *
@@ -34,7 +34,7 @@ function DropdownMenuContent({
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}
         className={cn(
-          "z-50 max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-pnl bg-raised p-1 text-ink animate-[lc-enter_var(--dur-enter)_var(--ease)] shadow-float",
+          "z-50 max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-pnl border border-hair bg-float p-1 text-ink animate-[lc-enter_var(--dur-enter)_var(--ease)] shadow-float",
           className,
         )}
         {...props}
@@ -169,7 +169,7 @@ function DropdownMenuSubContent({
     <DropdownMenuPrimitive.SubContent
       data-slot="dropdown-menu-sub-content"
       className={cn(
-        "z-50 min-w-[8rem] overflow-hidden rounded-pnl bg-raised p-1 text-ink animate-[lc-enter_var(--dur-enter)_var(--ease)] shadow-float",
+        "z-50 min-w-[8rem] overflow-hidden rounded-pnl border border-hair bg-float p-1 text-ink animate-[lc-enter_var(--dur-enter)_var(--ease)] shadow-float",
         className,
       )}
       {...props}

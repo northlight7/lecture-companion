@@ -36,7 +36,7 @@ export function PaneNotice({
           {icon}
         </span>
       ) : null}
-      <h2 className="font-reading text-[22px] leading-[1.25] font-semibold text-ink">{title}</h2>
+      <h2 className="font-reading text-head leading-[1.25] font-semibold text-ink">{title}</h2>
       {children ? (
         <div className="flex flex-col gap-3 font-reading text-body leading-[1.62] text-ink-muted [&_p]:m-0">
           {children}
@@ -138,7 +138,7 @@ export function SlideFooter({
 
       <section>
         <FooterLabel>Your note</FooterLabel>
-        <div className="[&_textarea]:font-reading [&_textarea]:text-[17px] [&_textarea]:leading-[1.5]">
+        <div className="[&_textarea]:font-reading [&_textarea]:text-body [&_textarea]:leading-[1.62]">
           <Textarea
             aria-label="Your note on this slide"
             rows={6}
@@ -322,9 +322,9 @@ export function ExplanationPane({
   return (
     <aside
       aria-label="Explanation of this slide"
-      className="min-h-0 min-w-0 overflow-y-auto border-l border-hair"
+      className="min-h-0 min-w-0 overflow-y-auto rounded-srf border-l border-hair bg-raised"
     >
-      <div className="flex flex-col pb-12 pl-[var(--space-6)]">
+      <div className="flex flex-col pt-[var(--space-6)] pb-12 pl-[var(--space-6)] pr-[var(--space-6)]">
         {/* The selection control is positioned against this node and not
          *  against the pane, so it stays on the text it was raised over while
          *  the pane scrolls. */}
@@ -399,7 +399,7 @@ export function ExplanationPane({
             </PaneNotice>
           ) : (
             <article className="flex flex-col">
-              <h2 className="font-reading text-[22px] leading-[1.25] font-semibold text-ink">
+              <h2 className="font-reading text-head leading-[1.25] font-semibold text-ink">
                 {explanation.heading.trim() || `Slide ${slideNumber}`}
               </h2>
 
@@ -429,7 +429,7 @@ export function ExplanationPane({
 
           {pick ? (
             <div
-              className="absolute z-20 flex -translate-x-1/2 animate-[lc-enter_var(--dur-enter)_var(--ease)] items-center gap-1 rounded-pnl bg-raised p-1 shadow-float"
+              className="absolute z-20 flex -translate-x-1/2 animate-[lc-enter_var(--dur-enter)_var(--ease)] items-center gap-1 rounded-pnl bg-float p-1 shadow-float"
               style={{ top: pick.top, left: pick.left }}
               onMouseDown={(event) => event.preventDefault()}
             >

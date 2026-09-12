@@ -33,8 +33,9 @@ import { Trash2 } from "lucide-react";
 
 import * as api from "@/lib/api";
 import { ACCENT_INK, courseAccent, type CourseAccent } from "@/lib/accents";
+import { courseProse } from "@/lib/overview";
 import { hash, navigate } from "@/lib/router";
-import type { ProgressRow } from "@/lib/types";
+import type { DeckRow, ProgressRow } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useErrorHandler, useStore } from "@/state/store";
 import { Screen, Section } from "@/shell/Screen";
@@ -99,24 +100,86 @@ function plural(count: number, one: string, many: string): string {
 }
 
 /**
+ * What the course holds, as UI rather than as a sentence.
+ *
+ * The stored overview used to carry these facts in prose ("holds 2 deck(s)
+ * covering roughly 112 slides, in this order: …"), and that sentence is one of
+ * the ones dropped. The facts themselves are worth keeping, and the screen
+ * already holds them as structured data, so they are drawn from `detail.decks`
+ * and `detail.progress` instead of being re-synthesised into a sentence
+ * (`.internal/DESIGN.md`, "The course overview, and what the UI refuses to
+ * print"). Chrome type only: this is a fact block, not the reading body.
+ */
+function CourseFacts({ decks, slideCount }: { decks: DeckRow[]; slideCount: number }): JSX.Element {
+  const counts: Array<[string, number]> = [
+    ["Decks", decks.length],
+    ["Slides", slideCount],
+  ];
+
+  return (
+    <div className="rounded-srf border border-hair bg-raised p-4">
+      <dl className="flex flex-col">
+        {counts.map(([label, value]) => (
+          <div
+            key={label}
+            className="flex h-[var(--row-h)] items-center justify-between gap-4"
+          >
+            <dt className="text-meta text-ink-muted">{label}</dt>
+            <dd className="text-ui tabular-nums text-ink">{value}</dd>
+          </div>
+        ))}
+      </dl>
+
+      {decks.length ? (
+        <ol className="mt-2 flex flex-col border-t border-hair pt-2">
+          {decks.map((deck, index) => (
+            <li key={deck.id} className="flex h-[var(--row-h)] items-center gap-3 text-ui">
+              <span className="w-5 shrink-0 text-meta tabular-nums text-ink-faint">
+                {index + 1}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-ink" title={deck.title}>
+                {deck.title}
+              </span>
+              <span className="shrink-0 text-meta tabular-nums text-ink-muted">
+                {plural(deck.n_slides, "slide", "slides")}
+              </span>
+            </li>
+          ))}
+        </ol>
+      ) : null}
+    </div>
+  );
+}
+
+/**
  * The course overview, in the reading column. A long one is folded until the
  * reader asks for it, and an absent one says so and offers to write it rather
  * than hiding the control that would.
+ *
+ * The stored value is derived, never printed: `courseProse` keeps only the
+ * sentences that are about the course. When none survive, no prose is rendered
+ * at all and the facts those sentences were carrying are drawn as UI instead.
+ * The rewrite control is untouched by either path.
  */
 function OverviewBlock({
   cid,
   overview,
+  decks,
+  slideCount,
   onRewritten,
 }: {
   cid: string;
   overview: string;
+  decks: DeckRow[];
+  slideCount: number;
   onRewritten: () => Promise<void>;
 }): JSX.Element {
   const handle = useErrorHandler();
   const [expanded, setExpanded] = useState(false);
   const [writing, setWriting] = useState(false);
 
-  const text = (overview ?? "").trim();
+  const stored = (overview ?? "").trim();
+  const text = courseProse(stored);
   const foldable = text.length > OVERVIEW_FOLD_AT;
 
   const rewrite = async () => {
@@ -135,15 +198,17 @@ function OverviewBlock({
   return (
     <div className="flex flex-col gap-3">
       <div id="course-overview">
-        {text ? (
-          <div className={foldable && !expanded ? "max-h-64 overflow-hidden" : undefined}>
-            <Prose>{text}</Prose>
-          </div>
-        ) : (
+        {!stored ? (
           <p className="font-reading text-body leading-[1.62] text-ink-muted">
             No overview yet. Add the syllabus or the programme requirements and the app writes one,
             so every explanation knows what the course is for.
           </p>
+        ) : text ? (
+          <div className={foldable && !expanded ? "max-h-64 overflow-hidden" : undefined}>
+            <Prose>{text}</Prose>
+          </div>
+        ) : (
+          <CourseFacts decks={decks} slideCount={slideCount} />
         )}
       </div>
 
@@ -160,7 +225,7 @@ function OverviewBlock({
           </Button>
         ) : null}
         <Button type="button" variant="secondary" disabled={writing} onClick={() => void rewrite()}>
-          {writing ? "Rewriting" : text ? "Rewrite overview" : "Write an overview"}
+          {writing ? "Rewriting" : stored ? "Rewrite overview" : "Write an overview"}
         </Button>
       </div>
     </div>
@@ -339,6 +404,11 @@ export function CourseScreen({ cid }: { cid: string }): JSX.Element {
               key={cid}
               cid={cid}
               overview={detail.overview}
+              decks={detail.decks}
+              slideCount={
+                detail.progress.n_slides ||
+                detail.decks.reduce((total, deck) => total + deck.n_slides, 0)
+              }
               onRewritten={reloadCourse}
             />
 
@@ -360,9 +430,12 @@ export function CourseScreen({ cid }: { cid: string }): JSX.Element {
 
           <Section title="Decks">
             {detail.decks.length ? (
-              <ul className="flex flex-col">
+              // The deck list is a grouped block, so it is level 1: raised
+              // fill, hairline boundary, surface radius. The rows inside keep
+              // their own hover step, which is a state of this same level.
+              <ul className="flex flex-col rounded-srf border border-hair bg-raised p-2">
                 {detail.decks.map((deck, index) => (
-                  <li key={deck.id} className="-mx-2 flex flex-col">
+                  <li key={deck.id} className="flex flex-col">
                     {index > 0 ? <Separator className="my-1" /> : null}
                     <a
                       href={hash.deck(cid, deck.id, 0)}

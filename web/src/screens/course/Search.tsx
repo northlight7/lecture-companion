@@ -466,11 +466,14 @@ export function SearchSection({ cid }: { cid: string }): JSX.Element {
             ) : null}
 
             {found.results.length ? (
-              <ul className="mt-2 flex flex-col">
+              // The result block is a grouped block, so it is level 1: raised
+              // fill, hairline boundary, surface radius. Rows inside keep their
+              // own hover step, a state of this same level.
+              <ul className="mt-2 flex flex-col rounded-srf border border-hair bg-raised p-2">
                 {found.results.map((row, position) => (
                   <li
                     key={`${row.artifact_id}-${row.object_id}-${position}`}
-                    className="-mx-2 flex flex-col px-2"
+                    className="flex flex-col px-2"
                   >
                     {position > 0 ? <Separator className="my-3" /> : null}
                     <SearchResultRow cid={cid} row={row} />

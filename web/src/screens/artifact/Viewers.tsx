@@ -106,7 +106,7 @@ function RenderedObject(props: ObjectProps) {
   return (
     <Shell {...props}>
       {page && page > 0 ? (
-        <div className="rounded-srf bg-sunken p-3">
+        <div className="rounded-srf bg-well p-3">
           <img
             src={api.artifactRenderUrl(cid, aid, page)}
             alt={`${label} ${locatorText(object)}`}
@@ -172,7 +172,7 @@ function EmbeddedImage(props: ObjectProps) {
   const part = str(object.data.part_name);
   return (
     <Shell {...props} meta={part || undefined}>
-      <div className="rounded-srf bg-sunken p-3">
+      <div className="rounded-srf bg-well p-3">
         <img
           src={api.artifactObjectMediaUrl(cid, aid, object.id)}
           alt={`Embedded image at ${locatorText(object)}`}
@@ -559,7 +559,7 @@ function NotebookOutput(props: ObjectProps & { className?: string }) {
       <div className="border-l border-hair pl-4">
         <div className="text-meta text-ink-faint">Saved output</div>
         {image ? (
-          <div className="mt-2 rounded-srf bg-sunken p-3">
+          <div className="mt-2 rounded-srf bg-well p-3">
             <img
               src={api.artifactObjectMediaUrl(cid, aid, object.id)}
               alt={`Saved output from ${locatorText(object)}`}

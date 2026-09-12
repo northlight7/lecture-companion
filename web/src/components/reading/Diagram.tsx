@@ -56,8 +56,8 @@ export function Diagram({ source }: { source: string }) {
 
   if (failed) {
     return (
-      <figure className="my-5 rounded-srf bg-sunken p-4">
-        <pre className="overflow-x-auto font-code text-[12px] text-ink-muted">
+      <figure className="my-6 rounded-srf bg-well p-4">
+        <pre className="overflow-x-auto font-code text-meta text-ink-muted">
           <code>{source}</code>
         </pre>
       </figure>
@@ -69,7 +69,7 @@ export function Diagram({ source }: { source: string }) {
       ref={host}
       role="img"
       aria-label="Diagram from this slide's explanation"
-      className="my-5 flex justify-center overflow-x-auto rounded-srf bg-sunken p-4 [&_svg]:h-auto [&_svg]:max-w-full"
+      className="my-6 flex justify-center overflow-x-auto rounded-srf bg-well p-4 [&_svg]:h-auto [&_svg]:max-w-full"
     />
   );
 }

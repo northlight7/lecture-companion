@@ -235,7 +235,7 @@ export function ObjectBlock({
   );
 }
 
-/** A code or preformatted well. `--surface-sunken` is the well colour. */
+/** A code or preformatted well. `--surface-well` is the well colour. */
 export function CodeWell({
   children,
   className,
@@ -248,7 +248,7 @@ export function CodeWell({
   return (
     <pre
       className={cn(
-        "min-w-0 overflow-hidden rounded-srf bg-sunken p-3 font-code text-ui whitespace-pre-wrap break-words",
+        "min-w-0 overflow-hidden rounded-srf bg-well p-3 font-code text-ui whitespace-pre-wrap break-words",
         tone === "bad" ? "text-bad" : "text-ink",
         className,
       )}

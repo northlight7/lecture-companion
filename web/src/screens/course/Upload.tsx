@@ -208,9 +208,10 @@ export function UploadSection({ cid }: { cid: string }): JSX.Element {
           <div className="mt-4 flex flex-col gap-4">
             <div className="flex flex-col">
               <h3 className="text-ui font-medium text-ink">Filed</h3>
-              <ul className="mt-1 flex flex-col">
+              {/* The filed report is a grouped block, so it is level 1. */}
+              <ul className="mt-1 flex flex-col rounded-srf border border-hair bg-raised p-2">
                 {report.filed.map((row, index) => (
-                  <li key={`${row.file_id || row.filename}-${index}`} className="-mx-2 flex flex-col px-2">
+                  <li key={`${row.file_id || row.filename}-${index}`} className="flex flex-col px-2">
                     {index > 0 ? <Separator className="my-2" /> : null}
                     <p className="text-ui text-ink-muted">
                       <span className="font-medium text-ink">{row.filename}</span> as{" "}

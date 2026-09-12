@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
  * `--line-control` boundary, because the boundary is what identifies it.
  *
  * The open list is a menu, so it is lifted: `--radius-panel`,
- * `--surface-raised`, `--shadow-lift`. Rows inside it use `--surface-hover`
+ * `--surface-float`, `--shadow-lift`. Rows inside it use `--surface-hover`
  * on highlight, from the surface table, and never a focus override: Radix
  * drives `data-highlighted` for both the pointer and the keyboard, and the
  * global ring in `app.css` still draws for keyboard focus.
@@ -58,7 +58,7 @@ function SelectContent({
         align={align}
         sideOffset={sideOffset}
         className={cn(
-          "relative z-50 max-h-[var(--radix-select-content-available-height)] min-w-[8rem] overflow-hidden rounded-pnl bg-raised text-ink animate-[lc-enter_var(--dur-enter)_var(--ease)] shadow-float",
+          "relative z-50 max-h-[var(--radix-select-content-available-height)] min-w-[8rem] overflow-hidden rounded-pnl border border-hair bg-float text-ink animate-[lc-enter_var(--dur-enter)_var(--ease)] shadow-float",
           className,
         )}
         {...props}

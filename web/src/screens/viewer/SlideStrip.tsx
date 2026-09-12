@@ -137,7 +137,10 @@ export function SlideStrip({
         onPointerCancel={() => setScrub(null)}
         className="flex h-full min-w-0 flex-1 cursor-pointer touch-none items-center"
       >
-        <div className="flex h-1.5 w-full items-stretch gap-px overflow-hidden rounded-ctl bg-line">
+        {/* The rail is a progress track, so it is level 0: a well, recessed
+         *  into the ground. The current slide's segment keeps the course's
+         *  accent, which is the one state the accent is reserved for. */}
+        <div className="flex h-1.5 w-full items-stretch gap-px overflow-hidden rounded-ctl bg-well">
           {slides.map((slide) => (
             <span
               key={slide.index}

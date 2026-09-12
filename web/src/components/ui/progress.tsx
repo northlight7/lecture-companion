@@ -4,7 +4,7 @@ import * as ProgressPrimitive from "@radix-ui/react-progress";
 import { cn } from "@/lib/utils";
 
 /**
- * A progress bar. The track is a well (`--surface-sunken`), the fill is the
+ * A progress bar. The track is a well (`--surface-well`), the fill is the
  * one accent, and the fill moves by transform only, never by width, so nothing
  * in the layout animates.
  *
@@ -22,7 +22,7 @@ function Progress({
     <ProgressPrimitive.Root
       data-slot="progress"
       value={value}
-      className={cn("relative h-2 w-full overflow-hidden rounded-ctl bg-sunken", className)}
+      className={cn("relative h-2 w-full overflow-hidden rounded-ctl bg-well", className)}
       {...props}
     >
       <ProgressPrimitive.Indicator

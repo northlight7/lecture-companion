@@ -143,7 +143,7 @@
    * not a hover state at all, so faint is not permitted there instead, and
    * `gate_static.py` refuses to let it appear there.
    */
-  --ink-faint: #9a958c;
+  --ink-faint: #a19c93;
 
   /* Chosen so it clears 3:1 on the panel as well as both grounds: a text input
    * inside a dialog sits on a panel, and the darker value this replaces

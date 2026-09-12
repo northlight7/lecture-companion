@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
  *     toast("Deck deleted");
  *     toast({ title: "Deck deleted", description: "3 slides", variant: "good" });
  *
- * A toast is lifted: `--radius-panel`, `--surface-raised`, `--shadow-lift`.
+ * A toast is lifted: `--radius-panel`, `--surface-float`, `--shadow-lift`.
  * The variant is carried by the icon colour, never by a filled panel, so no
  * colour is invented. The timer pauses while the pointer or the keyboard is
  * inside the toast, and `duration: 0` keeps it until it is dismissed.
@@ -116,7 +116,7 @@ function ToastItem({ toast: item, className, ...props }: ToastItemProps) {
       onFocus={() => setPaused(true)}
       onBlur={() => setPaused(false)}
       className={cn(
-        "pointer-events-auto flex w-full items-start gap-3 rounded-pnl bg-raised p-4 text-ink shadow-float",
+        "pointer-events-auto flex w-full items-start gap-3 rounded-pnl border border-hair bg-float p-4 text-ink shadow-float",
         className,
       )}
       {...props}
