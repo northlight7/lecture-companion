@@ -49,14 +49,12 @@ export function NavRow({
   href,
   current,
   children,
-  trailing,
   accent,
   className,
 }: {
   href: string;
   current?: boolean;
   children: ReactNode;
-  trailing?: ReactNode;
   /** A course accent class for the row's mark. The sidebar agrees with the
    *  board: a course is the same colour in both. */
   accent?: string;
@@ -79,7 +77,6 @@ export function NavRow({
         />
       ) : null}
       <span className="min-w-0 flex-1 truncate">{children}</span>
-      {trailing ? <span className="shrink-0 text-ink-faint">{trailing}</span> : null}
     </a>
   );
 }

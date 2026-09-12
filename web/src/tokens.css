@@ -102,7 +102,16 @@
 
   --ink: #f0eee9;
   --ink-muted: #a8a29a;
-  --ink-faint: #8e887f;
+/* Faint text lands on more than a ground: a source object in the viewer becomes
+   * --surface-selected when it is focused, and its metadata line is faint, so
+   * the old value read 4.07:1 there in dark and 4.12:1 in light against a 4.5
+   * floor. Raised just far enough to clear 4.5 on every surface faint is
+   * actually put on. It is NOT made to clear the chrome state surfaces:
+   * --surface-chrome-hover would have to be 99% ground to get there, which is
+   * not a hover state at all, so faint is not permitted there instead, and
+   * `gate_static.py` refuses to let it appear there.
+   */
+  --ink-faint: #959087;
 
   /* Chosen so it clears 3:1 on the raised surface as well as both grounds:
    * a text input inside a dialog sits on --surface-raised, and the darker
@@ -154,7 +163,7 @@
 
   --ink: #1b1915;
   --ink-muted: #5c554b;
-  --ink-faint: #6e675c;
+  --ink-faint: #686157;
 
   --line-control: #8a8175;
   --line-hair: #ded8cd;
@@ -200,7 +209,7 @@
 
     --ink: #1b1915;
     --ink-muted: #5c554b;
-    --ink-faint: #6e675c;
+    --ink-faint: #686157;
 
     --line-control: #8a8175;
     --line-hair: #ded8cd;
