@@ -9,6 +9,7 @@ import {
 } from "react";
 
 import * as api from "@/lib/api";
+import { assignCourseAccents } from "@/lib/accents";
 import { ApiError } from "@/lib/api";
 import type { ConnectionInfo, CourseDetail, CourseRow, ProgressRow } from "@/lib/types";
 import { toast } from "@/components/ui/toast";
@@ -106,7 +107,13 @@ export function StoreProvider({ cid, children }: { cid: string | null; children:
 
   const reloadCourses = useCallback(async () => {
     try {
-      setCourses(await api.listCourses());
+      const rows = await api.listCourses();
+      // The course accent palette is assigned from the whole set rather than
+      // from each id on its own, so that no two courses share a colour. This is
+      // the only place the full list arrives, which makes it the only place the
+      // assignment can be made. See `assignCourseAccents`.
+      assignCourseAccents(rows.map((row) => row.id));
+      setCourses(rows);
       setCoursesError(null);
     } catch (err) {
       setCoursesError(err instanceof Error ? err.message : String(err));

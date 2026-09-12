@@ -478,6 +478,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
         // land on the port `AppServer` picked rather than the default.
         var environment = ProcessInfo.processInfo.environment
         environment["LC_PORT"] = String(AppServer.port)
+        // The window reads the interface out of the bundle over `lc://`, and
+        // the scheme handler forwards only `/api/` here, so the backend has no
+        // reason to serve a page. This makes that structural: with the flag
+        // set, `app/main.py` does not register `/`, `/favicon.ico` or
+        // `/static` at all, and the shipped app serves an API and nothing
+        // else. Without it the page is reachable on the loopback port, which
+        // is how a reviewer ends up measuring a browser instead of the app.
+        environment["LC_BUNDLE_ONLY"] = "1"
         process.environment = environment
         // Keep the backend's output. Sending it to /dev/null threw away every
         // line explaining why a slide was skipped, which is how a run can

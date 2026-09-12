@@ -16,6 +16,7 @@ import base64
 import binascii
 from io import BytesIO
 import logging
+import os
 import threading
 import zipfile
 from typing import Any, Callable
@@ -1198,26 +1199,45 @@ def get_progress(cid: str):
 # --------------------------------------------------------------------------
 # static frontend
 # --------------------------------------------------------------------------
+#
+# The app does not serve its interface, and this is where that is enforced.
+#
+# The window loads `lc://app/index.html` out of `Contents/Resources/web` through
+# a `WKURLSchemeHandler`, and `SchemeHandler` forwards only `/api/` to this
+# process. Nothing in the bundle ever asks for `/` or `/static`, so when the
+# launcher sets `LC_BUNDLE_ONLY=1` these three routes are not registered at all
+# and the process serves the API and nothing else.
+#
+# They stay registered by default because the development flow is `./run.sh`
+# and a visit to that address, and because `tests/test_api.py` asserts that `/`
+# is served. The launcher, which is the only thing that ships, opts out.
+#
+# The reason this matters beyond tidiness: while the page is reachable, a
+# headless browser can be pointed at it, and a reviewer who does that is
+# measuring Blink on a different origin through a path that does not ship while
+# believing they are measuring the product. That happened, in round 12. A
+# surface that does not exist cannot be measured by mistake.
 
+_BUNDLE_ONLY = os.environ.get("LC_BUNDLE_ONLY") == "1"
 
-@app.get("/")
-def index():
-    path = config.WEB_DIR / "index.html"
-    if not path.is_file():
-        return _err(500, "web/index.html is missing.")
-    return FileResponse(path, media_type="text/html")
+if not _BUNDLE_ONLY:
 
+    @app.get("/")
+    def index():
+        path = config.WEB_DIR / "index.html"
+        if not path.is_file():
+            return _err(500, "web/index.html is missing.")
+        return FileResponse(path, media_type="text/html")
 
-@app.get("/favicon.ico")
-def favicon():
-    path = config.WEB_DIR / "app-icon.png"
-    if not path.is_file():
-        return Response(status_code=204)
-    return FileResponse(path, media_type="image/png")
+    @app.get("/favicon.ico")
+    def favicon():
+        path = config.WEB_DIR / "app-icon.png"
+        if not path.is_file():
+            return Response(status_code=204)
+        return FileResponse(path, media_type="image/png")
 
-
-if config.WEB_DIR.is_dir():
-    app.mount("/static", StaticFiles(directory=str(config.WEB_DIR)), name="static")
+    if config.WEB_DIR.is_dir():
+        app.mount("/static", StaticFiles(directory=str(config.WEB_DIR)), name="static")
 
 
 __all__ = ["app"]
