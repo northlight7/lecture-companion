@@ -60,8 +60,8 @@ const PROGRESS_FILL: Record<CourseAccent, string> = {
   blue: "[&_[data-slot=progress-indicator]]:bg-course-blue-fill",
   teal: "[&_[data-slot=progress-indicator]]:bg-course-teal-fill",
   green: "[&_[data-slot=progress-indicator]]:bg-course-green-fill",
-  amber: "[&_[data-slot=progress-indicator]]:bg-course-amber-fill",
-  rose: "[&_[data-slot=progress-indicator]]:bg-course-rose-fill",
+  orange: "[&_[data-slot=progress-indicator]]:bg-course-orange-fill",
+  olive: "[&_[data-slot=progress-indicator]]:bg-course-olive-fill",
   violet: "[&_[data-slot=progress-indicator]]:bg-course-violet-fill",
 };
 

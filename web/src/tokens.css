@@ -186,26 +186,31 @@
   --surface-chrome-selected: color-mix(in oklab, var(--ground-chrome) 87%, var(--ink));
 
   /* ---- course accents -------------------------------------------------- */
-  /* Six hues, derived by `.internal/derive_accents.py` rather than picked by
-   * eye, so every value is the one that satisfies the floors in DESIGN.md: a
-   * fill is >= 3:1 against every ground as a graphic and carries --on-accent
-   * at >= 4.5:1, an ink is >= 4.5:1 as text on every ground, all six sit in
-   * one narrow OKLCH lightness AND chroma band so none reads as louder than
-   * another, every pair is at least dE 11 apart in OKLab, and no hue is red
-   * or green because those two are what --meaning-bad and --meaning-good mean.
-   * A course is assigned one from its id, so its colour never changes. */
-  --course-blue-fill: #4a68ba;
-  --course-blue-ink: #6886d9;
-  --course-teal-fill: #30767e;
-  --course-teal-ink: #2997a3;
-  --course-green-fill: #247b43;
-  --course-green-ink: #289f54;
-  --course-amber-fill: #8a6628;
-  --course-amber-ink: #b4822d;
-  --course-rose-fill: #a95157;
-  --course-rose-ink: #d96870;
-  --course-violet-fill: #875c99;
-  --course-violet-ink: #b768d9;
+  /* Six hues, derived and enforced by `.internal/derive_accents.py` rather
+   * than picked by eye. The rules changed in round 14, because as written
+   * they were arithmetically impossible: dE = 2*C*sin(dH/2), so a 0.06 chroma
+   * band at C ~ 0.12 needs dH >= 60 for dE 12, and six hues 60 degrees apart
+   * is the whole circle, with nothing left to exclude red OR green. Green is
+   * surrendered to buy the separation. What holds now: every fill sits in a
+   * 0.06-wide OKLCH chroma band and a 0.05-wide lightness band, no hue is red
+   * (H <= 45 or H >= 350, the one reserved hue with a real UX cost, since a
+   * red cover block reads as an error state), every pair of fills is at least
+   * dE 11 apart in OKLab, every fill is >= 3:1 against every ground as a
+   * graphic and carries --on-accent at >= 4.5:1, and every ink is >= 4.5:1 as
+   * text on every ground. Each name is the hue it actually is. A course is
+   * assigned one from its id, so its colour never changes. */
+  --course-orange-fill: #b24e01;
+  --course-orange-ink: #c87344;
+  --course-olive-fill: #7c6c00;
+  --course-olive-ink: #9a8a30;
+  --course-green-fill: #007d35;
+  --course-green-ink: #339c53;
+  --course-teal-fill: #00787e;
+  --course-teal-ink: #36969b;
+  --course-blue-fill: #0e6ebd;
+  --course-blue-ink: #398ddf;
+  --course-violet-fill: #8157b7;
+  --course-violet-ink: #9b78cd;
 }
 
 /* ====================================================================== */
@@ -254,26 +259,21 @@
   --surface-chrome-selected: color-mix(in oklab, var(--ground-chrome) 87%, var(--ink));
 
   /* ---- course accents -------------------------------------------------- */
-  /* Six hues, derived by `.internal/derive_accents.py` rather than picked by
-   * eye, so every value is the one that satisfies the floors in DESIGN.md: a
-   * fill is >= 3:1 against every ground as a graphic and carries --on-accent
-   * at >= 4.5:1, an ink is >= 4.5:1 as text on every ground, all six sit in
-   * one narrow OKLCH lightness AND chroma band so none reads as louder than
-   * another, every pair is at least dE 11 apart in OKLab, and no hue is red
-   * or green because those two are what --meaning-bad and --meaning-good mean.
-   * A course is assigned one from its id, so its colour never changes. */
-  --course-blue-fill: #426de0;
-  --course-blue-ink: #375fcd;
-  --course-teal-fill: #167d88;
-  --course-teal-ink: #1f717a;
-  --course-green-fill: #15843e;
-  --course-green-ink: #1e763e;
-  --course-amber-fill: #9a6a19;
-  --course-amber-ink: #835f21;
-  --course-rose-fill: #dd2c38;
-  --course-rose-ink: #c0303a;
-  --course-violet-fill: #ad3adf;
-  --course-violet-ink: #9b32c8;
+  /* The same six hues as the dark theme, re-derived against this theme's
+   * grounds. See the dark block above for the rules and why green is not
+   * among them. */
+  --course-orange-fill: #b34d00;
+  --course-orange-ink: #ac4700;
+  --course-olive-fill: #837200;
+  --course-olive-ink: #786800;
+  --course-green-fill: #008439;
+  --course-green-ink: #007932;
+  --course-teal-fill: #007f85;
+  --course-teal-ink: #007479;
+  --course-blue-fill: #1574c5;
+  --course-blue-ink: #0069ba;
+  --course-violet-fill: #8358ba;
+  --course-violet-ink: #7d52b3;
 }
 
 /* A reader who has never chosen a theme follows the system. */
@@ -316,17 +316,17 @@
     --surface-chrome-selected: color-mix(in oklab, var(--ground-chrome) 87%, var(--ink));
 
     /* ---- course accents, light ----------------------------------------- */
-    --course-blue-fill: #426de0;
-    --course-blue-ink: #375fcd;
-    --course-teal-fill: #167d88;
-    --course-teal-ink: #1f717a;
-    --course-green-fill: #15843e;
-    --course-green-ink: #1e763e;
-    --course-amber-fill: #9a6a19;
-    --course-amber-ink: #835f21;
-    --course-rose-fill: #dd2c38;
-    --course-rose-ink: #c0303a;
-    --course-violet-fill: #ad3adf;
-    --course-violet-ink: #9b32c8;
+    --course-orange-fill: #b34d00;
+    --course-orange-ink: #ac4700;
+    --course-olive-fill: #837200;
+    --course-olive-ink: #786800;
+    --course-green-fill: #008439;
+    --course-green-ink: #007932;
+    --course-teal-fill: #007f85;
+    --course-teal-ink: #007479;
+    --course-blue-fill: #1574c5;
+    --course-blue-ink: #0069ba;
+    --course-violet-fill: #8358ba;
+    --course-violet-ink: #7d52b3;
   }
 }

@@ -1,17 +1,19 @@
 /**
  * The course accent palette.
  *
- * Six hues, derived by `.internal/derive_accents.py` so that every one of them
- * meets the floors in `DESIGN.md` in both themes rather than being picked by
- * eye. A course takes one from its id, so its colour is the same on every
- * screen, in every session, and after a reload: a course that changed colour
- * would be worse than a course with no colour at all.
+ * Six hues, derived and enforced by `.internal/derive_accents.py` so that every
+ * one of them meets the rules in `web/src/tokens.css` in both themes rather
+ * than being picked by eye. Each name is the hue it actually is, in OKLCH hue
+ * order: 48 orange, 99 olive, 150 green, 200 teal, 251 blue, 302 violet. A
+ * course takes one from its id, so its colour is the same on every screen, in
+ * every session, and after a reload: a course that changed colour would be
+ * worse than a course with no colour at all.
  *
  * Class names are written out in full below. Tailwind only emits a utility it
  * can see in the source, so building one at runtime (`bg-course-${name}-fill`)
  * would silently produce no CSS at all.
  */
-export const COURSE_ACCENTS = ["blue", "teal", "green", "amber", "rose", "violet"] as const;
+export const COURSE_ACCENTS = ["orange", "olive", "green", "teal", "blue", "violet"] as const;
 
 export type CourseAccent = (typeof COURSE_ACCENTS)[number];
 
@@ -84,29 +86,29 @@ export function courseAccent(courseId: string): CourseAccent {
 
 /** The band and progress fill. Carries `--on-accent` text when it does. */
 export const ACCENT_FILL: Record<CourseAccent, string> = {
-  blue: "bg-course-blue-fill",
-  teal: "bg-course-teal-fill",
+  orange: "bg-course-orange-fill",
+  olive: "bg-course-olive-fill",
   green: "bg-course-green-fill",
-  amber: "bg-course-amber-fill",
-  rose: "bg-course-rose-fill",
+  teal: "bg-course-teal-fill",
+  blue: "bg-course-blue-fill",
   violet: "bg-course-violet-fill",
 };
 
 /** The same hue as text or as a thin graphic on a ground. */
 export const ACCENT_INK: Record<CourseAccent, string> = {
-  blue: "text-course-blue-ink",
-  teal: "text-course-teal-ink",
+  orange: "text-course-orange-ink",
+  olive: "text-course-olive-ink",
   green: "text-course-green-ink",
-  amber: "text-course-amber-ink",
-  rose: "text-course-rose-ink",
+  teal: "text-course-teal-ink",
+  blue: "text-course-blue-ink",
   violet: "text-course-violet-ink",
 };
 
 export const ACCENT_BORDER: Record<CourseAccent, string> = {
-  blue: "border-course-blue-ink",
-  teal: "border-course-teal-ink",
+  orange: "border-course-orange-ink",
+  olive: "border-course-olive-ink",
   green: "border-course-green-ink",
-  amber: "border-course-amber-ink",
-  rose: "border-course-rose-ink",
+  teal: "border-course-teal-ink",
+  blue: "border-course-blue-ink",
   violet: "border-course-violet-ink",
 };

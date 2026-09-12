@@ -90,8 +90,8 @@ const TITLE_INK: Record<CourseAccent, string> = {
   blue: "text-course-blue-ink",
   teal: "text-course-teal-ink",
   green: "text-course-green-ink",
-  amber: "text-course-amber-ink",
-  rose: "text-course-rose-ink",
+  orange: "text-course-orange-ink",
+  olive: "text-course-olive-ink",
   violet: "text-course-violet-ink",
 };
 
