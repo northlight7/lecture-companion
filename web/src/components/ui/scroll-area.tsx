@@ -22,10 +22,17 @@ function ScrollArea({
       className={cn("relative overflow-hidden", className)}
       {...props}
     >
-      <ScrollAreaPrimitive.Viewport data-slot="scroll-area-viewport" className="size-full">
+      <ScrollAreaPrimitive.Viewport
+        data-slot="scroll-area-viewport"
+        className="scroll-viewport size-full"
+      >
         {children}
       </ScrollAreaPrimitive.Viewport>
       <ScrollBar />
+      {/* Both orientations. Without the horizontal one, anything wider than
+          its pane is clipped with no affordance at all: the reader can see
+          that content is missing and cannot reach it. */}
+      <ScrollBar orientation="horizontal" />
       <ScrollAreaPrimitive.Corner />
     </ScrollAreaPrimitive.Root>
   );

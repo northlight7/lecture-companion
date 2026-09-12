@@ -178,6 +178,18 @@
   }
 }
 
+/* Radix's scroll viewport wraps its children in an element with
+ * `display: table` and `min-width: 100%`, which sizes to max-content. Every
+ * `w-full` beneath it therefore resolves against the CONTENT width, not the
+ * pane, so an `overflow-x-auto` wrapper inside one has nothing to scroll: it
+ * simply grows. Measured on the dataset and document viewers, a table laid out
+ * 1648px inside a 696px pane and 952px of it was unreachable by any input.
+ * Block layout restores the constraint the wrapper needs. */
+.scroll-viewport > div {
+  display: block !important;
+  min-width: 100%;
+}
+
 /* The page frame every screen shares. Same left edge, same right edge, same
  * vertical rhythm, so no screen looks like it was built by someone else. */
 @utility page-column {
@@ -215,7 +227,12 @@
  * does not fit in a 744px content area and must not be squeezed into one. */
 @utility prose-rail {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  /* Capped and centred in the single-column case too. It was `1fr`, so below
+   * the two-column breakpoint the prose filled the whole column: measured 872px
+   * at 1280 against a locked measure of 720. The measure is not a maximum that
+   * applies only when there is room for a rail beside it. */
+  grid-template-columns: minmax(0, var(--measure));
+  justify-content: center;
   gap: var(--space-6);
   max-width: var(--column-max);
   margin-inline: auto;
