@@ -153,7 +153,13 @@ export function UploadSection({ cid }: { cid: string }): JSX.Element {
         className={cn(
           "flex cursor-pointer flex-col rounded-pnl border border-dashed",
           "px-6 py-6 transition-colors duration-[120ms] ease-[var(--ease)]",
-          over ? "border-accent bg-hover" : "border-line hover:bg-hover",
+          // `border-accent-ink`, not `border-accent`. The fill does not become
+          // the accent here, so this is an OUTLINED control and its boundary is
+          // what identifies it: 3:1 is owed. `--accent` measures 2.77 on a hover
+          // surface, 2.58 on a selected one and 2.37 on the float, and this state
+          // is reachable only by dragging, so nothing had measured it. The ink
+          // variant is the accent family's on-a-surface colour and clears 5.82.
+          over ? "border-accent-ink bg-hover" : "border-line hover:bg-hover",
         )}
       >
         <p className="text-ui font-medium text-ink">

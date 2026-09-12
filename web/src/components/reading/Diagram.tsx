@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+import { diagramThemeVariables } from "@/lib/diagramTheme";
 import { useTheme } from "@/lib/theme";
 
 /**
@@ -12,6 +13,12 @@ import { useTheme } from "@/lib/theme";
  *
  * If mermaid cannot draw the source, the source is shown instead. A diagram is
  * never worth losing the explanation it belongs to.
+ *
+ * Colour: `theme: "base"` plus `themeVariables` built from this app's tokens by
+ * `@/lib/diagramTheme`, so no fill, stroke or label inside the SVG is
+ * mermaid's own. The SVG is injected as markup, so the only colours in it are
+ * the ones resolved from `:root` when this effect ran, and the effect re-runs
+ * when the theme changes.
  */
 let mermaidPromise: Promise<typeof import("mermaid")["default"]> | null = null;
 
@@ -38,8 +45,8 @@ export function Diagram({ source }: { source: string }) {
         mermaid.initialize({
           startOnLoad: false,
           securityLevel: "strict",
-          theme: theme === "light" ? "neutral" : "dark",
-          fontFamily: getComputedStyle(document.body).fontFamily,
+          theme: "base",
+          themeVariables: diagramThemeVariables(theme),
         });
         const { svg } = await mermaid.render(`lc-diagram-${++seq}`, source);
         if (cancelled) return;
