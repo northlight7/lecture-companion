@@ -49,7 +49,7 @@ export function Screen({
           <h1
             tabIndex={-1}
             className={cn(
-              "font-reading text-display leading-[1.15] font-semibold text-ink focus-target",
+              "font-ui text-display leading-[1.15] font-semibold text-ink focus-target",
               titleClassName,
             )}
           >

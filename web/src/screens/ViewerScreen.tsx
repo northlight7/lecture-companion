@@ -427,7 +427,7 @@ export function ViewerScreen({ cid, did, index }: { cid: string; did: string; in
         </a>
         <h1
           tabIndex={-1}
-          className="truncate font-reading text-display leading-[1.15] font-semibold text-ink focus-target"
+          className="truncate font-ui text-display leading-[1.15] font-semibold text-ink focus-target"
         >
           {deck?.title ?? "Deck"}
         </h1>
