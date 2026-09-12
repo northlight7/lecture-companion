@@ -23,6 +23,11 @@ build/
 # a checkout without a build would serve nothing.
 node_modules/
 
+# The copy of the interface inside the app bundle. `build-app.sh` makes it from
+# web/ on every build, and its asset names are content-hashed, so tracking it
+# churns a hundred files per rebuild for no benefit. web/ is the source of truth.
+Lecture Companion.app/Contents/Resources/web/
+
 # Test / coverage
 .pytest_cache/
 .coverage
