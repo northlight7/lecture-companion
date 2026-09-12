@@ -33,7 +33,16 @@ do
 done
 iconutil -c icns "$ICONSET" -o "$RESOURCES/AppIcon.icns"
 
+# The interface travels inside the bundle. It is read from here by
+# `SchemeHandler`, never served, so there is no page on a port to open.
+rm -rf "$RESOURCES/web"
+cp -R web "$RESOURCES/web"
+rm -rf "$RESOURCES/web/src" "$RESOURCES/web/node_modules"
+echo "bundled the interface from web/"
+
 swiftc launcher/LectureCompanion.swift \
+      launcher/AppServer.swift \
+      launcher/SchemeHandler.swift \
   -framework AppKit \
   -framework WebKit \
   -o "$MACOS/LectureCompanion"

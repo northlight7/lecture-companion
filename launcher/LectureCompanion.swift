@@ -1,10 +1,10 @@
 import AppKit
 import WebKit
 
-private let appURL = URL(string: "http://127.0.0.1:8765")!
-private let healthURL = URL(string: "http://127.0.0.1:8765/api/health")!
+// The backend's address is chosen at launch, not fixed. See `AppServer`.
 
 final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScriptMessageHandler {
+    private let schemeHandler = SchemeHandler()
     private var backend: Process?
     private var backendLog: FileHandle?
     private var window: NSWindow?
@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
             NSApp.applicationIconImage = icon
         }
         installMenu()
+        AppServer.choose()
 
         if serverIsAlreadyRunning() {
             let alert = NSAlert()
@@ -179,6 +180,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
             modifiedSince: .distantPast
         ) { }
         configuration.websiteDataStore = store
+        configuration.setURLSchemeHandler(schemeHandler, forURLScheme: AppServer.scheme)
         configuration.userContentController.add(self, name: "folderPicker")
         let webView = WKWebView(frame: frame, configuration: configuration)
         webView.uiDelegate = self
@@ -465,6 +467,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
         process.arguments = [projectRoot.appendingPathComponent("run.sh").path]
         process.currentDirectoryURL = projectRoot
+        // run.sh already honours LC_PORT; this is what makes the app's backend
+        // land on the port `AppServer` picked rather than the default.
+        var environment = ProcessInfo.processInfo.environment
+        environment["LC_PORT"] = String(AppServer.port)
+        process.environment = environment
         // Keep the backend's output. Sending it to /dev/null threw away every
         // line explaining why a slide was skipped, which is how a run can
         // finish with unexplained gaps and nothing to diagnose it with.
@@ -503,7 +510,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
                 return
             }
 
-            URLSession.shared.dataTask(with: healthURL) { _, response, _ in
+            URLSession.shared.dataTask(with: AppServer.healthURL) { _, response, _ in
                 guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
                     if self.attempts >= 180 {
                         DispatchQueue.main.async {
@@ -515,7 +522,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
                 }
                 DispatchQueue.main.async {
                     timer.invalidate()
-                    self.webView?.load(URLRequest(url: appURL))
+                    self.webView?.load(URLRequest(url: AppServer.pageURL))
                 }
             }.resume()
         }
@@ -524,7 +531,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
     private func serverIsAlreadyRunning() -> Bool {
         let semaphore = DispatchSemaphore(value: 0)
         var running = false
-        var request = URLRequest(url: healthURL)
+        var request = URLRequest(url: AppServer.healthURL)
         request.timeoutInterval = 0.5
         URLSession.shared.dataTask(with: request) { _, response, _ in
             if let http = response as? HTTPURLResponse, http.statusCode == 200 {
@@ -548,8 +555,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
     }
 }
 
-let app = NSApplication.shared
-let delegate = AppDelegate()
-app.delegate = delegate
-app.setActivationPolicy(.regular)
-app.run()
+/// The entry point.
+///
+/// An `@main` type rather than top-level code, because the launcher is more
+/// than one file now and Swift only allows top-level statements in a file
+/// called `main.swift`.
+@main
+enum LectureCompanion {
+    static func main() {
+        let app = NSApplication.shared
+        let delegate = AppDelegate()
+        app.delegate = delegate
+        app.setActivationPolicy(.regular)
+        app.run()
+    }
+}
