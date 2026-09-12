@@ -175,8 +175,8 @@
   /* ---- SURFACE table, dark -------------------------------------------- */
   /* The only percentages the dark theme may mix. Every level moves AWAY from
    * the ground, and the ground here is near the bottom of the lightness range,
-   * so away is lighter. Measured L*: ground 8.4, well 4.8, panel 13.4,
-   * hover 16.2, selected 18.6, float 21.3. */
+   * so away is lighter. Measured L*: ground 8.40, chrome 4.37, well 4.74,
+   * panel 13.37, hover 16.22, selected 18.61, float 21.35. */
   --surface-well: color-mix(in oklab, var(--ground) 12%, var(--ground-chrome));
   --surface-raised: color-mix(in oklab, var(--ground) 94%, var(--ink));
   --surface-hover: color-mix(in oklab, var(--ground) 91%, var(--ink));
@@ -248,8 +248,8 @@
    * is darker, and every level goes down. The float is the one exception: it
    * is the brightest surface in the theme and is separated from the panel by
    * --shadow-lift, because a near-white ground leaves no room above it.
-   * Measured L*: ground 94.9, chrome 89.0, panel 90.7, hover 88.6,
-   * selected 86.3, well 82.9, float 93.5. */
+   * Measured L*: ground 96.96, chrome 93.18, panel 91.72, hover 88.90,
+   * selected 86.42, well 89.96, float 95.92. */
   --surface-well: color-mix(in oklab, var(--ground) 92%, var(--ink));
   --surface-raised: color-mix(in oklab, var(--ground) 94%, var(--ink));
   --surface-hover: color-mix(in oklab, var(--ground) 91%, var(--ink));
