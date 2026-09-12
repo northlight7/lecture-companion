@@ -120,6 +120,15 @@
   --line-hair: #2c2925;
 
   --accent: #3f66c9;
+  /* The hover of a filled accent control moves the fill AWAY from its label.
+   * The base declaration mixes the accent toward `--ink`, which is dark in the
+   * light theme and therefore darkens the fill, which is right. In the dark
+   * theme `--ink` is nearly white, so the same mix LIGHTENS the fill and takes
+   * `--on-accent` from 4.58:1 to 3.70:1 while the label stays near-white: every
+   * hovered primary button in the app, below the 4.5 floor. Mixing toward
+   * `--ground` instead darkens it there, which is the same 12% step the light
+   * theme takes and reads as the same kind of hover. */
+  --accent-hover: color-mix(in oklab, var(--accent) 88%, var(--ground));
   --accent-ink: #93b0f0;
   --on-accent: #f0eee9;
 
@@ -169,6 +178,7 @@
   --line-hair: #ded8cd;
 
   --accent: #2b4fa8;
+  --accent-hover: color-mix(in oklab, var(--accent) 88%, var(--ink));
   --accent-ink: #2b4fa8;
   --on-accent: #fdfbf7;
 
@@ -215,6 +225,7 @@
     --line-hair: #ded8cd;
 
     --accent: #2b4fa8;
+  --accent-hover: color-mix(in oklab, var(--accent) 88%, var(--ink));
     --accent-ink: #2b4fa8;
     --on-accent: #fdfbf7;
 
