@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useRoute, type Route } from "@/lib/router";
+import { usePrefs, usePrefsUpdater } from "@/lib/prefs";
 import { ConnectProvider, StoreProvider } from "@/state/store";
 import { AppShell } from "@/shell/AppShell";
 import { Sidebar } from "@/shell/Sidebar";
@@ -15,6 +16,14 @@ export function App() {
   const route = useRoute();
   const [connectOpen, setConnectOpen] = useState(false);
   const openConnect = useCallback(() => setConnectOpen(true), []);
+  // Collapsing the sidebar is a preference, not a route: it survives a
+  // relaunch the same way the course order does.
+  const prefs = usePrefs();
+  const updatePrefs = usePrefsUpdater();
+  const toggleCollapsed = useCallback(
+    () => updatePrefs({ collapsed: !prefs.collapsed }),
+    [prefs.collapsed, updatePrefs],
+  );
 
   const cid = route.name === "courses" ? null : route.cid;
 
@@ -24,7 +33,15 @@ export function App() {
     <ConnectProvider open={openConnect}>
       <StoreProvider cid={cid}>
         <AppShell
-          chrome={<Sidebar route={route} onOpenConnect={openConnect} />}
+          collapsed={prefs.collapsed}
+          onToggleCollapsed={toggleCollapsed}
+          chrome={
+            <Sidebar
+              route={route}
+              onOpenConnect={openConnect}
+              onToggleCollapsed={toggleCollapsed}
+            />
+          }
         >
           <ScreenFor route={route} />
         </AppShell>

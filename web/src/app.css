@@ -106,6 +106,12 @@
     -webkit-app-region: drag;
   }
 
+  /* A control inside a drag region. Without this the window server takes the
+   * click for a window drag and the button never fires. */
+  .titlebar-control {
+    -webkit-app-region: no-drag;
+  }
+
   /* The skip link the previous frontend had. Off screen until focused, then
    * the first stop in the tab order, so the keyboard does not have to walk the
    * whole sidebar to reach the content. */

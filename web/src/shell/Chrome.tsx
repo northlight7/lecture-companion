@@ -7,12 +7,18 @@ import { cn } from "@/lib/utils";
  * scroll region, so a course with forty decks scrolls inside the sidebar and
  * the window still does not move.
  */
-export function SidebarFrame({ children }: { children: ReactNode }) {
+export function SidebarFrame({
+  top,
+  children,
+}: {
+  /** Sits beside the traffic lights, which the window server draws at the far
+   *  left of this strip. Anything here must carry `.titlebar-control`. */
+  top?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <>
-      {/* The traffic lights are drawn here by the window server. Nothing may be
-          placed in this strip: it belongs to the window, not to the page. */}
-      <div className="titlebar-drag h-[52px] shrink-0" aria-hidden="true" />
+      <div className="titlebar-drag flex h-[52px] shrink-0 items-center pl-[86px]">{top}</div>
       {children}
     </>
   );

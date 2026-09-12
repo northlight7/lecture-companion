@@ -5,6 +5,7 @@ import { hash, type Route } from "@/lib/router";
 import { ACCENT_FILL, courseAccent } from "@/lib/accents";
 import { useStore } from "@/state/store";
 import { NavRow, SectionLabel, SidebarFoot, SidebarFrame, SidebarScroll } from "@/shell/Chrome";
+import { SidebarToggle } from "@/shell/SidebarToggle";
 
 /**
  * The chrome. Every course, and the decks of the course you are in.
@@ -13,14 +14,22 @@ import { NavRow, SectionLabel, SidebarFoot, SidebarFrame, SidebarScroll } from "
  * title: the traffic lights are drawn over the strip above these rows, so the
  * sidebar is where the window's identity lives.
  */
-export function Sidebar({ route, onOpenConnect }: { route: Route; onOpenConnect: () => void }) {
+export function Sidebar({
+  route,
+  onOpenConnect,
+  onToggleCollapsed,
+}: {
+  route: Route;
+  onOpenConnect: () => void;
+  onToggleCollapsed: () => void;
+}) {
   const { courses, course, connection } = useStore();
 
   const activeDeck = route.name === "viewer" ? route.did : null;
   const inCourse = route.name !== "courses";
 
   return (
-    <SidebarFrame>
+    <SidebarFrame top={<SidebarToggle collapsed={false} onToggle={onToggleCollapsed} />}>
       <SidebarScroll>
         <NavRow href={hash.courses()} current={!inCourse}>
           <span className="flex items-center gap-2">

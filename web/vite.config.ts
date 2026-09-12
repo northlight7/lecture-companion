@@ -39,12 +39,15 @@ export default defineConfig({
     chunkSizeWarningLimit: 1500,
     rollupOptions: {
       output: {
-        // Deterministic names. The bundle is served from disk by a local
-        // process, so cache-busting hashes buy nothing and make the gate that
-        // greps the compiled CSS harder to write.
-        entryFileNames: "assets/app.js",
-        chunkFileNames: "assets/[name].js",
-        assetFileNames: "assets/[name][extname]",
+        // Content-hashed. Stable names were tried, on the reasoning that the
+        // bundle is served from disk by a local process and a hash buys
+        // nothing. That was wrong: the web view keeps a real HTTP cache, so
+        // after a rebuild it went on serving the previous app.js and every
+        // screenshot showed the build before last. A content hash makes a
+        // stale asset impossible.
+        entryFileNames: "assets/[name]-[hash].js",
+        chunkFileNames: "assets/[name]-[hash].js",
+        assetFileNames: "assets/[name]-[hash][extname]",
       },
     },
   },

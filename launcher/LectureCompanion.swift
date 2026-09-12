@@ -159,7 +159,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
         window.minSize = NSSize(width: 1024, height: 640)
 
         let configuration = WKWebViewConfiguration()
-        configuration.websiteDataStore = .nonPersistent()
+        // `.default()` rather than `.nonPersistent()`, so the reader's own
+        // preferences survive a relaunch: the order they drag their courses
+        // into, and whether they left the sidebar collapsed. The store is
+        // scoped to http://127.0.0.1:8765, which is this app's own page and
+        // nothing else, so there is no browsing data to keep out.
+        // The page and every asset come off local disk, so an HTTP cache can
+        // only ever serve a build that is no longer there: a rebuild changes
+        // the hashed asset names, and a cached index.html would then point at
+        // a file that does not exist. Three ways to stop that, and only the
+        // third works. `WKWebViewConfiguration.urlCache` is iOS-only.
+        // `URLCache.shared` is set in this process, and the web view fetches in
+        // its own, so it never saw it. Clearing the two cache types on the
+        // website data store does reach it, and leaves `WKWebsiteDataTypeLocalStorage`
+        // alone, which is where the reader's course order and sidebar state live.
+        let store = WKWebsiteDataStore.default()
+        store.removeData(
+            ofTypes: [WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache],
+            modifiedSince: .distantPast
+        ) { }
+        configuration.websiteDataStore = store
         configuration.userContentController.add(self, name: "folderPicker")
         let webView = WKWebView(frame: frame, configuration: configuration)
         webView.uiDelegate = self
