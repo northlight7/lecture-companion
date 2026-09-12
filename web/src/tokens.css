@@ -145,10 +145,16 @@
    */
   --ink-faint: #a19c93;
 
-  /* Chosen so it clears 3:1 on the panel as well as both grounds: a text input
-   * inside a dialog sits on a panel, and the darker value this replaces
-   * measured 2.85:1 there. */
-  --line-control: #79726a;
+  /* Chosen so it clears 3:1 against EVERY surface a boundary is drawn on, and
+   * the list was wrong twice. It first cleared the grounds only, then the
+   * grounds and the panel — with the note "a text input inside a dialog sits
+   * on a panel", which is false. A dialog's interior is `--surface-float`, and
+   * an input in it is `border border-line bg-ground` sitting directly on that
+   * float, so the boundary is the only thing identifying the control and it
+   * measured 2.66:1 against the float while both gates passed. The value is
+   * now the one that clears the float as well: 3.36:1 there, 4.23 on the
+   * panel, 4.73 on the ground, 5.11 on the chrome ground, 5.08 on the well. */
+  --line-control: #8a837a;
   --line-hair: #2c2925;
 
   --accent: #3f66c9;
