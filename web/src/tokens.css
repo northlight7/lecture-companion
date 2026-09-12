@@ -13,8 +13,23 @@
  *   --ground-chrome   the sidebar ground
  * Every other background in the app is a color-mix() of one of those two with
  * one of the theme's ink tokens, at a percentage from the SURFACE table at the
- * bottom of this file. There is no third ground, and no border is ever drawn
- * between the two.
+ * bottom of each theme block. There is no third ground, and no border is ever
+ * drawn between the two.
+ *
+ * ELEVATION. Three levels, defined in DESIGN.md and gated by
+ * `.internal/gate_elevation.py`, which computes the CIE L* of every surface and
+ * checks the separation floor between each adjoining pair.
+ *
+ *   level 0  ground   --ground, --ground-chrome, --surface-well
+ *   level 1  panel    --surface-raised, and its --surface-hover / -selected steps
+ *   level 2  float    --surface-float, the only surface that casts a shadow
+ *
+ * In the dark theme the ground is near the bottom of the lightness range, so
+ * every level moves away from it by getting lighter. In the light theme the
+ * ground is near the top, so the panel, its states and the well move away by
+ * getting darker. The float is the brightest surface in the light theme: it is
+ * separated from the panel by --shadow-lift rather than by its value, because
+ * there is no room above a near-white ground.
  */
 
 /* ====================================================================== */
@@ -40,19 +55,22 @@
 
   /* ---- radius scale (three values, one role each) ---------------------- */
   --radius-control: 6px;  /* buttons, inputs, selects, chips, badges */
-  --radius-surface: 10px; /* rows, list selection, raised list surfaces */
-  --radius-panel: 14px;   /* dialogs, the composer, the slide stage */
+  --radius-surface: 10px; /* rows, list selection, the panel level */
+  --radius-panel: 14px;   /* dialogs, the composer, the float level */
 
   /* ---- density --------------------------------------------------------- */
-  --control-h: 32px;
-  --field-h: 38px;
-  --row-h: 34px;
+  /* Three heights for three jobs. A control is a box you click, a row is a
+   * line you read, a field is where you type. One value for all three would
+   * make an input and a button look like the same object. */
+  --control-h: 36px;
+  --field-h: 44px;
+  --row-h: 38px;
   --measure: 720px;       /* the prose measure. Prose only, never chrome. */
   --chrome-w: 280px;      /* the sidebar. */
   /* The widest the content column is allowed to get, and the width of the rail
-   * beside a prose column. The measure alone would strand 38% of the content
-   * column at 1440, so prose screens put real material in the rail: source
-   * links, the slide's position, its terms and notes. */
+   * beside a prose column. The measure alone would strand a large part of the
+   * content column at 1440, so prose screens put real material in the rail:
+   * source links, the slide's position, its terms and notes. */
   --column-max: 1120px;
   --rail-w: 336px;
 
@@ -62,29 +80,43 @@
   --ease: cubic-bezier(0.2, 0, 0, 1);
 
   /* ---- type scale ------------------------------------------------------ */
-  /* Named --fs-*, not --text-*. Tailwind's `@theme inline` does not emit its
+  /* SIX STEPS, AND THE SCALE IS CLOSED. A rendered size that is not one of
+   * these six is a defect, and `.internal/gate_type.py` reads the built CSS
+   * and fails on one.
+   *
+   * Named --fs-*, not --text-*. Tailwind's `@theme inline` does not emit its
    * own custom properties, so a `var(--text-body)` written by hand would
    * resolve to nothing, and a `--text-chrome` theme key would generate a
    * `text-chrome` utility that collides with the colour of the same name and
-   * loses. The utilities `text-meta`, `text-ui` and `text-body` are mapped to
-   * these in app.css. */
-  --fs-meta: 12px;
-  --fs-ui: 13px;
-  --fs-body: 17px;
+   * loses. The utilities `text-micro`, `text-meta`, `text-ui`, `text-lead`,
+   * `text-body` and `text-display` are mapped to these in app.css.
+   *
+   * 14  meta    metadata, captions, footnotes, AND uppercase micro-labels.
+   * 16  ui      default chrome: rows, controls, cell text.
+   * 18  lead    chrome emphasis: section headings, tile and dialog titles.
+   * 21  body    the reading body.
+   * 26  head    a reading heading: a slide title, a prose h1.
+   * 30  display the screen title, once per screen.
+   *
+   * THE MINIMUM IS 14px. Nothing renders smaller, including badges and
+   * counters. That is two steps above the 12px floor the sources support, on
+   * purpose: the complaint was that the text was too small to read, and a
+   * floor argued down to the published minimum answers the wrong question.
+   *
+   * The chrome tier is an arithmetic 2px ladder (14, 16, 18): chrome is scanned
+   * rather than read, so it is bought back with a tight ratio, and the ladder is
+   * where the density lives. Nothing is 13px. That value was deleted, not
+   * deprecated. */
+  --fs-meta: 14px;
+  --fs-ui: 16px;
+  --fs-lead: 18px;
+  --fs-body: 21px;
+  --fs-head: 26px;
+  --fs-display: 30px;
 
-  /* ---- SURFACE table --------------------------------------------------- */
-  /* The only percentages the app may mix. Each is a ground plus an ink. */
-  --surface-hover: color-mix(in oklab, var(--ground) 94%, var(--ink));
-  --surface-selected: color-mix(in oklab, var(--ground) 90%, var(--ink));
-  --surface-raised: color-mix(in oklab, var(--ground) 96%, var(--ink));
-  --surface-chrome-hover: color-mix(in oklab, var(--ground-chrome) 92%, var(--ink));
-  --surface-chrome-selected: color-mix(in oklab, var(--ground-chrome) 87%, var(--ink));
-  --surface-sunken: color-mix(in oklab, var(--ground) 92%, var(--ground-chrome));
-
-  /* State of the accent itself, and the dialog scrim. Neither is a ground:
-   * both are the accent or the ground at a stated mix, so the two-ground rule
-   * still holds and no ad-hoc alpha appears anywhere else in the app. */
-  --accent-hover: color-mix(in oklab, var(--accent) 88%, var(--ink));
+  /* The accent at rest and on hover. `--accent-hover` is per-theme: see the
+   * note in the dark block. */
+  --accent-hover: color-mix(in oklab, var(--accent) 88%, var(--ground));
   --scrim: color-mix(in oklab, var(--ground) 78%, transparent);
 }
 
@@ -111,12 +143,12 @@
    * not a hover state at all, so faint is not permitted there instead, and
    * `gate_static.py` refuses to let it appear there.
    */
-  --ink-faint: #959087;
+  --ink-faint: #9a958c;
 
-  /* Chosen so it clears 3:1 on the raised surface as well as both grounds:
-   * a text input inside a dialog sits on --surface-raised, and the darker
-   * value this replaces measured 2.85:1 there. */
-  --line-control: #706a62;
+  /* Chosen so it clears 3:1 on the panel as well as both grounds: a text input
+   * inside a dialog sits on a panel, and the darker value this replaces
+   * measured 2.85:1 there. */
+  --line-control: #79726a;
   --line-hair: #2c2925;
 
   --accent: #3f66c9;
@@ -140,24 +172,40 @@
 
   --shadow-lift: 0 18px 48px -18px rgb(0 0 0 / 0.55), 0 2px 8px rgb(0 0 0 / 0.28);
 
+  /* ---- SURFACE table, dark -------------------------------------------- */
+  /* The only percentages the dark theme may mix. Every level moves AWAY from
+   * the ground, and the ground here is near the bottom of the lightness range,
+   * so away is lighter. Measured L*: ground 8.4, well 4.8, panel 13.4,
+   * hover 16.2, selected 18.6, float 21.3. */
+  --surface-well: color-mix(in oklab, var(--ground) 12%, var(--ground-chrome));
+  --surface-raised: color-mix(in oklab, var(--ground) 94%, var(--ink));
+  --surface-hover: color-mix(in oklab, var(--ground) 91%, var(--ink));
+  --surface-selected: color-mix(in oklab, var(--ground) 88%, var(--ink));
+  --surface-float: color-mix(in oklab, var(--ground) 85%, var(--ink));
+  --surface-chrome-hover: color-mix(in oklab, var(--ground-chrome) 92%, var(--ink));
+  --surface-chrome-selected: color-mix(in oklab, var(--ground-chrome) 87%, var(--ink));
+
   /* ---- course accents -------------------------------------------------- */
   /* Six hues, derived by `.internal/derive_accents.py` rather than picked by
    * eye, so every value is the one that satisfies the floors in DESIGN.md: a
    * fill is >= 3:1 against every ground as a graphic and carries --on-accent
-   * at >= 4.5:1, and an ink is >= 4.5:1 as text on every ground. A course is
-   * assigned one from its id, so its colour never changes. */
-  --course-blue-fill: #3562de;  /* worst pair 3.09:1 */
-  --course-blue-ink: #6483d8;  /* worst pair 4.52:1 */
-  --course-teal-fill: #15757f;  /* worst pair 3.04:1 */
-  --course-teal-ink: #28939f;  /* worst pair 4.51:1 */
-  --course-green-fill: #147b3a;  /* worst pair 3.07:1 */
-  --course-green-ink: #279b51;  /* worst pair 4.61:1 */
-  --course-amber-fill: #8c6117;  /* worst pair 3.00:1 */
-  --course-amber-ink: #af7f2c;  /* worst pair 4.61:1 */
-  --course-rose-fill: #ce222d;  /* worst pair 3.04:1 */
-  --course-rose-ink: #d76068;  /* worst pair 4.51:1 */
-  --course-violet-fill: #a424db;  /* worst pair 3.01:1 */
-  --course-violet-ink: #b564d8;  /* worst pair 4.52:1 */
+   * at >= 4.5:1, an ink is >= 4.5:1 as text on every ground, all six sit in
+   * one narrow OKLCH lightness AND chroma band so none reads as louder than
+   * another, every pair is at least dE 11 apart in OKLab, and no hue is red
+   * or green because those two are what --meaning-bad and --meaning-good mean.
+   * A course is assigned one from its id, so its colour never changes. */
+  --course-blue-fill: #4a68ba;
+  --course-blue-ink: #6886d9;
+  --course-teal-fill: #30767e;
+  --course-teal-ink: #2997a3;
+  --course-green-fill: #247b43;
+  --course-green-ink: #289f54;
+  --course-amber-fill: #8a6628;
+  --course-amber-ink: #b4822d;
+  --course-rose-fill: #a95157;
+  --course-rose-ink: #d96870;
+  --course-violet-fill: #875c99;
+  --course-violet-ink: #b768d9;
 }
 
 /* ====================================================================== */
@@ -172,9 +220,9 @@
 
   --ink: #1b1915;
   --ink-muted: #5c554b;
-  --ink-faint: #686157;
+  --ink-faint: #645d53;
 
-  --line-control: #8a8175;
+  --line-control: #837a6e;
   --line-hair: #ded8cd;
 
   --accent: #2b4fa8;
@@ -190,26 +238,45 @@
 
   --shadow-lift: 0 18px 48px -20px rgb(60 50 35 / 0.28), 0 2px 8px rgb(60 50 35 / 0.10);
 
+  /* ---- SURFACE table, light ------------------------------------------- */
+  /* The ground here is near the TOP of the lightness range, so away from it
+   * is darker, and every level goes down. The float is the one exception: it
+   * is the brightest surface in the theme and is separated from the panel by
+   * --shadow-lift, because a near-white ground leaves no room above it.
+   * Measured L*: ground 94.9, chrome 89.0, panel 90.7, hover 88.6,
+   * selected 86.3, well 82.9, float 93.5. */
+  --surface-well: color-mix(in oklab, var(--ground) 92%, var(--ink));
+  --surface-raised: color-mix(in oklab, var(--ground) 94%, var(--ink));
+  --surface-hover: color-mix(in oklab, var(--ground) 91%, var(--ink));
+  --surface-selected: color-mix(in oklab, var(--ground) 88%, var(--ink));
+  --surface-float: color-mix(in oklab, var(--ground) 99%, var(--ink));
+  --surface-chrome-hover: color-mix(in oklab, var(--ground-chrome) 92%, var(--ink));
+  --surface-chrome-selected: color-mix(in oklab, var(--ground-chrome) 87%, var(--ink));
+
   /* ---- course accents -------------------------------------------------- */
   /* Six hues, derived by `.internal/derive_accents.py` rather than picked by
    * eye, so every value is the one that satisfies the floors in DESIGN.md: a
    * fill is >= 3:1 against every ground as a graphic and carries --on-accent
-   * at >= 4.5:1, and an ink is >= 4.5:1 as text on every ground. A course is
-   * assigned one from its id, so its colour never changes. */
-  --course-blue-fill: #426de0;  /* worst pair 3.93:1 */
-  --course-blue-ink: #3b62ce;  /* worst pair 4.62:1 */
-  --course-teal-fill: #167d88;  /* worst pair 4.09:1 */
-  --course-teal-ink: #20757e;  /* worst pair 4.52:1 */
-  --course-green-fill: #15843e;  /* worst pair 4.01:1 */
-  --course-green-ink: #1f7a40;  /* worst pair 4.51:1 */
-  --course-amber-fill: #9a6a19;  /* worst pair 3.97:1 */
-  --course-amber-ink: #876222;  /* worst pair 4.65:1 */
-  --course-rose-fill: #dd2c38;  /* worst pair 3.93:1 */
-  --course-rose-ink: #c4313b;  /* worst pair 4.59:1 */
-  --course-violet-fill: #ad3adf;  /* worst pair 3.97:1 */
-  --course-violet-ink: #a037cd;  /* worst pair 4.51:1 */
+   * at >= 4.5:1, an ink is >= 4.5:1 as text on every ground, all six sit in
+   * one narrow OKLCH lightness AND chroma band so none reads as louder than
+   * another, every pair is at least dE 11 apart in OKLab, and no hue is red
+   * or green because those two are what --meaning-bad and --meaning-good mean.
+   * A course is assigned one from its id, so its colour never changes. */
+  --course-blue-fill: #426de0;
+  --course-blue-ink: #375fcd;
+  --course-teal-fill: #167d88;
+  --course-teal-ink: #1f717a;
+  --course-green-fill: #15843e;
+  --course-green-ink: #1e763e;
+  --course-amber-fill: #9a6a19;
+  --course-amber-ink: #835f21;
+  --course-rose-fill: #dd2c38;
+  --course-rose-ink: #c0303a;
+  --course-violet-fill: #ad3adf;
+  --course-violet-ink: #9b32c8;
 }
 
+/* A reader who has never chosen a theme follows the system. */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme]) {
     color-scheme: light;
@@ -219,13 +286,13 @@
 
     --ink: #1b1915;
     --ink-muted: #5c554b;
-    --ink-faint: #686157;
+    --ink-faint: #645d53;
 
-    --line-control: #8a8175;
+    --line-control: #837a6e;
     --line-hair: #ded8cd;
 
     --accent: #2b4fa8;
-  --accent-hover: color-mix(in oklab, var(--accent) 88%, var(--ink));
+    --accent-hover: color-mix(in oklab, var(--accent) 88%, var(--ink));
     --accent-ink: #2b4fa8;
     --on-accent: #fdfbf7;
 
@@ -237,23 +304,29 @@
 
     --shadow-lift: 0 18px 48px -20px rgb(60 50 35 / 0.28), 0 2px 8px rgb(60 50 35 / 0.10);
 
-  /* ---- course accents -------------------------------------------------- */
-  /* Six hues, derived by `.internal/derive_accents.py` rather than picked by
-   * eye, so every value is the one that satisfies the floors in DESIGN.md: a
-   * fill is >= 3:1 against every ground as a graphic and carries --on-accent
-   * at >= 4.5:1, and an ink is >= 4.5:1 as text on every ground. A course is
-   * assigned one from its id, so its colour never changes. */
-    --course-blue-fill: #426de0;  /* worst pair 3.93:1 */
-    --course-blue-ink: #3b62ce;  /* worst pair 4.62:1 */
-    --course-teal-fill: #167d88;  /* worst pair 4.09:1 */
-    --course-teal-ink: #20757e;  /* worst pair 4.52:1 */
-    --course-green-fill: #15843e;  /* worst pair 4.01:1 */
-    --course-green-ink: #1f7a40;  /* worst pair 4.51:1 */
-    --course-amber-fill: #9a6a19;  /* worst pair 3.97:1 */
-    --course-amber-ink: #876222;  /* worst pair 4.65:1 */
-    --course-rose-fill: #dd2c38;  /* worst pair 3.93:1 */
-    --course-rose-ink: #c4313b;  /* worst pair 4.59:1 */
-    --course-violet-fill: #ad3adf;  /* worst pair 3.97:1 */
-    --course-violet-ink: #a037cd;  /* worst pair 4.51:1 */
+    /* The light surface table, repeated: `var()` inside a media query resolves
+     * against this block, so every token the surfaces are built from has to be
+     * here too. */
+    --surface-well: color-mix(in oklab, var(--ground) 92%, var(--ink));
+    --surface-raised: color-mix(in oklab, var(--ground) 94%, var(--ink));
+    --surface-hover: color-mix(in oklab, var(--ground) 91%, var(--ink));
+    --surface-selected: color-mix(in oklab, var(--ground) 88%, var(--ink));
+    --surface-float: color-mix(in oklab, var(--ground) 99%, var(--ink));
+    --surface-chrome-hover: color-mix(in oklab, var(--ground-chrome) 92%, var(--ink));
+    --surface-chrome-selected: color-mix(in oklab, var(--ground-chrome) 87%, var(--ink));
+
+    /* ---- course accents, light ----------------------------------------- */
+    --course-blue-fill: #426de0;
+    --course-blue-ink: #375fcd;
+    --course-teal-fill: #167d88;
+    --course-teal-ink: #1f717a;
+    --course-green-fill: #15843e;
+    --course-green-ink: #1e763e;
+    --course-amber-fill: #9a6a19;
+    --course-amber-ink: #835f21;
+    --course-rose-fill: #dd2c38;
+    --course-rose-ink: #c0303a;
+    --course-violet-fill: #ad3adf;
+    --course-violet-ink: #9b32c8;
   }
 }

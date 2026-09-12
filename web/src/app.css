@@ -25,12 +25,17 @@
   --color-good: var(--meaning-good);
   --color-warn: var(--meaning-warn);
   --color-bad: var(--meaning-bad);
+  /* The elevation levels, named after the level and not after the look, so a
+   * class list says which layer a thing is on rather than what it resembles.
+   * `bg-well` is level 0, `bg-raised` is level 1, `bg-float` is level 2, and
+   * `bg-hover` / `bg-selected` are level-1 state steps. */
+  --color-well: var(--surface-well);
+  --color-raised: var(--surface-raised);
+  --color-float: var(--surface-float);
   --color-hover: var(--surface-hover);
   --color-selected: var(--surface-selected);
-  --color-raised: var(--surface-raised);
   --color-chrome-hover: var(--surface-chrome-hover);
   --color-chrome-selected: var(--surface-chrome-selected);
-  --color-sunken: var(--surface-sunken);
 
   --font-reading: var(--font-serif);
   --font-ui: var(--font-sans);
@@ -51,7 +56,10 @@
    * and nothing else. The sizes themselves live in tokens.css. */
   --text-meta: var(--fs-meta);
   --text-ui: var(--fs-ui);
+  --text-lead: var(--fs-lead);
   --text-body: var(--fs-body);
+  --text-head: var(--fs-head);
+  --text-display: var(--fs-display);
 
 
   /* The six course accents. Enumerated, not generated: Tailwind only emits
@@ -92,7 +100,7 @@
   body {
     margin: 0;
     font-family: var(--font-sans);
-    font-size: 13px;
+    font-size: var(--fs-ui);
     line-height: 1.5;
     color: var(--ink);
     background: var(--ground);
@@ -316,7 +324,7 @@
   & code {
     font-family: var(--font-mono);
     font-size: 0.86em;
-    background: var(--surface-sunken);
+    background: var(--surface-well);
     border-radius: var(--radius-control);
     padding: 0.1em 0.35em;
   }
@@ -324,7 +332,7 @@
   & pre {
     font-family: var(--font-mono);
     font-size: 0.86em;
-    background: var(--surface-sunken);
+    background: var(--surface-well);
     border-radius: var(--radius-surface);
     padding: var(--space-3) var(--space-4);
     overflow-x: auto;
@@ -352,7 +360,7 @@
     width: 100%;
     border-collapse: collapse;
     font-family: var(--font-sans);
-    font-size: 13px;
+    font-size: var(--fs-meta);
     margin-block: 0 var(--space-4);
   }
 
