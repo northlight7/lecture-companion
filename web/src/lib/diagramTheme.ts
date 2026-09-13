@@ -84,6 +84,48 @@ const FALLBACK: Record<string, string> = {
   "--surface-selected": "--ground-chrome",
 };
 
+/**
+ * mermaid's one size-bearing theme variable: `fontSize`.
+ *
+ * WHY THIS EXISTS. The colour table above pins every fill, stroke and label
+ * colour, but the *sizes* were mermaid's own. Whatever the base theme defaults
+ * to (16px for a flowchart label, 10-12px in the class, state, usecase, block
+ * and journey chunks that ship in the same bundle) reached the screen, because
+ * nothing here set it. The project's rule is that nothing renders below 14px,
+ * for any reason, and a diagram label is no exception.
+ *
+ * WHICH STEP, AND WHY `--fs-lead` (18px). A label inside a diagram is figure
+ * text in the reading column, not app chrome: it is the thing the reader looks
+ * at to read the picture, so it is held to the reading scale, not the control
+ * scale. The column's prose is `--fs-body` (21px). One step down is
+ * `--fs-lead` (18px), which is the largest step that still reads as a caption
+ * to the prose rather than competing with it, and the smallest one that leaves
+ * the 14px floor intact once the figure has been through the width scaling the
+ * reading column applies to a wide SVG. `--fs-meta` (14px) is the floor itself,
+ * so any scaling at all would put a label under it, and `--fs-ui` (16px) is a
+ * control label's size, which this is not.
+ *
+ * WHAT IT DOES NOT REACH. `fontSize` is the generic slot: the base theme
+ * derives its label, node, edge-label and title sizes from it. The per-diagram
+ * font sizes mermaid also ships (sequence `actorFontSize`, `messageFontSize`,
+ * `noteFontSize`; journey and gantt `taskFontSize`, `sectionFontSize`,
+ * `titleFontSize`; the c4 `*FontSize` family; the quadrant and xy label sizes)
+ * are *not* theme variables. They hang off each diagram's own config object,
+ * so `themeVariables` cannot set them at all. See the module's note in the
+ * report: they are the sizes still outside this file's reach.
+ */
+const FONT_SIZE_TOKEN = "--fs-lead";
+
+/** A token written as a length, taken as its computed value. No canvas: a
+ * length is already the form a CSS declaration wants, unlike a `color-mix()`. */
+function readSize(name: string): string | null {
+  const raw = getComputedStyle(document.documentElement)
+    .getPropertyValue(name)
+    .replace(/\s+/g, " ")
+    .trim();
+  return raw || null;
+}
+
 /** Resolve a CSS colour to one concrete `rgb(...)`, or null if it will not. */
 function toConcrete(value: string): string | null {
   const probe =
@@ -134,5 +176,10 @@ export function diagramThemeVariables(theme: Theme): Record<string, string> {
     const value = readToken(token);
     if (value) vars[key] = value;
   }
+  // Every size mermaid derives itself comes off this one slot. If the token is
+  // missing the slot is left unset and mermaid's own size stands, which is the
+  // state this table was added to end, so the fallback is the token's own
+  // literal step rather than nothing.
+  vars.fontSize = readSize(FONT_SIZE_TOKEN) ?? "18px";
   return vars;
 }

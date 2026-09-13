@@ -27,6 +27,7 @@ import type {
   KnowledgeIndexStatus,
   SearchResult,
 } from "@/lib/types";
+import { explanationProse } from "@/lib/overview";
 import { Section } from "@/shell/Screen";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -105,8 +106,12 @@ function SearchResultRow({ cid, row }: { cid: string; row: SearchResult }): JSX.
         <span className="font-medium text-ink">{row.artifact_filename}</span> · {row.location}
       </a>
 
+      {/* A snippet is stored text, and a stored explanation carries the
+       *  course-overview meta-text the pipeline put in its prompt. The phrase
+       *  comes off the snippet here, the same way it comes off the explanation
+       *  it was taken from. */}
       <p className="mt-1 text-ui text-ink-muted">
-        {row.snippet || "Structured source object"}
+        {explanationProse(row.snippet) || "Structured source object"}
       </p>
 
       {row.relationship_reason ? (

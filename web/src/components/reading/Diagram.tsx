@@ -76,7 +76,16 @@ export function Diagram({ source }: { source: string }) {
       ref={host}
       role="img"
       aria-label="Diagram from this slide's explanation"
-      className="my-6 flex justify-center overflow-x-auto rounded-srf bg-well p-4 [&_svg]:h-auto [&_svg]:max-w-full"
+      // `[&_svg]:max-w-full` used to shrink a wide diagram to fit, and that is
+      // how the type floor was broken: at a 1440 window the SVG scaled to about
+      // 0.67 and an 18px label painted at roughly 12px. The floor is a rule
+      // about rendered pixels, so the diagram scrolls instead of shrinking.
+      //
+      // `justify-start` with `mx-auto` on the child, not `justify-center`: a
+      // centred flex child that overflows its scroll container gets its leading
+      // edge clipped, which would hide the left of every wide diagram. Auto
+      // margins still centre a narrow one.
+      className="my-6 flex justify-start overflow-x-auto rounded-srf bg-well p-4 [&_svg]:mx-auto [&_svg]:h-auto"
     />
   );
 }

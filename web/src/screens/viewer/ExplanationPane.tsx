@@ -7,6 +7,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { Diagram } from "@/components/reading/Diagram";
 import { Prose } from "@/components/reading/Prose";
+import { explanationProse } from "@/lib/overview";
 import type { Explanation, Term } from "@/lib/types";
 
 /** Must match MAX_TERM_CHARS in app/terms.py. */
@@ -123,7 +124,7 @@ export function SlideFooter({
                   <Trash2 size={16} strokeWidth={1.75} aria-hidden />
                 </Button>
               </div>
-              <Prose>{term.note}</Prose>
+              <Prose>{explanationProse(term.note)}</Prose>
             </li>
           ))}
         </ul>
@@ -305,7 +306,14 @@ export function ExplanationPane({
     if (event.key === "Escape") setPick(null);
   };
 
-  const example = explanation?.example.trim() ?? "";
+  // The body, the heading, the worked example and a term gloss are all the
+  // model's prose, and all of them can carry the course-overview meta-text the
+  // pipeline hands the prompt (`app/pipeline.py:301`). `explanationProse`
+  // removes those phrases and leaves the teaching around them alone. The
+  // mermaid source is code and is not touched.
+  const heading = explanationProse(explanation?.heading.trim() ?? "");
+  const body = explanationProse(explanation?.body ?? "");
+  const example = explanationProse(explanation?.example.trim() ?? "");
   const mermaid = explanation?.mermaid.trim() ?? "";
 
   const notConnected = (
@@ -400,7 +408,7 @@ export function ExplanationPane({
           ) : (
             <article className="flex flex-col">
               <h2 className="font-reading text-head leading-[1.25] font-semibold text-ink">
-                {explanation.heading.trim() || `Slide ${slideNumber}`}
+                {heading || `Slide ${slideNumber}`}
               </h2>
 
               <div
@@ -411,7 +419,7 @@ export function ExplanationPane({
                 onMouseDown={() => setPick(null)}
                 className="mt-3"
               >
-                <Prose>{explanation.body}</Prose>
+                <Prose>{body}</Prose>
 
                 {example ? (
                   <aside className="mt-6">
