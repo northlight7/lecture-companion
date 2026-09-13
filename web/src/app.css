@@ -223,6 +223,24 @@
 }
 
 /* Prose measure. Never chrome, never lists, never tables. */
+/* Reduced motion. WCAG 2.3.3 is met by the tokens below rather than by a rule
+ * per component, so a component added later inherits it: anything that moves
+ * is driven by `--dur-panel` and `--lift`, and both collapse here.
+ *
+ * The motion is REPLACED, not deleted. Apple's guidance is explicit that
+ * removing an animation outright costs more than it saves, and that the
+ * substitute for movement in x, y and z is a fade. So the sidebar still
+ * changes width and the tile still changes surface, they simply arrive in one
+ * frame. Setting the duration to 1ms rather than 0 keeps the transition event
+ * firing, which anything waiting on `transitionend` would otherwise miss.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-panel: 1ms;
+    --lift: 0px;
+  }
+}
+
 @utility reading-column {
   width: 100%;
   max-width: var(--measure);

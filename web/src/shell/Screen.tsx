@@ -17,6 +17,7 @@ export function Screen({
   actions,
   meta,
   titleClassName,
+  rule,
   children,
   className,
 }: {
@@ -29,6 +30,10 @@ export function Screen({
    *  course's accent; the heading belongs to this frame, so the class is
    *  passed in rather than reached for from outside. */
   titleClassName?: string;
+  /** A course screen passes its own accent fill. A short rule under the title
+   *  is the one mark that says which course this page belongs to, without
+   *  tinting a surface the reader has to read through. */
+  rule?: string;
   children: ReactNode;
   className?: string;
 }) {
@@ -56,6 +61,9 @@ export function Screen({
             {title}
           </h1>
           {meta ? <div className="mt-2 text-meta text-ink-faint">{meta}</div> : null}
+          {rule ? (
+            <div aria-hidden className={cn("mt-4 h-[3px] w-14 rounded-ctl", rule)} />
+          ) : null}
         </div>
         {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
       </div>
@@ -84,7 +92,7 @@ export function Section({
   return (
     <section className={cn("mt-8 first:mt-0", className)}>
       <div className="mb-3 flex items-center justify-between gap-4">
-        <h2 className="font-ui text-lead font-semibold text-ink">{title}</h2>
+        <h2 className="font-ui text-head font-semibold text-ink">{title}</h2>
         {action}
       </div>
       {children}

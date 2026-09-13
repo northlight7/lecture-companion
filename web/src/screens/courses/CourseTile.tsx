@@ -3,10 +3,30 @@
  *
  * After Canvas: a coloured cover across the top in the course's own accent,
  * carrying the course's monogram with an overflow menu in its corner, then the
- * title in that accent and one line of metadata. No state word, no progress bar
- * and no per-tile action: progress is what the course screen is for, and this
+ * title in that accent and the course's two counts on a footer rail. No state
+ * word and no progress bar: progress is what the course screen is for, and this
  * grid is a shelf (`.internal/DESIGN.md`, "The courses screen: a Canvas tile
  * grid").
+ *
+ * WHAT CHANGED, AND WHY IT READ AS CRUDE. The first version was a 192px tile
+ * with a single run-on metadata line, and the whole of its lower half was one
+ * two-line title with a sentence under it that ran out at the tile's edge. A
+ * card whose content stops mid-air has no base, and the eye reads the missing
+ * base as an unfinished card rather than as a small one. Three things give it
+ * one:
+ *
+ *   * The counts are a FOOTER RAIL, ruled off from the title by a hairline and
+ *     pinned to the bottom edge, instead of a sentence following the title.
+ *     Labelled figures with tabular numerals read as a shelf label. The run-on
+ *     line did not, and it also repeated the word "slides" on every tile.
+ *   * The tile is 224px rather than 192, so the cover keeps its share and the
+ *     body stops being a slot the title barely fits into.
+ *   * It is a SURFACE that lifts, not a rectangle that changes colour. Hover
+ *     and focus move it half a pixel up onto the float level and give it the
+ *     float's shadow, which is the one place in the app a shadow is allowed and
+ *     the one place a pointer is guaranteed to be. Banned-list entry 18 said
+ *     "no shadow outside the float level" and this does not break it: the tile
+ *     IS at the float level while it is hovered.
  *
  * The cover is not decoration and it is not a bare colour. The accent palette
  * holds lightness constant by design, which spends the one non-colour channel
@@ -39,19 +59,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-/**
- * The one metadata line: how much is in the course, never how much is done.
- * `no slides yet` is what a course with no slides says, the same way the row
- * this replaced said it.
- */
-function metaLine(course: CourseRow): string {
-  const decks = `${course.n_decks} ${course.n_decks === 1 ? "deck" : "decks"}`;
-  const slides = course.n_slides
-    ? `${course.n_slides} ${course.n_slides === 1 ? "slide" : "slides"} uploaded`
-    : "no slides yet";
-  return `${decks} · ${slides}`;
-}
 
 /**
  * Words a monogram is allowed to skip: articles, conjunctions and the short
@@ -128,6 +135,20 @@ export function courseMonogram(title: string): string {
   return monogram || MONOGRAM_FALLBACK;
 }
 
+/** One labelled figure on the footer rail. */
+function Stat({ label, value }: { label: string; value: number }): JSX.Element {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <dt className="text-meta font-medium tracking-[0.06em] text-ink-faint uppercase">
+        {label}
+      </dt>
+      <dd className="text-lead leading-none tabular-nums text-ink">
+        {value === 0 ? <span className="text-ink-faint">None</span> : value}
+      </dd>
+    </div>
+  );
+}
+
 export function CourseTile({
   course,
   index,
@@ -172,18 +193,23 @@ export function CourseTile({
       onDragStart={startDrag}
       onDragEnter={() => onDragEnterTile(course.id)}
       className={cn(
-        "group relative flex h-48 flex-col overflow-hidden rounded-pnl border border-hair bg-raised",
-        "transition-colors duration-[120ms] ease-[var(--ease)] hover:bg-hover",
-        // The tile in flight fades. Opacity and outline only, so neither the
-        // drag nor the landing point moves anything on the page.
+        "group relative flex h-56 flex-col overflow-hidden rounded-pnl border border-hair bg-raised",
+        "transition-[transform,background-color,box-shadow,border-color] duration-[160ms] ease-[var(--ease)]",
+        // The lift. `focus-within` as well as `hover`, so a reader on the
+        // keyboard gets the same feedback as a reader on the pointer: the tile
+        // that is about to open is the one standing off the shelf.
+        "hover:translate-y-[var(--lift)] hover:bg-hover hover:shadow-lift",
+        "focus-within:translate-y-[var(--lift)] focus-within:bg-hover focus-within:shadow-lift",
+        // The tile in flight fades and stays put: a lift on the thing already
+        // under the pointer reads as a second drag ghost.
         dragging ? "opacity-50" : null,
         dropTarget ? "outline-2 outline-solid outline-focus" : null,
       )}
     >
       {/* The cover is a real 40 per cent of the tile: the tile's height is
           fixed, so the percentage has a definite box to resolve against, and
-          everything on the tile is bounded anyway, a two-line title and one
-          line of counts. An absolutely positioned menu button would otherwise
+          everything on the tile is bounded anyway, a two-line title and the
+          footer rail. An absolutely positioned menu button would otherwise
           collapse an unresolved percentage to nothing. */}
       <div
         className={cn(
@@ -202,11 +228,10 @@ export function CourseTile({
             `pr-14` on the cover reserves the menu's column, so the mark is
             clear of the button however long it gets, and `items-end` puts it on
             the cover's bottom edge, as far from that button as the block
-            allows. `text-head` and not `text-lead`: this is a mark on a block a
-            third the width of the tile, not a line of chrome. */}
+            allows. */}
         <span
           aria-hidden
-          className="font-ui text-head leading-none font-semibold text-on-accent"
+          className="font-ui text-head leading-none font-semibold tracking-[0.02em] text-on-accent"
         >
           {courseMonogram(course.title)}
         </span>
@@ -253,12 +278,12 @@ export function CourseTile({
         </DropdownMenu>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-1 p-4">
+      <div className="flex min-h-0 flex-1 flex-col p-4">
         {/* Sans, because the tile is chrome: DESIGN.md reserves serif for the
             reading column and puts "every heading that sits in chrome rather
-            than in the reading column" in sans. `text-lead`, because the role
-            table assigns tile titles to `--fs-lead` and not to the 21px
-            reading body this used to carry. */}
+            than in the reading column" in sans. The title owns the space above
+            the rail, so a one-line title leaves the rail where a two-line one
+            does and the counts line up across the shelf. */}
         <h3 className="font-ui text-lead leading-snug font-semibold">
           <a
             href={href}
@@ -270,7 +295,10 @@ export function CourseTile({
             {course.title}
           </a>
         </h3>
-        <p className="text-meta text-ink-faint">{metaLine(course)}</p>
+        <dl className="mt-auto flex items-end gap-6 border-t border-hair pt-3">
+          <Stat label="Decks" value={course.n_decks} />
+          <Stat label="Slides" value={course.n_slides} />
+        </dl>
       </div>
     </li>
   );

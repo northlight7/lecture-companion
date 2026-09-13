@@ -77,7 +77,15 @@
   /* ---- motion ---------------------------------------------------------- */
   --dur-state: 120ms;
   --dur-enter: 180ms;
+  /* A panel arriving or leaving: the sidebar, the notes strip. Longer than a
+   * state change because more of the window moves, and inside the 150-200ms
+   * band that Material, Carbon and AppKit all land in for a desktop
+   * disclosure. AppKit's own `toggleSidebar` animates at 250ms. */
+  --dur-panel: 200ms;
   --ease: cubic-bezier(0.2, 0, 0, 1);
+  /* How far a card rises under the pointer. Zero under reduced motion, so the
+   * lift becomes a colour change rather than a movement. */
+  --lift: -2px;
 
   /* ---- type scale ------------------------------------------------------ */
   /* SIX STEPS, AND THE SCALE IS CLOSED. A rendered size that is not one of
@@ -93,10 +101,10 @@
    *
    * 14  meta    metadata, captions, footnotes, AND uppercase micro-labels.
    * 16  ui      default chrome: rows, controls, cell text.
-   * 18  lead    chrome emphasis: section headings, tile and dialog titles.
-   * 21  body    the reading body.
-   * 26  head    a reading heading: a slide title, a prose h1.
-   * 30  display the screen title, once per screen.
+   * 18  lead    chrome emphasis: tile and dialog titles, a lede, a subsection.
+   * 22  body    the reading body.
+   * 28  head    a section heading, and a reading h2.
+   * 36  display the screen title, once per screen.
    *
    * THE MINIMUM IS 14px. Nothing renders smaller, including badges and
    * counters. That is two steps above the 12px floor the sources support, on
@@ -106,13 +114,21 @@
    * The chrome tier is an arithmetic 2px ladder (14, 16, 18): chrome is scanned
    * rather than read, so it is bought back with a tight ratio, and the ladder is
    * where the density lives. Nothing is 13px. That value was deleted, not
-   * deprecated. */
+   * deprecated.
+   *
+   * Above the chrome tier the ladder is regular and wider (18, 22, 28, 36: 1.22,
+   * 1.27, 1.29) because those four steps are the hierarchy a reader uses to find
+   * their way into a screen. The scale they replaced wobbled (18, 21, 26, 30:
+   * 1.17, 1.24, 1.15), and the wobble cost more than it saved: a 30px screen
+   * title over a 26px reading heading over a 21px body is three sizes that read
+   * as one size, which is the human's "all the font is in the same size be it
+   * for the title or for the text". */
   --fs-meta: 14px;
   --fs-ui: 16px;
   --fs-lead: 18px;
-  --fs-body: 21px;
-  --fs-head: 26px;
-  --fs-display: 30px;
+  --fs-body: 22px;
+  --fs-head: 28px;
+  --fs-display: 36px;
 
   /* The accent at rest and on hover. `--accent-hover` is per-theme: see the
    * note in the dark block. */

@@ -32,7 +32,7 @@ import { useCallback, useEffect, useRef, useState, type JSX } from "react";
 import { Trash2 } from "lucide-react";
 
 import * as api from "@/lib/api";
-import { ACCENT_INK, courseAccent, type CourseAccent } from "@/lib/accents";
+import { ACCENT_FILL, ACCENT_INK, courseAccent, type CourseAccent } from "@/lib/accents";
 import { courseProse } from "@/lib/overview";
 import { hash, navigate } from "@/lib/router";
 import type { DeckRow, ProgressRow } from "@/lib/types";
@@ -110,7 +110,15 @@ function plural(count: number, one: string, many: string): string {
  * (`.internal/DESIGN.md`, "The course overview, and what the UI refuses to
  * print"). Chrome type only: this is a fact block, not the reading body.
  */
-function CourseFacts({ decks, slideCount }: { decks: DeckRow[]; slideCount: number }): JSX.Element {
+function CourseFacts({
+  decks,
+  slideCount,
+  accent,
+}: {
+  decks: DeckRow[];
+  slideCount: number;
+  accent: CourseAccent;
+}): JSX.Element {
   const counts: Array<[string, number]> = [
     ["Decks", decks.length],
     ["Slides", slideCount],
@@ -118,14 +126,21 @@ function CourseFacts({ decks, slideCount }: { decks: DeckRow[]; slideCount: numb
 
   return (
     <div className="rounded-srf border border-hair bg-raised p-4">
-      <dl className="flex flex-col">
+      {/* A stat row, not a list of two rows. The facts are the first thing on
+          the screen and they were drawn at the same weight as the deck titles
+          below them, which is the "all the font is the same size" the human
+          reported: nothing on arrival said which number mattered. The figures
+          are `--fs-head` in the course's own colour and the labels are micro
+          caps, so the arrival screen has a focal point before any prose. */}
+      <dl className="flex items-start gap-8">
         {counts.map(([label, value]) => (
-          <div
-            key={label}
-            className="flex h-[var(--row-h)] items-center justify-between gap-4"
-          >
-            <dt className="text-meta text-ink-muted">{label}</dt>
-            <dd className="text-ui tabular-nums text-ink">{value}</dd>
+          <div key={label} className="flex flex-col gap-1">
+            <dt className="text-meta font-medium tracking-[0.06em] text-ink-faint uppercase">
+              {label}
+            </dt>
+            <dd className={cn("text-head leading-none tabular-nums", ACCENT_INK[accent])}>
+              {value}
+            </dd>
           </div>
         ))}
       </dl>
@@ -166,12 +181,14 @@ function OverviewBlock({
   overview,
   decks,
   slideCount,
+  accent,
   onRewritten,
 }: {
   cid: string;
   overview: string;
   decks: DeckRow[];
   slideCount: number;
+  accent: CourseAccent;
   onRewritten: () => Promise<void>;
 }): JSX.Element {
   const handle = useErrorHandler();
@@ -208,7 +225,7 @@ function OverviewBlock({
             <Prose>{text}</Prose>
           </div>
         ) : (
-          <CourseFacts decks={decks} slideCount={slideCount} />
+          <CourseFacts decks={decks} slideCount={slideCount} accent={accent} />
         )}
       </div>
 
@@ -362,6 +379,7 @@ export function CourseScreen({ cid }: { cid: string }): JSX.Element {
     <Screen
       title={detail?.title ?? "Course"}
       titleClassName={TITLE_INK[accent]}
+      rule={ACCENT_FILL[accent]}
       back={{ href: hash.courses(), label: "All courses" }}
       meta={
         detail
@@ -409,10 +427,11 @@ export function CourseScreen({ cid }: { cid: string }): JSX.Element {
                 detail.progress.n_slides ||
                 detail.decks.reduce((total, deck) => total + deck.n_slides, 0)
               }
+              accent={accent}
               onRewritten={reloadCourse}
             />
 
-            <div className="flex flex-col gap-8">
+            <div className="flex min-w-0 flex-col gap-8 border-l border-hair pl-6">
               <ProgressPanel
                 accent={accent}
                 progress={shown}
@@ -422,7 +441,7 @@ export function CourseScreen({ cid }: { cid: string }): JSX.Element {
                 onPause={() => void pause()}
                 onRetry={() => startPolling()}
               />
-              <StudyFoldersSummary groups={groups} />
+              <StudyFoldersSummary groups={groups} accent={accent} />
             </div>
           </div>
 

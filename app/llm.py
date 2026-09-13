@@ -118,9 +118,15 @@ term and define it in plain words the first time it matters. Never brush jargon 
 aside or assume the student already knows it.
 8. Do not use an em dash character. Do not use semicolons. Use full stops, \
 commas, or parentheses instead.
-9. Up to 180 words for a normal slide, 240 at most on a dense one. The heading \
-is 3 to 8 words naming the subject, not the slide's role, so "FinTech and AI in \
-Finance" rather than "Title Slide and Course Framing".
+9. Be brief by SELECTION, not by compression. Aim for roughly 120 words on a \
+normal slide. There is no ceiling: a dense slide that genuinely carries more \
+gets more, and a title slide gets one line. What you cut is the restatement, \
+and there are three kinds. A sentence that repeats the one before it. A \
+sentence that tells the reader something they can already see in the slide. A \
+sentence that would survive being deleted without the reader losing a fact, a \
+definition or a distinction. Never drop one of those three to reach a length. \
+The heading is 3 to 8 words naming the subject, not the slide's role, so \
+"FinTech and AI in Finance" rather than "Title Slide and Course Framing".
 10. Give a concrete example only when one clarifies the slide. Keep it under \
 60 words. An empty string is a correct answer for `example`.
 11. The diagram is optional. Return a mermaid diagram ONLY when the slide \

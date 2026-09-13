@@ -14,7 +14,7 @@
  */
 
 import { useState, type JSX } from "react";
-import type { CourseAccent } from "@/lib/accents";
+import { ACCENT_INK, type CourseAccent } from "@/lib/accents";
 import type { PipelineState, ProgressRow } from "@/lib/types";
 
 import { Button } from "@/components/ui/button";
@@ -98,7 +98,7 @@ export function ProgressPanel({
 
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="text-ui font-semibold text-ink">Progress</h2>
+      <h2 className={cn("text-lead font-semibold", ACCENT_INK[accent])}>Progress</h2>
 
       {lost ? (
         <>
@@ -217,14 +217,23 @@ function Summary({ text }: { text: string }): JSX.Element {
  * without scrolling to the file list. Counts only: the editable control lives
  * with the row it belongs to.
  */
-export function StudyFoldersSummary({ groups }: { groups: StudyGroup[] }): JSX.Element {
+export function StudyFoldersSummary({
+  groups,
+  accent,
+}: {
+  groups: StudyGroup[];
+  /** The rail's headings carry the course colour. The rail is the part of the
+   *  screen that is about this course as a whole rather than about a slide, so
+   *  it is where the course's own colour belongs. */
+  accent: CourseAccent;
+}): JSX.Element {
   const files = groups.reduce((count, group) => count + group.rows.length, 0);
   const named = groups.filter((group) => group.folder !== "Unfiled");
   const unfiled = groups.find((group) => group.folder === "Unfiled")?.rows.length ?? 0;
 
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="text-ui font-semibold text-ink">Study folders</h2>
+      <h2 className={cn("text-lead font-semibold", ACCENT_INK[accent])}>Study folders</h2>
 
       {files === 0 ? (
         <p className="text-ui text-ink-muted">
