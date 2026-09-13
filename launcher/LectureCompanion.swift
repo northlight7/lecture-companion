@@ -473,7 +473,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
     }
 
     private func startBackend() {
-        let projectRoot = Bundle.main.bundleURL.deletingLastPathComponent()
+        guard let projectRoot = Project.root() else {
+            // Naming where it looked is the whole value of this message. The
+            // app is installed to /Applications while the project lives
+            // elsewhere, so "not found" on its own leaves nothing to fix.
+            let looked = Project.candidates().map { "  " + $0.path }.joined(separator: "\n")
+            showFailure(
+                "Lecture Companion cannot find its backend.\n\n"
+                    + "It looked in:\n\(looked)\n\n"
+                    + "Run install.sh in the project to record the right location."
+            )
+            return
+        }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
         process.arguments = [projectRoot.appendingPathComponent("run.sh").path]
@@ -494,13 +505,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
         // Keep the backend's output. Sending it to /dev/null threw away every
         // line explaining why a slide was skipped, which is how a run can
         // finish with unexplained gaps and nothing to diagnose it with.
-        let logURL = projectRoot.appendingPathComponent(".internal/launcher.log")
-        try? FileManager.default.createDirectory(
-            at: logURL.deletingLastPathComponent(), withIntermediateDirectories: true
-        )
-        // Truncate per launch: the log is for the run in front of you.
-        try? Data().write(to: logURL)
-        if let handle = try? FileHandle(forWritingTo: logURL) {
+        // The log lives in ~/Library/Logs, not beside the app. Writing into the
+        // project meant the app could not run without a writable checkout, and
+        // writing inside the bundle would break its signature.
+        let logURL = Project.launcherLog()
+        if let logURL {
+            // Truncate per launch: the log is for the run in front of you.
+            try? Data().write(to: logURL)
+        }
+        if let logURL, let handle = try? FileHandle(forWritingTo: logURL) {
             backendLog = handle
             process.standardOutput = handle
             process.standardError = handle

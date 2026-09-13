@@ -17,7 +17,19 @@ Everything runs locally except requested explanation generation and connected se
   <img src=".github/viewer-light.png" alt="The two-pane viewer: rendered slide on the left, plain-language explanation on the right" width="820">
 </p>
 
-## Running it
+## Installing it
+
+```bash
+./install.sh
+```
+
+Builds the app, installs it to `/Applications`, launches it and checks that the
+backend answers. Running it again is how you update: the app bundle is replaced
+whole and your courses are not touched, because they live in
+`~/Library/Application Support/LectureCompanion/` rather than inside anything
+that gets replaced. `--no-launch` stops it from opening the app.
+
+## Running it for development
 
 ```bash
 ./run.sh
@@ -25,6 +37,10 @@ Everything runs locally except requested explanation generation and connected se
 
 First run creates `.venv` and installs dependencies; then it serves on
 <http://127.0.0.1:8765>. Override with `LC_PORT`.
+
+The installed app runs this project's backend too, so a change under `app/`
+needs only a restart of the app, while a change under `web/` needs
+`./install.sh` to rebuild the interface into the bundle.
 
 To try the whole thing with no API key and no spend:
 
@@ -197,9 +213,15 @@ their text and marked `[no renderer: text-only extraction]` so you can tell.
 
 ## Where your data lives
 
-Everything is under `Courses/<course-id>/` in this directory — slides,
-extracted text, explanations, the search indexes, concept relationships, and the progress checkpoint.
-It is gitignored and never leaves your machine by default. A slide image with
+Everything is under `~/Library/Application Support/LectureCompanion/library/<course-id>/` —
+slides, extracted text, explanations, the search indexes, concept relationships, and the progress checkpoint.
+
+It lives outside the app and outside this checkout on purpose. Installing or
+updating the app replaces the app bundle and touches nothing else, so a new
+version can never take your courses with it. `LC_COURSES_ROOT` points it
+somewhere else when you want that, which is what the tests do.
+
+Nothing here leaves your machine by default. A slide image with
 its bounded context goes to DeepSeek when you request an explanation. A question
 and the bounded source objects you explicitly selected go to DeepSeek when you
 ask selected context. Original files, unselected objects, and other courses are

@@ -42,10 +42,45 @@ echo "bundled the interface from web/"
 
 swiftc launcher/LectureCompanion.swift \
       launcher/AppServer.swift \
+      launcher/Project.swift \
       launcher/SchemeHandler.swift \
   -framework AppKit \
   -framework WebKit \
   -o "$MACOS/LectureCompanion"
 chmod +x "$MACOS/LectureCompanion"
 
-echo "Built $APP"
+# Stamp the build. The short string is what a reader sees and the bundle version
+# is what an updater will compare, and both come from the commit count so they
+# rise on their own, without anyone remembering to bump a number. A working tree
+# with uncommitted changes is marked as such, so a build can never be mistaken
+# for a commit.
+BUILD="$(git rev-list --count HEAD 2>/dev/null || echo 0)"
+# Source only. The built bundle is tracked, so asking git about the whole tree
+# would report this very build as an uncommitted change and every version would
+# read as dirty.
+if [ -n "$(git status --porcelain -- launcher web/src app pyproject.toml 2>/dev/null)" ]; then
+  SUFFIX="-dirty"
+else
+  SUFFIX=""
+fi
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString 0.1.$BUILD$SUFFIX" \
+                        -c "Set :CFBundleVersion $BUILD" "$CONTENTS/Info.plist"
+
+# Sign it. `LC_SIGN_IDENTITY` names a certificate in the login keychain, and ad
+# hoc signing is the fallback, so the build never fails for want of a
+# certificate. Signing in this order, executable then bundle, is what the
+# notarization step will need later. Hardened runtime is deliberately off:
+# it is a notarization requirement, and library validation would start
+# inspecting the virtualenv's extension modules for no benefit yet.
+IDENTITY="${LC_SIGN_IDENTITY:-}"
+if [ -n "$IDENTITY" ] && security find-identity -v -p codesigning 2>/dev/null | grep -qF "$IDENTITY"; then
+  codesign --force --sign "$IDENTITY" "$MACOS/LectureCompanion"
+  codesign --force --sign "$IDENTITY" "$APP"
+  echo "signed with $IDENTITY"
+else
+  codesign --force --sign - "$MACOS/LectureCompanion"
+  codesign --force --sign - "$APP"
+  echo "signed ad hoc"
+fi
+
+echo "Built $APP ($(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$CONTENTS/Info.plist"))"

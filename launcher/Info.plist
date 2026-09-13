@@ -7,7 +7,7 @@
     <key>CFBundleExecutable</key>
     <string>LectureCompanion</string>
     <key>CFBundleIdentifier</key>
-    <string>local.lecture-companion.app</string>
+    <string>com.northlight.lecturecompanion</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon.icns</string>
     <key>CFBundleIconName</key>

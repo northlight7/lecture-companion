@@ -1,4 +1,10 @@
 # Course content and per-course memory (user data, not source).
+#
+# The live library moved out of the checkout to the per-user application data
+# directory, so nothing is expected here any more. The rule stays as a guard:
+# `LC_COURSES_ROOT` can still point a development run back into the project, and
+# that must never end up committed.
+#
 # ANCHORED: an unanchored `Courses/` matches at any depth, so it also swallowed
 # web/src/screens/courses/ — the entire courses screen, silently, for the whole
 # project. Three source files were never in version control.

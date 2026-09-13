@@ -4,9 +4,10 @@ READ-ONLY for builders. Every module in `app/` imports its shared types from
 here so parallel work cannot drift. Changing this file requires an orchestrator
 decision recorded in `.internal/RUNLOG.md`.
 
-Layout on disk (all user data lives under COURSES_ROOT, which is gitignored):
+Layout on disk (all user data lives under COURSES_ROOT, which is outside the
+checkout so an update cannot reach it):
 
-    Courses/<course_id>/
+    <courses_root>/<course_id>/
       course.json                  Course, serialised
       raw/<file_id>__<name>        the uploaded original, byte for byte
       slides/<deck_id>/page-0001.png
@@ -17,7 +18,7 @@ Layout on disk (all user data lives under COURSES_ROOT, which is gitignored):
       index.jsonl                  one IndexRow per line
 
 Invariant 1 (course isolation) is enforced structurally: nothing outside
-`Courses/<course_id>/` is ever read while serving that course.
+`<courses_root>/<course_id>/` is ever read while serving that course.
 """
 
 from __future__ import annotations
