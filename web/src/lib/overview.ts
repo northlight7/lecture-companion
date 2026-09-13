@@ -232,139 +232,48 @@ export function courseProse(overview: string | null | undefined): string {
  *      itself on that path rather than a rebuilt string.
  * ---------------------------------------------------------------------- */
 
-/** A quoted span. Straight single quotes are left out on purpose: an
- *  apostrophe would start a span that never closes, and a parenthetical is what
- *  carries this defect anyway. */
-const QUOTE_PAIRS: ReadonlyArray<readonly [string, string]> = [
-  ['"', '"'],
-  ["“", "”"],
-  ["‘", "’"],
-];
-
-/** Every balanced `(...)` in the text, innermost included, as offsets. */
-function parenGroups(text: string): Array<[number, number]> {
-  const open: number[] = [];
-  const out: Array<[number, number]> = [];
-  for (let i = 0; i < text.length; i += 1) {
-    if (text[i] === "(") {
-      open.push(i);
-      continue;
-    }
-    if (text[i] !== ")" || open.length === 0) continue;
-    const start = open.pop() as number;
-    out.push([start, i + 1]);
-  }
-  return out;
-}
-
-/** Every quoted span in the text, as offsets that include the quotes. */
-function quoteSpans(text: string): Array<[number, number]> {
-  const out: Array<[number, number]> = [];
-  for (const [open, close] of QUOTE_PAIRS) {
-    let from = 0;
-    for (;;) {
-      const a = text.indexOf(open, from);
-      if (a < 0) break;
-      const b = text.indexOf(close, a + open.length);
-      if (b < 0) break;
-      out.push([a, b + close.length]);
-      from = b + close.length;
-    }
-  }
-  return out;
-}
-
-/** Overlapping spans become one, so nothing is removed twice. */
-function mergeSpans(spans: Array<[number, number]>): Array<[number, number]> {
-  const sorted = [...spans].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  const out: Array<[number, number]> = [];
-  for (const span of sorted) {
-    const last = out[out.length - 1];
-    if (last && span[0] <= last[1]) {
-      last[1] = Math.max(last[1], span[1]);
-      continue;
-    }
-    out.push([span[0], span[1]]);
-  }
-  return out;
-}
-
 /**
- * The spans of one sentence that carry a banned phrase and can be removed
- * without touching the sentence around them.
- *
- * A nested parenthetical takes its parents with it: dropping the inner one
- * would leave `(he said )`, which is the broken punctuation rule 3 forbids.
- */
-function bannedSpans(sentence: string): Array<[number, number]> {
-  const groups = parenGroups(sentence);
-  const quoted = quoteSpans(sentence);
-  const found: Array<[number, number]> = [];
-
-  for (const [a, b] of [...groups, ...quoted]) {
-    if (!isBanned(sentence.slice(a, b))) continue;
-    let span: [number, number] = [a, b];
-    for (;;) {
-      const outer = groups.find((g) => g[0] < span[0] && g[1] >= span[1]);
-      if (!outer) break;
-      span = [outer[0], outer[1]];
-    }
-    found.push(span);
-  }
-
-  return mergeSpans(found);
-}
-
-/** The sentence with those spans gone. The whitespace the span sat in is left
- *  to `tidy`, which closes the seam: taking a side's space here would run the
- *  words on either side together. */
-function without(sentence: string, spans: Array<[number, number]>): string {
-  let out = "";
-  let cursor = 0;
-  for (const [a, b] of spans) {
-    out += sentence.slice(cursor, a);
-    cursor = b;
-  }
-  return out + sentence.slice(cursor);
-}
-
-/** What the removal left behind, with the seams closed. */
-function tidy(sentence: string): string {
-  let out = sentence.replace(/\s+/g, " ").trim();
-  out = out.replace(/\s+([,.;:!?])/g, "$1"); // a space before punctuation
-  out = out.replace(/([,;:])(\s*)(?=[.!?]|$)/g, ""); // a comma with nothing after it
-  out = out.replace(/([.!?])\s*([.!?])/g, "$1"); // a doubled stop
-  out = out.replace(/([,;:])\s*([,;:])/g, "$1"); // a doubled comma
-  out = out.replace(/\(\s*\)/g, ""); // brackets left holding nothing
-  out = out.replace(/\[\s*\]/g, "");
-  return out.trim();
-}
-
-/**
- * One sentence, rendered for the reader: the banned spans removed, the sentence
- * dropped only when the phrase is outside them, or `null` when the sentence is
- * gone. Text with no banned phrase comes back identical.
+ * One sentence, rendered for the reader: `null` when it carries a banned
+ * meta-phrase and the sentence itself otherwise. Text with no banned phrase
+ * comes back identical.
  */
 function renderedSentence(sentence: string): string | null {
   if (!isBanned(sentence)) return sentence;
 
-  const spans = bannedSpans(sentence);
-  const text = spans.length ? without(sentence, spans) : sentence;
-  // A banned phrase that survived the removals was not inside a span.
-  if (isBanned(text)) return null;
-
-  const cleaned = tidy(text);
-  // Nothing but punctuation left: the span was the sentence.
-  return /[0-9A-Za-z]/.test(cleaned) ? cleaned : null;
+  // A sentence that carries one of these phrases, however it carries it, goes.
+  //
+  // The first version of this removed only the parenthetical or quoted span and
+  // kept the sentence around it. That was wrong, and a critic found it in the
+  // running app. The stored text was:
+  //
+  //   ... In the context of the course overview ("This overview for
+  //   \u201c4-Fintech and AI"), this is where that thread continues.
+  //
+  // and what shipped was:
+  //
+  //   ... In the context of the course overview, this is where that thread
+  //   continues.
+  //
+  // The span went and the seam was clean, but the surviving sentence's entire
+  // subject is still the model's own artifact, and its antecedent \u2014 "that
+  // thread" \u2014 was inside the part that got deleted. So the reader was left
+  // with a sentence about nothing, which is the defect this file exists to
+  // prevent. DESIGN.md rule 17 bans "any sentence about the model, its sources
+  // or its method, printed to the reader", and that sentence is one.
+  //
+  // A phrase inside a span does not make the sentence innocent; it makes the
+  // sentence a quotation of the model talking about itself. 425 stored
+  // explanations carry exactly this construction.
+  return null;
 }
 
 /**
  * What the viewer and the search list render out of stored model prose: the
  * explanation body, its worked example, its heading, a term gloss, a search
- * snippet. Banned meta-phrases are removed in place. This is not `courseProse`:
- * an explanation is teaching and a dropped sentence takes teaching with it, so
- * a phrase inside a parenthetical or a quotation costs the span and nothing
- * else.
+ * snippet. Sentences carrying a banned meta-phrase are dropped. This is not
+ * `courseProse`, which also drops everything after the first slide scrape:
+ * an explanation is teaching and only the sentences that are about the model
+ * go, so the rest of the paragraph survives.
  *
  * Text carrying none of the phrases is returned unchanged, byte for byte.
  */

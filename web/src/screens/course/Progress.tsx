@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import type { StudyGroup } from "@/screens/course/Files";
+import { explanationProse } from "@/lib/overview";
 
 /** The state word, toned by meaning. Never a filled panel: the word is the
  *  signal, and the surface table has nothing to say about a run. */
@@ -191,7 +192,14 @@ function Summary({ text }: { text: string }): JSX.Element {
   const [open, setOpen] = useState(false);
   return (
     <div>
-      <p className={cn("text-meta text-ink-muted", !open && "line-clamp-3")}>{text}</p>
+      {/* The running summary is built by the frozen backend from model-written
+          gists, so it is model prose and it goes through the same filter as the
+          explanation. Round 19's Critic B found this rendering raw. Nothing in
+          the fixtures fires it today, which makes it latent rather than live,
+          and latent is exactly the state a filter is easiest to leave off. */}
+      <p className={cn("text-meta text-ink-muted", !open && "line-clamp-3")}>
+        {explanationProse(text)}
+      </p>
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}

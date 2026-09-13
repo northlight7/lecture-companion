@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { Prose } from "@/components/reading/Prose";
+import { explanationProse } from "@/lib/overview";
 
 /** Must match MAX_SELECTIONS in app/questions.py. */
 const MAX_SELECTIONS = 12;
@@ -173,7 +174,9 @@ export function AskDialog({
                 <li key={`${row.artifact_id}:${row.object_id}`} className="font-ui text-meta">
                   <span className="text-ink">{row.artifact_filename}</span>
                   <span className="text-ink-faint"> · {row.location}</span>
-                  <span className="text-ink-muted"> {row.snippet.slice(0, 160)}</span>
+                  {/* The search snippet is stored model text, and `Search.tsx` filters the same
+                      field. Round 19's Critic B found this one rendering it raw. */}
+                  <span className="text-ink-muted"> {explanationProse(row.snippet).slice(0, 160)}</span>
                 </li>
               ))}
             </ul>
