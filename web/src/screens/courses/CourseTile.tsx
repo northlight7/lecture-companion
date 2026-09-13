@@ -198,8 +198,8 @@ export function CourseTile({
         // The lift. `focus-within` as well as `hover`, so a reader on the
         // keyboard gets the same feedback as a reader on the pointer: the tile
         // that is about to open is the one standing off the shelf.
-        "hover:translate-y-[var(--lift)] hover:bg-hover hover:shadow-lift",
-        "focus-within:translate-y-[var(--lift)] focus-within:bg-hover focus-within:shadow-lift",
+        "hover:translate-y-[var(--lift)] hover:bg-hover hover:shadow-float",
+        "focus-within:translate-y-[var(--lift)] focus-within:bg-hover focus-within:shadow-float",
         // The tile in flight fades and stays put: a lift on the thing already
         // under the pointer reads as a second drag ghost.
         dragging ? "opacity-50" : null,
