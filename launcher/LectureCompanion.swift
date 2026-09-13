@@ -406,7 +406,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
         let path = mode == "bulk"
             ? "/api/import/bulk"
             : "/api/courses/\(courseId)/files"
-        var request = URLRequest(url: URL(string: "http://127.0.0.1:8765\(path)")!)
+        // The backend is on the port `AppServer` picked a moment ago, not on a
+        // fixed one. Naming 8765 here was survivable while the window and the
+        // server were the same origin; once the port became fresh per launch it
+        // silently sent every folder to an address nothing was listening on.
+        var request = URLRequest(url: URL(string: path, relativeTo: AppServer.baseURL)!)
         request.httpMethod = "POST"
         request.timeoutInterval = 3600
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")

@@ -6,13 +6,16 @@
  * same file kinds. The drop target is the same shape as the courses screen's
  * pile zone, so the two read as one control used twice.
  *
- * Folders arrive three ways: a dropped directory is walked through
- * `webkitGetAsEntry` and its names keep the folder as a prefix, the folder
- * button uses `webkitdirectory`, and either way the multipart filename is the
- * relative path the importer groups by.
+ * Folders arrive three ways. Inside the app the folder button hands the job to
+ * the launcher, because a web view cannot read a directory it has been handed:
+ * the launcher puts up its own panel, walks what was chosen and posts the files
+ * itself. In a browser there is no launcher, so the button falls back to a
+ * `webkitdirectory` input. A dropped directory is walked here through
+ * `webkitGetAsEntry`, the way the launcher walks a chosen one. Whichever path
+ * runs, the multipart filename is the relative path the importer groups by.
  */
 
-import { useRef, useState, type ChangeEvent, type DragEvent, type InputHTMLAttributes, type JSX } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type DragEvent, type InputHTMLAttributes, type JSX } from "react";
 
 import * as api from "@/lib/api";
 import type { FiledRow, UploadResult } from "@/lib/types";
@@ -20,6 +23,7 @@ import { useStore } from "@/state/store";
 import { Section } from "@/shell/Screen";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { toast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
 /** The file kinds the importer classifies. The old input's accept list. */
@@ -72,6 +76,32 @@ async function filesFromDrop(dataTransfer: DataTransfer | null): Promise<File[]>
   return out;
 }
 
+/**
+ * The launcher's half of the folder import.
+ *
+ * The launcher registers `folderPicker` as a message handler and expects
+ * `{mode, courseId}`; it answers by calling `nativeFolderImportFinished` with
+ * `{mode, ok, message}` and never with the filed rows, because it posts the
+ * files itself and shows what the server said in one sentence.
+ *
+ * A browser has no `window.webkit`, so the handler's absence is the whole
+ * app-versus-browser test. It is the same test the previous frontend used.
+ */
+type FolderPickerBridge = {
+  postMessage(message: { mode: "course" | "bulk"; courseId: string }): void;
+};
+
+type FolderImportResult = { mode: string; ok: boolean; message: string };
+
+function folderPicker(): FolderPickerBridge | undefined {
+  const webkit = (
+    window as unknown as {
+      webkit?: { messageHandlers?: { folderPicker?: FolderPickerBridge } };
+    }
+  ).webkit;
+  return webkit?.messageHandlers?.folderPicker;
+}
+
 /** What one filed row became, in the words the old report used. */
 function filedAs(row: FiledRow): string {
   if (row.role === "slides") return plural(row.n_slides, "slide", "slides");
@@ -89,6 +119,34 @@ export function UploadSection({ cid }: { cid: string }): JSX.Element {
   const dragDepth = useRef(0);
   const filesInput = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    // The launcher answers here when its own panel finishes an import. It is
+    // registered while this screen is open, which is the only place a folder
+    // can be chosen from, and removed on the way out so a stale closure cannot
+    // write into an unmounted screen.
+    const host = window as unknown as {
+      nativeFolderImportFinished?: (result: FolderImportResult) => void;
+    };
+    host.nativeFolderImportFinished = (result) => {
+      if (!result.ok) {
+        // The old screen wrote these into the report region rather than
+        // toasting them, so a refusal stays next to the control that caused it.
+        setReport(null);
+        setFailure(result.message);
+        return;
+      }
+      // Success toasts, the way it did before, and the rows the browser path
+      // would have listed arrive with the reloaded course.
+      setFailure(null);
+      setReport(null);
+      toast(result.message);
+      void reloadCourse();
+    };
+    return () => {
+      delete host.nativeFolderImportFinished;
+    };
+  }, [reloadCourse]);
 
   const send = async (files: File[]) => {
     if (!files.length) return;
@@ -181,7 +239,15 @@ export function UploadSection({ cid }: { cid: string }): JSX.Element {
             variant="secondary"
             onClick={(event) => {
               event.stopPropagation();
-              folderInput.current?.click();
+              const bridge = folderPicker();
+              if (!bridge) {
+                // No launcher: a browser, where the directory input works.
+                folderInput.current?.click();
+                return;
+              }
+              // The launcher opens its own panel and posts the files itself, so
+              // nothing is sent from here. It reports back through the effect.
+              bridge.postMessage({ mode: "course", courseId: cid });
             }}
           >
             Choose a folder
