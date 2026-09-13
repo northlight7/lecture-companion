@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { diagramThemeVariables } from "@/lib/diagramTheme";
+import { diagramConfig, diagramThemeVariables } from "@/lib/diagramTheme";
 import { useTheme } from "@/lib/theme";
 
 /**
@@ -47,6 +47,10 @@ export function Diagram({ source }: { source: string }) {
           securityLevel: "strict",
           theme: "base",
           themeVariables: diagramThemeVariables(theme),
+          // The sizes mermaid keeps in each diagram's own config rather than in
+          // `themeVariables`. Without these a gantt's axis labels paint at 11px
+          // and a quadrant's point labels at 12px, in every theme.
+          ...diagramConfig(),
         });
         const { svg } = await mermaid.render(`lc-diagram-${++seq}`, source);
         if (cancelled) return;

@@ -157,6 +157,62 @@ function readToken(name: string): string | null {
   return toConcrete(raw) ?? (FALLBACK[name] ? readToken(FALLBACK[name]) : null);
 }
 
+/**
+ * The per-diagram font sizes mermaid keeps outside `themeVariables`.
+ *
+ * WHY THIS EXISTS. `themeVariables` pins every colour and the one generic
+ * `fontSize`, and it cannot reach the sizes each diagram keeps in its **own**
+ * config object. Round 20's two critics named the same category independently:
+ * the shipped bundle carries vendored declarations at 10, 11 and 12px, and
+ * `gate_type.py` stood down on all of them **by name** rather than because
+ * anything proved they could not render. The default that decides a gantt's
+ * axis labels is `gantt.fontSize: 11`, a usecase actor's is 12, an ER entity's
+ * is 12, a quadrant point's is 12. None of those is reachable from
+ * `themeVariables` and every one of them is reachable from here.
+ *
+ * WHY `--fs-lead`. Same reasoning as `fontSize` above: a diagram label is
+ * figure text in the reading column, so it is held to the reading scale. 18px
+ * is one step below the column's 21px prose and comfortably above the floor.
+ * A size is a plain number in these config blocks, not a CSS length, so the
+ * token is parsed rather than used as written.
+ *
+ * WHY THE TABLE IS EXACTLY THIS AND NOT MORE. It lists the keys mermaid
+ * defaults **below** the floor and nothing else. Pinning a key that already
+ * defaults to 14 or 16 changes no pixel and hides the fact that the below-floor
+ * set moved when mermaid was upgraded, so
+ * `.internal/gate_diagram_sizes.py` fails on an entry that pins nothing. The
+ * table is the below-floor set, and the gate keeps it that way.
+ *
+ * WHAT IT DOES NOT REACH, so the next reader does not have to rediscover it.
+ * Several vendored declarations are hard literals inside a diagram chunk with
+ * no config key behind them at all -- `classDiagram-v2` and `stateDiagram-v2`
+ * each carry a 10px, `blockDiagram` and `journeyDiagram` a 12px. There is no
+ * key to set, so they cannot be pinned from here, and
+ * `.internal/gate_diagram_sizes.py` reads the vendored config out of the
+ * shipped chunk and separates the two cases by name and count instead of
+ * leaving them in one exempted pile.
+ */
+const SIZE_SLOTS: Record<string, string[]> = {
+  gantt: ["fontSize", "sectionFontSize"],
+  usecase: ["usecaseFontSize"],
+  c4: ["messageFontSize"],
+  er: ["fontSize"],
+  quadrantChart: ["pointLabelFontSize"],
+  treemap: ["valueFontSize"],
+};
+
+/** The per-diagram blocks for `mermaid.initialize`, at the reading step. */
+export function diagramConfig(): Record<string, Record<string, number>> {
+  const px = Number.parseInt(readSize(FONT_SIZE_TOKEN) ?? "", 10);
+  const size = Number.isFinite(px) && px > 0 ? px : 18;
+  const out: Record<string, Record<string, number>> = {};
+  for (const [diagram, keys] of Object.entries(SIZE_SLOTS)) {
+    out[diagram] = {};
+    for (const key of keys) out[diagram][key] = size;
+  }
+  return out;
+}
+
 /** The `themeVariables` for `mermaid.initialize`, in the active theme. */
 export function diagramThemeVariables(theme: Theme): Record<string, string> {
   const vars: Record<string, string> = {
