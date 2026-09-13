@@ -84,19 +84,27 @@ const FALLBACK: Record<string, string> = {
   "--surface-selected": "--ground-chrome",
 };
 
-/** Resolve a CSS colour to one concrete `#rrggbb`, or null if it will not. */
+/** Resolve a CSS colour to one concrete `rgb(...)`, or null if it will not. */
 function toConcrete(value: string): string | null {
   const probe =
     typeof document === "undefined" ? null : document.createElement("canvas");
-  const ctx = probe?.getContext("2d");
+  const ctx = probe?.getContext("2d", { willReadFrequently: true });
   if (!ctx) return null;
   // An invalid assignment to `fillStyle` is ignored, so a sentinel that is
   // never a real token value tells us whether the assignment took.
   const sentinel = "rgb(1, 2, 3)";
   ctx.fillStyle = sentinel;
   ctx.fillStyle = value;
-  const out = ctx.fillStyle;
-  return out === sentinel ? null : out;
+  if (ctx.fillStyle === sentinel) return null;
+  // Reading `fillStyle` back is not enough. A resolved `color-mix()` comes back
+  // as `color(srgb ...)` or `oklab(...)`, which mermaid's own colour parser does
+  // not read, and passing one made `mermaid.render` reject the whole diagram.
+  // Rasterising one pixel and reading the sRGB bytes back gives a value in the
+  // one form every parser accepts.
+  ctx.fillStyle = value;
+  ctx.fillRect(0, 0, 1, 1);
+  const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+  return `rgb(${r}, ${g}, ${b})`;
 }
 
 function readToken(name: string): string | null {
@@ -114,9 +122,12 @@ export function diagramThemeVariables(theme: Theme): Record<string, string> {
     // told the truth even though every slot above is set explicitly.
     darkMode: theme === "dark" ? "true" : "false",
     // The same family the reading column's chrome uses. Read from the token,
-    // not from `document.body`, so it cannot drift from the app.
+    // not from `document.body`, so it cannot drift from the app. `--font-sans`
+    // is written across two lines in `tokens.css`, so its value carries a
+    // newline that is collapsed here before it reaches a CSS declaration.
     fontFamily: getComputedStyle(document.documentElement)
       .getPropertyValue("--font-sans")
+      .replace(/\s+/g, " ")
       .trim(),
   };
   for (const [key, token] of Object.entries(SLOTS)) {
