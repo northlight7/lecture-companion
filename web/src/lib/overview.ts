@@ -236,12 +236,31 @@ export function stripSlideAgenda(text: string): string {
   return text.replace(SLIDE_AGENDA, "$1");
 }
 
+/**
+ * The two characters the bar forbids a reader from seeing, removed.
+ *
+ * `app/llm.py` normalises what it parses out of an explanation, so a model slip
+ * cannot put a semicolon in front of a reader through that door. The run's
+ * rolling summary is a different door: it is assembled from model-written gists
+ * and reaches the course screen through this filter alone, and the fixture's
+ * own summary carries one, "The course has two blocks and four AI layers; a
+ * financial AI product is more than a trained model". A reader saw it. The
+ * semicolon becomes a full stop and the letter after it is capitalised, because
+ * the sentence that follows is a sentence, and the dash becomes a comma.
+ */
+export function normalisePunctuation(text: string): string {
+  return text
+    .replace(/\s*[\u2014\u2013]\s*/g, ", ")
+    .replace(/;\s+([a-zA-Z])/g, (_all, letter: string) => ". " + letter.toUpperCase())
+    .replace(/;/g, ".");
+}
+
 export function explanationProse(text: string | null | undefined): string {
   const source = text ?? "";
   // The common case, and the one that must not be damaged: nothing to do, and
   // nothing rebuilt. The agenda strip still runs, because it is a substitution
   // and the fast path is keyed on the phrase list, which this is not in.
-  if (!isBanned(source)) return stripSlideAgenda(source);
+  if (!isBanned(source)) return normalisePunctuation(stripSlideAgenda(source));
 
   const spans = sentenceSpans(source);
   if (spans.length === 0) return source;
@@ -279,5 +298,5 @@ export function explanationProse(text: string | null | undefined): string {
   }
 
   if (previousKept) out += source.slice(cursor);
-  return stripSlideAgenda(out);
+  return normalisePunctuation(stripSlideAgenda(out));
 }

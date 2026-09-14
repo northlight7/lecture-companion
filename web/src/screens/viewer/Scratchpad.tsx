@@ -169,7 +169,13 @@ function serialize(root: HTMLElement): string {
     if (!(child instanceof HTMLElement)) continue;
     if (child.tagName === "UL" || child.tagName === "OL") {
       for (const item of Array.from(child.children)) {
-        lines.push(`- ${textOf(item).replace(/\s*\n+\s*/g, " ").trim()}`);
+        const body = textOf(item).replace(/\s*\n+\s*/g, " ").trim();
+        // AN EMPTY ITEM IS NOT A NOTE. It is where the caret is, and the
+        // reader who typed a bullet and then undid it, or deleted the text and
+        // walked away, was left with a stored "-" that came back on the next
+        // visit as a bullet with nothing in it. Measured: after undo the pad
+        // held an empty <li> and the saved markdown was "-".
+        if (body) lines.push(`- ${body}`);
       }
       continue;
     }
