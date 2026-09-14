@@ -24,12 +24,12 @@ import { cn } from "@/lib/utils";
  * agree with each other: a hand-rolled history would have to model every edit
  * this file makes, and it would still disagree with the caret.
  *
- * The cost of that choice, stated because it is real: every DOM change this
- * file makes by hand (the bullet conversion and the exit from a list) is NOT
- * on the browser's undo stack. Undo therefore steps over typed text and over
- * those two structural edits, which is what the bar asks for and all it asks
- * for. Text the reader typed is always undoable, because the browser inserted
- * it.
+ * The browser's stack cannot carry the structural edits this file makes by
+ * hand, and an earlier version of this comment claimed that was an acceptable
+ * cost. It is not: once a pad held a list, `Cmd+Z` did nothing at all, not even
+ * for the word the reader had just typed. So the pad keeps its own history of
+ * whole values and intercepts the key. Every edit is undoable, and the two
+ * structural ones step back as far as the keystroke before the dash.
  *
  * THE STORED FORM IS MARKDOWN, one line per block, `- ` for an item, because
  * the API stores a plain string (`app/notes.py`). The pad parses it on load
@@ -38,6 +38,9 @@ import { cn } from "@/lib/utils";
  * The status line beside the pad is the save state the screen above owns:
  * "Saving", "Saved", "Unsaved changes". The pad never talks to the API itself.
  */
+
+/** How many edits the pad's own undo can walk back. */
+const HISTORY_LIMIT = 200;
 
 /** Must match MAX_NOTE_CHARS in app/notes.py. */
 export const MAX_NOTE_CHARS = 4000;
@@ -188,34 +191,42 @@ function serialize(root: HTMLElement): string {
 // text-editor behaviour
 // --------------------------------------------------------------------------
 
-function placeCaretAtEnd(node: HTMLElement): void {
-  const range = document.createRange();
-  range.selectNodeContents(node);
-  range.collapse(false);
-  const selection = window.getSelection();
-  selection?.removeAllRanges();
-  selection?.addRange(range);
-}
-
-/**
- * A typed `- ` at the start of a block turns that block into a list item.
- *
- * Only when the caret is at the end of the block, so the trigger is typing
- * forward and a dash the reader is editing in the middle of an old line is
- * left alone.
- */
 function bulletise(root: HTMLElement): boolean {
   const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0 || !selection.isCollapsed) return false;
   const range = selection.getRangeAt(0);
   if (!root.contains(range.startContainer)) return false;
   const block = blockOf(root, range.startContainer);
-  if (block === root || block.tagName === "LI") return false;
+  if (block === root) return false;
   if (!caretAtEnd(block, range)) return false;
-  const match = /^-[ ](.*)$/s.exec(textOf(block).replace(/\u00a0/g, " "));
-  if (!match) return false;
+  const text = textOf(block).replace(/\u00a0/g, " ");
+  if (!/^-[ ]/.test(text)) return false;
 
-  const item = itemNode(match[1] ?? "");
+  // ALREADY IN A BULLET, so the dash is a typo rather than a request for one.
+  // Left alone, a reader who typed `- ` inside an item saw a bullet, a dash and
+  // the word, and the note stored `- - alpha`. The dash comes back out and the
+  // item keeps its text.
+  if (block.tagName === "LI") {
+    const node = range.startContainer;
+    const offset = range.startOffset;
+    if (node.nodeType === Node.TEXT_NODE && offset >= 2) {
+      const marker = document.createRange();
+      marker.setStart(node, offset - 2);
+      marker.setEnd(node, offset);
+      selection.removeAllRanges();
+      selection.addRange(marker);
+      document.execCommand("delete");
+      selection.removeAllRanges();
+      const after = document.createRange();
+      after.selectNodeContents(block);
+      after.collapse(false);
+      selection.addRange(after);
+    }
+    return true;
+  }
+  // The guard above proved the shape, so this cannot be null.
+  const match = /^-[ ]([\s\S]*)$/.exec(text);
+  const item = itemNode(match ? (match[1] ?? "") : text.replace(/^-\s*/, ""));
   const list = document.createElement("ul");
   list.className = LIST_CLASS;
   list.appendChild(item);
@@ -245,6 +256,22 @@ function exitList(item: HTMLLIElement): void {
   placeCaretAtEnd(div);
 }
 
+/**
+ * Where the caret goes after this file rebuilds a block by hand.
+ *
+ * Not a nicety. Every structural edit below replaces nodes the browser's own
+ * selection was anchored to, and a selection left on a detached node stops
+ * accepting input, which is what "the pad went dead after a bullet" was.
+ */
+function placeCaretAtEnd(node: HTMLElement): void {
+  const range = document.createRange();
+  range.selectNodeContents(node);
+  range.collapse(false);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
 // --------------------------------------------------------------------------
 
 export function Scratchpad({
@@ -266,6 +293,20 @@ export function Scratchpad({
   // and rebuilding it would throw the caret and the undo stack away, so the
   // DOM is only rebuilt when the incoming text is a different text.
   const written = useRef<string | null>(null);
+  // THE PAD'S OWN UNDO, because the browser's cannot record what this file
+  // does by hand. WebKit's stack holds typing, and it holds nothing at all for
+  // a node the file built and swapped in: measured, `Cmd+Z` against a settled
+  // bullet list did NOTHING, so the reader could not even take back the word
+  // they had just typed, while plain text in the same session undid correctly.
+  //
+  // So the history is kept here, as whole values. Coarser than a character
+  // history and honest about it: undo restores the note as it stood before an
+  // edit rather than replaying that edit backwards, and the caret goes to the
+  // end of the restored text. Bounded, so a long session cannot grow without
+  // limit.
+  const past = useRef<string[]>([]);
+  const future = useRef<string[]>([]);
+  const replaying = useRef(false);
 
   useEffect(() => {
     const node = pad.current;
@@ -282,8 +323,31 @@ export function Scratchpad({
     if (!node) return;
     const text = serialize(node).slice(0, MAX_NOTE_CHARS);
     written.current = text;
-    if (text !== value) onChange(text);
+    if (text === value) return;
+    if (!replaying.current) {
+      past.current.push(value);
+      if (past.current.length > HISTORY_LIMIT) past.current.shift();
+      future.current.length = 0;
+    }
+    onChange(text);
   }, [onChange, value]);
+
+  /** Put a stored value back on screen and in the pad's own memory of it. */
+  const restore = useCallback(
+    (text: string) => {
+      const node = pad.current;
+      if (!node) return;
+      const frag = parse(text);
+      if (!frag.firstChild) frag.appendChild(paragraph(""));
+      node.replaceChildren(frag);
+      written.current = text;
+      replaying.current = true;
+      onChange(text);
+      replaying.current = false;
+      placeCaretAtEnd(node.lastElementChild instanceof HTMLElement ? node.lastElementChild : node);
+    },
+    [onChange],
+  );
 
   const onInput = useCallback(() => {
     const node = pad.current;
@@ -293,6 +357,22 @@ export function Scratchpad({
   }, [commit]);
 
   const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    // Undo and redo first, before the Enter rules below can swallow them.
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
+      event.preventDefault();
+      if (event.shiftKey) {
+        const next = future.current.pop();
+        if (next === undefined) return;
+        past.current.push(value);
+        restore(next);
+        return;
+      }
+      const previous = past.current.pop();
+      if (previous === undefined) return;
+      future.current.push(value);
+      restore(previous);
+      return;
+    }
     if (
       event.key !== "Enter" ||
       event.shiftKey ||

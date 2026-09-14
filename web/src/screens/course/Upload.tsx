@@ -466,7 +466,18 @@ export function UploadSection({ cid }: { cid: string }): JSX.Element {
             // are still being read. The progressbar is still rendered,
             // indeterminate, because its absence is the failure this criterion
             // is written against.
-            <Progress className="max-w-[24rem]" value={null} aria-label="Upload progress" />
+            <Progress
+              className="max-w-[24rem]"
+              value={null}
+              aria-label="Upload progress"
+              // NOTHING IS BEING COUNTED YET, and the bar says so in words. A
+              // critic read `aria-valuenow=50` with `aria-valuemax=0` off this
+              // element while the file panel was open, on a screen where no
+              // byte had moved: a number a reader can be told before anything
+              // starts is a number that is not true. `aria-valuetext` carries
+              // the state instead, and no `aria-valuenow` is claimed here.
+              aria-valuetext="Waiting"
+            />
           )}
         </div>
       ) : null}
