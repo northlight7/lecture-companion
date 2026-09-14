@@ -17,7 +17,16 @@ const twMerge = extendTailwindMerge({
       // button rendered --ink on --accent: 2.33:1 in light theme, on every
       // screen. Dark theme hid it because --ink and --on-accent are the same
       // cream there. `.internal/gate_merge.mjs` pins this.
-      "font-size": [{ text: ["meta", "ui", "body"] }],
+      //
+      // ALL SIX STEPS, not the three that were listed first. The list used to
+      // be `["meta", "ui", "body"]`, and `text-lead`, `text-head` and
+      // `text-display` were therefore still classified as colours. The visible
+      // cost was the screen title: `Screen`'s `<h1>` merges `text-display` with
+      // `text-ink` and a course title's ink class through `cn()`, the merge
+      // read `text-display` as a colour that `text-ink` overrode, and the h1
+      // rendered at the inherited 16px on every screen in the app. The largest
+      // type on a page is not a thing to lose silently to a class merger.
+      "font-size": [{ text: ["meta", "ui", "lead", "body", "head", "display"] }],
     },
   },
 });

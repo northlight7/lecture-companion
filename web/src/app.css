@@ -78,8 +78,53 @@
   --color-course-violet-fill: var(--course-violet-fill);
   --color-course-violet-ink: var(--course-violet-ink);
 
+  /* The six section accents, for the island's boundary and the rule under its
+   * heading (`-line`) and for the heading text (`-ink`). Enumerated for the
+   * same reason as the course accents above: Tailwind emits a utility it can
+   * see written out and nothing else, so `border-sect-${name}-line` would
+   * compile to nothing at all and the island would silently lose its edge.
+   * They are additive to the colour namespace, not a second ground: the island
+   * they are drawn on is `bg-raised`, one of the six surfaces. */
+  --color-sect-blue-line: var(--sect-blue-line);
+  --color-sect-blue-ink: var(--sect-blue-ink);
+  --color-sect-teal-line: var(--sect-teal-line);
+  --color-sect-teal-ink: var(--sect-teal-ink);
+  --color-sect-green-line: var(--sect-green-line);
+  --color-sect-green-ink: var(--sect-green-ink);
+  --color-sect-orange-line: var(--sect-orange-line);
+  --color-sect-orange-ink: var(--sect-orange-ink);
+  --color-sect-olive-line: var(--sect-olive-line);
+  --color-sect-olive-ink: var(--sect-olive-ink);
+  --color-sect-violet-line: var(--sect-violet-line);
+  --color-sect-violet-ink: var(--sect-violet-ink);
+
   --color-accent-hover: var(--accent-hover);
   --color-scrim: var(--scrim);
+}
+
+/* The explanation pane's own type size.
+ *
+ * THE PANE'S + AND - MOVE THE EXPLANATION AND NOTHING ELSE. The six steps in
+ * tokens.css are the app-wide size, and this class re-points them, for this
+ * subtree only, at the pane's own six: the same base sizes multiplied by
+ * `--fs-read-scale` on top of `--fs-scale`. `--fs-head` is the explanation's
+ * heading and `--fs-body` is its body (`.prose-reading`), so those two move.
+ * Everything else in the pane reads a step that is unchanged outside this
+ * subtree, which is why the reader sees only the explanation resize.
+ *
+ * ON THE `<article>`, NOT ON THE PANE. The `<aside>` holds the scroll region,
+ * the pane's footer (`SlideFooter`'s terms, sources and position) and the
+ * size controls themselves. Putting this class on the pane would resize all of
+ * them, which is the defect the criterion names. On the article it reaches the
+ * heading, the body, the worked example and the diagram, and stops there.
+ */
+.explanation-type {
+  --fs-meta: var(--fs-read-meta);
+  --fs-ui: var(--fs-read-ui);
+  --fs-lead: var(--fs-read-lead);
+  --fs-body: var(--fs-read-body);
+  --fs-head: var(--fs-read-head);
+  --fs-display: var(--fs-read-display);
 }
 
 @layer base {

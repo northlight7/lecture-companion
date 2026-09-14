@@ -33,6 +33,65 @@
  */
 
 /* ====================================================================== */
+/* The six steps are registered as lengths, and this is why.              */
+/* ====================================================================== */
+/* A READER OF A CUSTOM PROPERTY GETS ITS COMPUTED VALUE, and an unregistered
+ * property computes to its token stream. Now that the step is declared as
+ * `--fs-lead: calc(18px * var(--fs-scale))`, an unregistered `--fs-lead` reads
+ * back through `getComputedStyle` as the STRING `calc(18px * 1)` rather than
+ * as `18px`, and two consumers break on that:
+ *
+ *   * `web/src/lib/diagramTheme.ts` reads `--fs-lead` with `getComputedStyle`
+ *     and `parseInt`s it to pin mermaid's base size. Its own note says the
+ *     contract is "a token written as a length, taken as its computed value".
+ *     `parseInt("calc(18px * 1)")` is NaN, so the pin silently falls back;
+ *   * mermaid then derives a sequence diagram's actor, message and note label
+ *     sizes from that pin and parses them again, so the label sizes land on
+ *     NaN at EVERY level, the default included.
+ *
+ * Registered with `syntax: "<length>"`, the same declaration computes to a
+ * length: `18px` at the default level, `23.4px` at level 4. The pin keeps
+ * working and a diagram follows the reader's level with the rest of the app,
+ * which is what C16 asks for. Measured in Chrome on 2026-09-14 rather than
+ * assumed: `--fs-lead` reads `20.7px` at `--fs-scale: 1.15`, `23.4px` at 1.3,
+ * and falls back to `18px` after `--fs-scale: nonsense`, which is what
+ * `initial-value` is for.
+ *
+ * The pane's six are not registered: nothing reads them as a string, and
+ * `.explanation-type` in app.css re-points these six at them, so the value any
+ * string reader sees is still a registered length. */
+@property --fs-meta {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 14px;
+}
+@property --fs-ui {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 16px;
+}
+@property --fs-lead {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 18px;
+}
+@property --fs-body {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 22px;
+}
+@property --fs-head {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 28px;
+}
+@property --fs-display {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 36px;
+}
+
+/* ====================================================================== */
 /* Theme-independent tokens.                                              */
 /* ====================================================================== */
 :root {
@@ -87,10 +146,39 @@
    * lift becomes a colour change rather than a movement. */
   --lift: -2px;
 
+  /* ---- type size levels ------------------------------------------------ */
+  /* FIVE LEVELS, A CLOSED SET, DECLARED AS TOKENS. The reader moves the whole
+   * app through these five with `Cmd` and `+`, `Cmd` and `-`, and `Cmd` and
+   * `0` for the default. They are declared here rather than written into the
+   * code that applies them, so a gate can read the set instead of trusting it.
+   *
+   * `--fs-scale` is the active level and `:root` starts on level 2, the
+   * default. `App.tsx` writes `--fs-scale` onto the DOCUMENT ELEMENT from the
+   * stored level, which is why the property lives there and not on a wrapper:
+   * nothing between the root and the text can shadow it. `lib/prefs.ts` is
+   * where the choice is kept, so it survives a relaunch.
+   *
+   * Level 1 is the smallest, and it takes the smallest step to 14 * 0.9 = 12.6
+   * pixels. 12 is the floor no level may cross. Below the default the smaller
+   * text is the reader's own choice, and banned-list entry 16 in DESIGN.md is
+   * re-scoped to say exactly that: the 14px minimum is the minimum AT THE
+   * DEFAULT SIZE, and a reader who asks for smaller text has asked for it.
+   */
+  --fs-level-1: 0.9;
+  --fs-level-2: 1;
+  --fs-level-3: 1.15;
+  --fs-level-4: 1.3;
+  --fs-level-5: 1.5;
+  --fs-scale: var(--fs-level-2);
+
   /* ---- type scale ------------------------------------------------------ */
   /* SIX STEPS, AND THE SCALE IS CLOSED. A rendered size that is not one of
    * these six is a defect, and `.internal/gate_type.py` reads the built CSS
    * and fails on one.
+   *
+   * Every step is its base size multiplied by `--fs-scale`, so the six move
+   * together and the ratios between them never change. The base sizes are
+   * exactly 14, 16, 18, 22, 28 and 36 pixels, and the gate checks that too.
    *
    * Named --fs-*, not --text-*. Tailwind's `@theme inline` does not emit its
    * own custom properties, so a `var(--text-body)` written by hand would
@@ -106,10 +194,12 @@
    * 28  head    a section heading, and a reading h2.
    * 36  display the screen title, once per screen.
    *
-   * THE MINIMUM IS 14px. Nothing renders smaller, including badges and
-   * counters. That is two steps above the 12px floor the sources support, on
-   * purpose: the complaint was that the text was too small to read, and a
-   * floor argued down to the published minimum answers the wrong question.
+   * THE MINIMUM IS 14px AT THE DEFAULT LEVEL. Nothing renders smaller there,
+   * including badges and counters. That is two steps above the 12px floor the
+   * sources support, on purpose: the complaint was that the text was too small
+   * to read, and a floor argued down to the published minimum answers the
+   * wrong question. The level the reader chooses multiplies it, and no level
+   * takes the smallest step below 12.
    *
    * The chrome tier is an arithmetic 2px ladder (14, 16, 18): chrome is scanned
    * rather than read, so it is bought back with a tight ratio, and the ladder is
@@ -123,12 +213,56 @@
    * title over a 26px reading heading over a 21px body is three sizes that read
    * as one size, which is the human's "all the font is in the same size be it
    * for the title or for the text". */
-  --fs-meta: 14px;
-  --fs-ui: 16px;
-  --fs-lead: 18px;
-  --fs-body: 22px;
-  --fs-head: 28px;
-  --fs-display: 36px;
+  --fs-meta: calc(14px * var(--fs-scale));
+  --fs-ui: calc(16px * var(--fs-scale));
+  --fs-lead: calc(18px * var(--fs-scale));
+  --fs-body: calc(22px * var(--fs-scale));
+  --fs-head: calc(28px * var(--fs-scale));
+  --fs-display: calc(36px * var(--fs-scale));
+
+  /* ---- the explanation pane's own size --------------------------------- */
+  /* THE SAME FIVE-STAGE SHAPE, MULTIPLIED ON TOP. The explanation pane carries
+   * its own plus and minus, and they move the explanation's heading and body
+   * and nothing else on the screen, so the pane reads `--fs-read-*` where the
+   * rest of the app reads `--fs-*`. The two multiply, which is what gives a
+   * reader who has enlarged everything and then enlarged the explanation both.
+   *
+   * `--fs-read-scale` defaults to 1 and is written onto the document element
+   * by the app, beside `--fs-scale`, from the same stored preference, so a
+   * relaunch restores it. Because both are on the root, this expression
+   * resolves where it is declared and inherits down already resolved.
+   *
+   * The override is carried by the explanation pane's `<article>` alone (see
+   * `.explanation-type` in app.css). The deck title, the position line, the
+   * pane's footer labels and the terms are outside that element and do not
+   * move.
+   */
+  --fs-read-level-1: 0.9;
+  --fs-read-level-2: 1;
+  --fs-read-level-3: 1.15;
+  --fs-read-level-4: 1.3;
+  --fs-read-level-5: 1.5;
+  --fs-read-scale: var(--fs-read-level-2);
+  /* THE PRODUCT IS CLAMPED, and this is the only place the floor is enforced on
+   * a composition rather than on a set. Both sets bottom out at 0.9, so the
+   * smallest step inside the pane would compose to 14 x 0.9 x 0.9 = 11.34px:
+   * under the 12px the levels themselves hold, and under the 14px the reader
+   * gets by default. Each control on its own is within the rules and the pair
+   * is not, which is exactly the kind of hole a set-by-set check cannot see.
+   * The clamp holds the composition at the app's own smallest level, so the
+   * pane can still be reduced from any level above the bottom and stops where
+   * everything else stops.
+   *
+   * `--fs-read-factor` is that product, once, rather than the same `max()`
+   * written into six declarations. `.internal/gate_type.py` resolves it as one
+   * more factor and checks its floor against the base steps. */
+  --fs-read-factor: max(0.9, calc(var(--fs-scale) * var(--fs-read-scale)));
+  --fs-read-meta: calc(14px * var(--fs-read-factor));
+  --fs-read-ui: calc(16px * var(--fs-read-factor));
+  --fs-read-lead: calc(18px * var(--fs-read-factor));
+  --fs-read-body: calc(22px * var(--fs-read-factor));
+  --fs-read-head: calc(28px * var(--fs-read-factor));
+  --fs-read-display: calc(36px * var(--fs-read-factor));
 
   /* The accent at rest and on hover. `--accent-hover` is per-theme: see the
    * note in the dark block. */
@@ -233,6 +367,43 @@
   --course-blue-ink: #398ddf;
   --course-violet-fill: #8157b7;
   --course-violet-ink: #9b78cd;
+
+  /* ---- section accents ------------------------------------------------- */
+  /* Six accents, one per section island, so a screen reads as islands rather
+   * than as one continuous scroll. An island's own boundary and its heading
+   * carry the accent, and they are the only two things that do: `-line` is the
+   * 1px boundary and the short rule under the heading, `-ink` is the heading
+   * text. Derived and enforced by `.internal/derive_accents.py` under the same
+   * four rules as the course palette above, with the contrast floors measured
+   * against the surface a section accent is drawn on rather than against the
+   * grounds: that surface is `--surface-raised`, which is what an island is
+   * filled with. A `-line` clears 3:1 on it as a graphic and an `-ink` clears
+   * 4.5:1 on it as text, in both themes. The chroma ceiling of 0.12 is what
+   * makes the family pastel, and it is a rule rather than a result. */
+  /* THE LIGHT THEME'S TRADE, written here because this is where a reader meets
+   * it and it should not have to be rediscovered. A pastel is high in lightness
+   * and low in chroma. On the light island (#eae7e1, L* 91.7) a high-lightness
+   * tint cannot clear 4.5:1 as TEXT at all: that floor reaches it at L* 44,
+   * which is a mid tone and not a pastel. So in the light theme the ink is a
+   * DEEPER MUTED TONE of the same hue and the LINE stays the pastel member.
+   * The trade is real and it is not a preference: the boundary is the soft
+   * element and the heading is the legible one, and that is the only way both
+   * floors hold on a near-white island. In the dark theme both members are
+   * light tints and the line is the paler and less chromatic of the two.
+   * Do not "fix" the light ink back to a pastel without moving a floor, and do
+   * not move a floor without reading the header above `derive_sections`. */
+  --sect-orange-line: #ffac7f;
+  --sect-orange-ink: #eb966a;
+  --sect-olive-line: #d7c566;
+  --sect-olive-ink: #c1af4f;
+  --sect-green-line: #8bd99c;
+  --sect-green-ink: #74c386;
+  --sect-teal-line: #50dbe2;
+  --sect-teal-ink: #30c4cb;
+  --sect-blue-line: #7ebeff;
+  --sect-blue-ink: #73b3f6;
+  --sect-violet-line: #d1b0ff;
+  --sect-violet-ink: #bc9cec;
 }
 
 /* ====================================================================== */
@@ -296,6 +467,23 @@
   --course-blue-ink: #0069ba;
   --course-violet-fill: #8358ba;
   --course-violet-ink: #7d52b3;
+
+  /* ---- section accents, light ------------------------------------------ */
+  /* The same six hues, re-derived against this theme's island. The ink here is
+   * the deeper muted tone and the line is the pastel one: see the trade in the
+   * dark block above, which is the only place it is written out. */
+  --sect-orange-line: #b36438;
+  --sect-orange-ink: #9b4e20;
+  --sect-olive-line: #95841b;
+  --sect-olive-ink: #766400;
+  --sect-green-line: #46935a;
+  --sect-green-ink: #23753d;
+  --sect-teal-line: #009199;
+  --sect-teal-ink: #00737a;
+  --sect-blue-line: #417fbf;
+  --sect-blue-ink: #2969a7;
+  --sect-violet-line: #9476c0;
+  --sect-violet-ink: #73549d;
 }
 
 /* A reader who has never chosen a theme follows the system. */
@@ -350,5 +538,19 @@
     --course-blue-ink: #0069ba;
     --course-violet-fill: #8358ba;
     --course-violet-ink: #7d52b3;
+
+    /* ---- section accents, light ---------------------------------------- */
+    --sect-orange-line: #b36438;
+    --sect-orange-ink: #9b4e20;
+    --sect-olive-line: #95841b;
+    --sect-olive-ink: #766400;
+    --sect-green-line: #46935a;
+    --sect-green-ink: #23753d;
+    --sect-teal-line: #009199;
+    --sect-teal-ink: #00737a;
+    --sect-blue-line: #417fbf;
+    --sect-blue-ink: #2969a7;
+    --sect-violet-line: #9476c0;
+    --sect-violet-ink: #73549d;
   }
 }

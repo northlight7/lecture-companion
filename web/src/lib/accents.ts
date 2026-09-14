@@ -112,3 +112,54 @@ export const ACCENT_BORDER: Record<CourseAccent, string> = {
   blue: "border-course-blue-ink",
   violet: "border-course-violet-ink",
 };
+
+/**
+ * The section accents, one per section island.
+ *
+ * The same six hues as the course accents, because a section accent and a
+ * course accent that share a name should be the same colour. What differs is
+ * the treatment: these are pastel, and they are drawn on the island rather than
+ * on a ground. `--sect-<hue>-line` is the island's 1px boundary and the short
+ * rule under its heading, `--sect-<hue>-ink` is the heading text, and both are
+ * measured against `--surface-raised` (the island's own fill) rather than
+ * against the grounds. `derive_accents.py` derives them under the same four
+ * rules as the course palette and `check_contrast.py` proves both floors in
+ * both themes.
+ *
+ * The type is the course accent type on purpose: the two are the same six
+ * names, and a screen that has a course's accent in hand can hand it straight
+ * to `Section` without a cast.
+ */
+export const SECTION_ACCENTS = COURSE_ACCENTS;
+
+export type SectionAccent = CourseAccent;
+
+/** The island's boundary, and the rule under its heading. */
+export const SECTION_LINE: Record<SectionAccent, string> = {
+  orange: "border-sect-orange-line",
+  olive: "border-sect-olive-line",
+  green: "border-sect-green-line",
+  teal: "border-sect-teal-line",
+  blue: "border-sect-blue-line",
+  violet: "border-sect-violet-line",
+};
+
+/** The same token as a painted rule rather than as an edge. */
+export const SECTION_RULE: Record<SectionAccent, string> = {
+  orange: "bg-sect-orange-line",
+  olive: "bg-sect-olive-line",
+  green: "bg-sect-green-line",
+  teal: "bg-sect-teal-line",
+  blue: "bg-sect-blue-line",
+  violet: "bg-sect-violet-line",
+};
+
+/** The island's heading. */
+export const SECTION_INK: Record<SectionAccent, string> = {
+  orange: "text-sect-orange-ink",
+  olive: "text-sect-olive-ink",
+  green: "text-sect-green-ink",
+  teal: "text-sect-teal-ink",
+  blue: "text-sect-blue-ink",
+  violet: "text-sect-violet-ink",
+};

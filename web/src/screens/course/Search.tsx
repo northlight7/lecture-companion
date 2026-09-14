@@ -407,6 +407,7 @@ export function SearchSection({ cid }: { cid: string }): JSX.Element {
   return (
     <Section
       title="Search across this course"
+      accent="teal"
       action={
         <Button
           type="button"

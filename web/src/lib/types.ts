@@ -240,7 +240,6 @@ export interface FiledRow {
 export interface UploadResult {
   filed: FiledRow[];
   errors: string[];
-  overview_refreshed: boolean;
   course: CourseRow;
 }
 

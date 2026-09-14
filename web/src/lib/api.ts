@@ -59,6 +59,11 @@ export class ApiError extends Error {
 
 export type UploadFiles = FileList | readonly File[];
 
+/** Bytes written so far, and the size of the body being written when the
+ *  browser can size it. `total` is `0` when it cannot, which is the signal to
+ *  render a state that does not claim to know. */
+export type UploadProgress = (loaded: number, total: number) => void;
+
 type Segment = string | number;
 
 /** Ids, run ids and filenames arrive from the server and may contain anything
@@ -122,14 +127,87 @@ const post = <T>(url: string, payload: unknown = {}) => send<T>("POST", url, pay
 const put = <T>(url: string, payload: unknown = {}) => send<T>("PUT", url, payload);
 const remove = <T>(url: string, payload?: unknown) => send<T>("DELETE", url, payload);
 
-async function postFiles<T>(url: string, files: UploadFiles): Promise<T> {
+function fileForm(files: UploadFiles): FormData {
   const form = new FormData();
   for (const file of files) {
     // The relative path keeps a dropped folder's hierarchy in the filename the
     // importer classifies and files.
     form.append("files", file, file.webkitRelativePath || file.name);
   }
-  return settle<T>(await fetch(url, { method: "POST", body: form }));
+  return form;
+}
+
+async function postFiles<T>(url: string, files: UploadFiles): Promise<T> {
+  return settle<T>(await fetch(url, { method: "POST", body: fileForm(files) }));
+}
+
+/** The body of a finished XHR, read the way `readBody` reads a response. */
+function readXhrBody(request: XMLHttpRequest): unknown {
+  const contentType = request.getResponseHeader("content-type") ?? "";
+  if (contentType.includes("json")) {
+    try {
+      return JSON.parse(request.responseText);
+    } catch {
+      return null;
+    }
+  }
+  const text = request.responseText ?? "";
+  return text.trim() ? text : null;
+}
+
+/**
+ * A multipart POST that reports its own upload progress.
+ *
+ * `fetch` has no upload progress channel. There is no `upload` on a `fetch`
+ * request and no event that counts the bytes as they leave: a `fetch` call
+ * with a `FormData` body reports nothing until the response arrives, and a
+ * request body built from a stream has no progress callback either.
+ * `XMLHttpRequest` is the only API in the platform that counts the bytes it is
+ * writing, through `xhr.upload.onprogress`, so that is what an upload uses.
+ *
+ * Everything else keeps `settle`'s contract exactly, because a failure is
+ * rendered from the error's own message: a non-2xx rejects with an `ApiError`
+ * carrying the server's own `{error: ...}` text, a 2xx resolves with the parsed
+ * body, and a body that is not JSON is passed through as a string.
+ */
+function postFilesProgress<T>(
+  url: string,
+  files: UploadFiles,
+  onProgress?: UploadProgress,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open("POST", url);
+
+    if (onProgress) {
+      // `lengthComputable` is false when the browser cannot size the body. The
+      // caller is told `0` rather than a guess, so it can render an
+      // indeterminate state instead of a bar that pretends to know.
+      request.upload.onprogress = (event) => {
+        onProgress(event.loaded, event.lengthComputable ? event.total : 0);
+      };
+    }
+
+    request.onload = () => {
+      const body = readXhrBody(request);
+      if (request.status < 200 || request.status >= 300) {
+        reject(new ApiError(request.status, describe(request.status, request.statusText, body)));
+        return;
+      }
+      resolve(body as T);
+    };
+    // `fetch` rejects these as a `TypeError` and has no status to report. The
+    // upload reports them as a request that never reached the server, which is
+    // the same thing the failure region would have said about it.
+    request.onerror = () => {
+      reject(new ApiError(0, "The upload could not reach the server."));
+    };
+    request.onabort = () => {
+      reject(new ApiError(0, "The upload was cancelled."));
+    };
+
+    request.send(fileForm(files));
+  });
 }
 
 /** For the routes that answer with bytes rather than JSON. */
@@ -232,8 +310,25 @@ export function importBulk(files: UploadFiles): Promise<ImportBulkResult> {
   return postFiles<ImportBulkResult>(path("api", "import", "bulk"), files);
 }
 
-export function uploadCourseFiles(courseId: string, files: UploadFiles): Promise<UploadResult> {
-  return postFiles<UploadResult>(path("api", "courses", courseId, "files"), files);
+/**
+ * Add files to a course. The multipart filename is the relative path, which is
+ * what the importer groups a dropped folder by.
+ *
+ * `onProgress` is optional and additive: every existing call keeps working
+ * unchanged, and a caller that passes it is told how many bytes have left the
+ * browser. It is called from `xhr.upload.onprogress` while the body is still
+ * being written, which is the whole reason this route is not on `fetch`.
+ */
+export function uploadCourseFiles(
+  courseId: string,
+  files: UploadFiles,
+  onProgress?: UploadProgress,
+): Promise<UploadResult> {
+  return postFilesProgress<UploadResult>(
+    path("api", "courses", courseId, "files"),
+    files,
+    onProgress,
+  );
 }
 
 // --------------------------------------------------------------------------

@@ -8,6 +8,13 @@ invariant 1 holds here.
 Every explanation is supposed to reference the overview (gate G5), so a course
 with no reference docs still gets one: `fallback_overview` derives a modest,
 clearly-hedged summary from the deck titles and the opening slides.
+
+**The course screen no longer renders an overview**, and nothing builds one
+automatically any more: importing a file used to spend a model call here and
+that call bought nothing a reader saw. `build_overview` is still what
+`POST /api/courses/{cid}/overview/regenerate` distils on request, and every
+overview already on disk is left untouched, because it is the reader's data and
+this was a UI decision rather than a data one.
 """
 
 from __future__ import annotations
@@ -106,6 +113,14 @@ def refresh_overview_if_needed(store, course_id: str, client) -> bool:
     Returns True when it rebuilt and saved. The comparison is on the set of
     reference `file_id`s, so re-importing the same syllabus is free but adding
     a programme handbook triggers a rebuild.
+
+    No longer called from the import path: the overview left the course screen,
+    so an import does not spend a model call on one. It is kept because the rule
+    it encodes is a real one and is pinned by `tests/test_overview_retry.py`:
+    a fallback caused by a transient model failure must stay retryable, so the
+    reference ids are only recorded as consumed when the model actually distilled
+    them. Anything that rebuilds an overview automatically belongs here rather
+    than beside it.
     """
     course = store.get_course(course_id)
     ref_ids = sorted(store.load_ref_texts(course_id).keys())

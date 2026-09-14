@@ -1,7 +1,10 @@
 import { ChevronLeft } from "lucide-react";
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 
+import { SECTION_INK, SECTION_LINE, SECTION_RULE, type SectionAccent } from "@/lib/accents";
 import { cn } from "@/lib/utils";
+
+export type { SectionAccent };
 
 /**
  * Every screen's page frame. One left edge, one right edge, one vertical
@@ -77,25 +80,76 @@ export function Screen({
   );
 }
 
-/** A titled run of content inside a screen. Separated by space, never a card. */
+/**
+ * A titled run of content inside a screen, drawn as its own ISLAND.
+ *
+ * An island is a level-1 surface: `--surface-raised` with its own 1px boundary
+ * and its own radius, resting on the content ground. What separates it from the
+ * next island is ground, never a border between the two, and `--space-6` (32px)
+ * of it, which is twice the 16px the reader needs to read them as two objects.
+ * `DESIGN.md`, "The section island and its accent", states the model value for
+ * value, and this is the component that draws it.
+ *
+ * The boundary and the heading carry the section's own pastel accent, from the
+ * `--sect-<hue>-line` / `--sect-<hue>-ink` family. Both are measured against
+ * the island's own fill by `check_contrast.py`, in both themes: the line clears
+ * 3:1 there as a graphic, the heading ink clears 4.5:1 there as text.
+ *
+ * `data-section` carries the accent's name, so a section is identifiable from
+ * the DOM as well as by its heading, and the heading's `id` names the region
+ * for a screen reader. Those two together are what make an island findable
+ * rather than merely visible.
+ */
 export function Section({
   title,
   action,
+  accent = "blue",
   children,
   className,
 }: {
   title: string;
   action?: ReactNode;
+  accent?: SectionAccent;
   children: ReactNode;
   className?: string;
 }) {
+  const headingId = useId();
   return (
-    <section className={cn("mt-8 first:mt-0", className)}>
-      <div className="mb-3 flex items-center justify-between gap-4">
-        <h2 className="font-ui text-head font-semibold text-ink">{title}</h2>
+    <section
+      data-section={accent}
+      aria-labelledby={headingId}
+      className={cn(
+        "mt-8 first:mt-0 rounded-pnl border bg-raised",
+        SECTION_LINE[accent],
+        className,
+      )}
+    >
+      {/* The heading row is the island's masthead: the title in the section's
+        * accent, the section's action on the right, and a hairline ruling it
+        * off from the content it introduces. The 3px rule under the title is
+        * the same mark the course screen puts under its own title, in the same
+        * family, so the two read as one system rather than as two. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-hair px-6 pt-4 pb-3">
+        <div className="min-w-0">
+          <h2
+            id={headingId}
+            // Deliberately not `cn()`. tailwind-merge does not know that
+            // `text-head` is a font size rather than a colour, so merging it
+            // with a colour class drops the size and the heading renders at the
+            // inherited one. Concatenation keeps both, and the size stays the
+            // scale's.
+            className={"font-ui text-head font-semibold " + SECTION_INK[accent]}
+          >
+            {title}
+          </h2>
+          <div
+            aria-hidden
+            className={"mt-2 h-[3px] w-12 rounded-ctl " + SECTION_RULE[accent]}
+          />
+        </div>
         {action}
       </div>
-      {children}
+      <div className="px-6 py-4">{children}</div>
     </section>
   );
 }

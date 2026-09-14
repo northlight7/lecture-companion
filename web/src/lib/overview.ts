@@ -1,13 +1,20 @@
 /**
- * What the course screen is allowed to print out of a stored overview.
+ * What the app is allowed to print out of stored model prose.
  *
- * `app/overview.py` is frozen and writes whatever it writes. It is asked to
- * describe the course, and sometimes it describes itself instead, or pastes the
- * text it scraped off the opening slides. This module is the presentation
- * decision that stands between the stored string and the reader: split it into
- * sentences and keep only the ones that are ABOUT THE COURSE. The screen renders
- * a summary, never a transcript (`.internal/DESIGN.md`, "The course overview,
- * and what the UI refuses to print").
+ * `app/overview.py` writes a course overview, and it is asked to describe the
+ * course. Sometimes it describes itself instead, or pastes the text it scraped
+ * off the opening slides. That text reaches the reader through a second door as
+ * well: every explanation prompt is handed the overview as context
+ * (`app/pipeline.py:301`), and the model quotes the meta-text back inside a
+ * sentence of its own.
+ *
+ * The course screen's half of this module went with the overview itself. That
+ * screen renders no overview prose at all now, so the filter it used
+ * (`courseProse` and `courseSentences`, which also dropped everything after the
+ * first slide scrape) has no caller and is deleted rather than left standing.
+ * What remains is the half that still has a reader: `explanationProse`, which
+ * the explanation pane, the search results, the question dialog and the run's
+ * own summary all render through.
  *
  * THE BANNED PHRASES, verbatim from DESIGN.md's named list:
  *
@@ -21,21 +28,10 @@
  *   subject matter          will be covered
  *
  * They are phrases, not words, so a course legitimately about provenance or
- * methodology is not caught. `.internal/gate_overview.py` renders the course
- * screen in the bundle and fails if any of them reaches the app, so this list
- * is a floor and not the design: the design is that a sentence about the model
- * never arrives at the reader.
- *
- * Three ways a sentence is dropped, in one pass:
- *
- *   1. It contains one of the banned phrases, case-insensitively.
- *   2. The slide scrape starts here. Everything from that sentence onward goes,
- *      because the reader is about to see the slides themselves, rendered, with
- *      an explanation, further down the same screen. The scrape announces itself
- *      with "the opening slides", but not always, so a sentence longer than
- *      `SLIDE_SENTENCE_CHARS` or carrying `SLIDE_SLASH_RUN` or more separators
- *      is slide text by any other name.
- *   3. It is a trailing fragment: text cut off before it became a sentence.
+ * methodology is not caught. `.internal/gate_overview.py` renders the built app
+ * and fails if any of them reaches a screen, so this list is a floor and not the
+ * design: the design is that a sentence about the model never arrives at the
+ * reader.
  */
 
 /** The named list from DESIGN.md, verbatim and exported so a reviewer can read
@@ -59,21 +55,9 @@ export const BANNED_PHRASES: readonly string[] = [
   "will be covered",
 ];
 
-/** A sentence past this length is scraped slide text, not prose. */
-const SLIDE_SENTENCE_CHARS = 400;
-
-/** Three or more `/` separators in one sentence: it is a deck outline. */
-const SLIDE_SLASH_RUN = 3;
-
-/** A trailing fragment is shorter than this and has no terminal punctuation. */
-const FRAGMENT_WORDS = 3;
-
 /** Abbreviations whose full stop does not end a sentence. Kept short on
  *  purpose: the material is slides and syllabi, not prose that uses them. */
 const ABBREVIATIONS = ["e.g.", "i.e.", "etc.", "vs.", "no.", "fig.", "p.", "pp.", "al."];
-
-/** Terminal punctuation, optionally inside a closing quote or bracket. */
-const TERMINAL = /[.!?]["'”’)\]]?$/;
 
 function isAbbreviation(text: string, at: number): boolean {
   const tail = text.slice(0, at + 1).toLowerCase();
@@ -161,57 +145,15 @@ export function isBanned(sentence: string): boolean {
   return BANNED_PHRASES.some((phrase) => lower.includes(phrase));
 }
 
-/** True when a sentence reads as scraped slide text rather than prose about the
- *  course. The first such sentence also ends the overview: see `courseProse`. */
-export function isSlideScrape(sentence: string): boolean {
-  if (sentence.length > SLIDE_SENTENCE_CHARS) return true;
-  const slashes = (sentence.match(/\//g) ?? []).length;
-  return slashes >= SLIDE_SLASH_RUN;
-}
-
-/** True when a sentence is a cut-off tail rather than a finished sentence. */
-export function isFragment(sentence: string): boolean {
-  if (TERMINAL.test(sentence)) return false;
-  return sentence.split(/\s+/).length < FRAGMENT_WORDS;
-}
-
-/**
- * The sentences of a stored overview that are about the course, in order.
- *
- * Everything from the first slide scrape onward is dropped, not just the scrape
- * sentence: the model pastes the scrape last, and the sentences after it are the
- * scrape's continuation rather than new claims about the course.
- */
-export function courseSentences(overview: string | null | undefined): string[] {
-  const kept: string[] = [];
-  for (const sentence of splitSentences(overview ?? "")) {
-    if (isSlideScrape(sentence)) break;
-    if (isBanned(sentence)) continue;
-    if (isFragment(sentence)) continue;
-    kept.push(sentence);
-  }
-  return kept;
-}
-
-/**
- * What the screen renders: the surviving sentences joined back into a
- * paragraph, or `""` when nothing in the stored overview was about the course.
- * An empty string is a real answer here, not a failure, and the screen has a
- * structured block for the facts the dropped sentences were carrying.
- */
-export function courseProse(overview: string | null | undefined): string {
-  return courseSentences(overview).join(" ").trim();
-}
-
 /* -------------------------------------------------------------------------
  *  The same phrases, reaching the reader through an explanation
  *
- *  The course screen was fixed by dropping whole sentences. An explanation
- *  cannot be treated that way: it is legitimate teaching prose, and the defect
+ *  An explanation cannot be treated the way the course screen's overview was,
+ *  by dropping whole sentences: it is legitimate teaching prose, and the defect
  *  does not arrive as a sentence of its own. `app/pipeline.py:301` hands every
  *  explanation prompt `course_overview=_truncate_words(overview, 500)`, and
  *  `app/pipeline.py:149` returns `app/overview.py`'s `fallback_overview(...)`
- *  for a course with no syllabus. The model is handed the meta-text and quotes
+ *  for a course with no syllabus. The model is handed that meta-text and quotes
  *  it back inside its own sentences, as seen on the Fintech course's viewer:
  *
  *    In the context of the course overview ("This overview for “4-Fintech and
@@ -219,17 +161,13 @@ export function courseProse(overview: string | null | undefined): string {
  *
  *  The banned phrase is inside a parenthetical quotation. The sentence around
  *  it is a real sentence about the slide. So the unit of removal here is the
- *  span, not the sentence:
+ *  sentence, and only when a banned phrase is in it:
  *
- *   1. A parenthetical or quoted span carrying a banned phrase goes, with the
- *      whitespace around it, and the sentence stays.
- *   2. A banned phrase anywhere else in a sentence still takes the sentence,
- *      which is the course screen's rule and the floor under this one.
- *   3. Nothing is left broken: no `()`, no dangling `,`, no ` .`, no doubled
- *      space, no doubled stop, and no sentence opening lower-case after one.
- *   4. Nothing without a banned phrase is dropped. Text that carries none comes
- *      back byte for byte, and `explanationProse` returns the input object
- *      itself on that path rather than a rebuilt string.
+ *   1. A sentence carrying a banned phrase anywhere, parenthetical or not,
+ *      goes. There is no partial removal and no seam to tidy.
+ *   2. Nothing without a banned phrase is dropped. Text that carries none comes
+ *      back byte for byte, and the join of what survives is re-spaced exactly
+ *      once.
  * ---------------------------------------------------------------------- */
 
 /**

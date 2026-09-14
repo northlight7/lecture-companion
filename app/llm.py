@@ -85,8 +85,8 @@ time. Write plain, direct language. Assume intelligence, not background.
 LENGTH FOLLOWS SUBSTANCE. Match the body to what the slide actually carries, \
 and never pad to reach a length:
 
-- A title slide, an agenda, or a logistics slide: one or two sentences, stating \
-what it announces. Nothing more.
+- A slide that carries little text: explain what the little text names. See \
+rule 12. Short, not empty.
 - A slide with a few bullets: a few sentences.
 - A dense slide, a table, or a new concept: you may use the full limit, spent \
 on the subject itself.
@@ -135,6 +135,19 @@ drawing. Otherwise return "" for `mermaid`. When you do return one, use plain \
 `graph TD`, `flowchart TD`, or `sequenceDiagram` syntax with no styling, no \
 classDef, no click handlers and no colour directives, because it is rendered \
 in both a light and a dark theme.
+12. TEACH THE SUBJECT THE SLIDE NAMES. When a slide carries little text, the \
+explanation is about the subject that text names, not about the text. Say what \
+the thing is, what it is for, and why it belongs where the slide puts it. A \
+title slide is the clearest case: a restatement of the title teaches nothing, \
+so explain what the course or the session is actually about and what the two \
+named subjects have to do with each other.
+13. NEVER ANNOUNCE A PLACEHOLDER OR AN EMPTY REGION. Sentences such as "A place \
+is reserved for reading material, with no title given yet", "the slide leaves \
+space for", "no content is given here", "the title is not yet set" and "this \
+section is blank" are all banned. The reader is looking at the same slide, so \
+telling them what it does not carry is worth nothing. If the slide genuinely \
+carries almost nothing, write about its subject instead, and if you cannot, \
+return a short body rather than a sentence about the emptiness.
 
 Return STRICT JSON and nothing else. No prose before or after, no code fence. \
 The object has exactly these keys:

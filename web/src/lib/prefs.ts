@@ -1,8 +1,10 @@
 import { useCallback, useSyncExternalStore } from "react";
 
+import { DEFAULT_LEVEL, clampLevel } from "@/lib/typography";
+
 /**
- * The reader's own preferences: the order they put their courses in, and
- * whether the sidebar is collapsed.
+ * The reader's own preferences: the order they put their courses in, whether
+ * the sidebar is collapsed, and the two text sizes they have chosen.
  *
  * These are UI state for a page this app serves itself, so they live in
  * `localStorage` rather than on the server. The server has no route for either
@@ -23,9 +25,25 @@ export interface Prefs {
   /** Course ids, in the reader's order. Ids not listed follow, in server order. */
   order: string[];
   collapsed: boolean;
+  /**
+   * The app-wide text size, as an index into `FS_LEVELS`.
+   *
+   * Stored as the level rather than as the multiplier, because the level is
+   * what the reader moves between and what the controls are bounded by: the
+   * multipliers live in `lib/typography.ts` and in `tokens.css`, and a stored
+   * copy of one of them would be a third place for the set to be wrong.
+   */
+  fsLevel: number;
+  /** The explanation pane's own text size, on the same five levels. */
+  readLevel: number;
 }
 
-const EMPTY: Prefs = { order: [], collapsed: false };
+const EMPTY: Prefs = {
+  order: [],
+  collapsed: false,
+  fsLevel: DEFAULT_LEVEL,
+  readLevel: DEFAULT_LEVEL,
+};
 
 function read(): Prefs {
   try {
@@ -39,6 +57,11 @@ function read(): Prefs {
         ? record.order.filter((id): id is string => typeof id === "string")
         : [],
       collapsed: record.collapsed === true,
+      // A value that is not one of the five levels, including one an older
+      // build never wrote, reads back as the default rather than as a size
+      // nothing on screen was built for.
+      fsLevel: clampLevel(record.fsLevel),
+      readLevel: clampLevel(record.readLevel),
     };
   } catch {
     // A browser that refuses storage, or a value another build wrote. Either

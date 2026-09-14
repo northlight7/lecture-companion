@@ -6,13 +6,20 @@ import { ACCENT_FILL, courseAccent } from "@/lib/accents";
 import { useStore } from "@/state/store";
 import { NavRow, SectionLabel, SidebarFoot, SidebarFrame, SidebarScroll } from "@/shell/Chrome";
 import { SidebarToggle } from "@/shell/SidebarToggle";
+import { ProgressRing } from "@/screens/course/Progress";
 
 /**
- * The chrome. Every course, and the decks of the course you are in.
+ * The chrome. Every course, the decks of the course you are in, and how far
+ * that course has been explained.
  *
  * This is the whole of the app's navigation. There is no toolbar and no window
  * title: the traffic lights are drawn over the strip above these rows, so the
  * sidebar is where the window's identity lives.
+ *
+ * The ring is the count the course screen no longer prints. It belongs on this
+ * side of the window because it is about the course rather than about a block
+ * of the page, and because it is the only number a reader wants while they are
+ * reading a slide in the viewer: the chrome does not scroll away.
  */
 export function Sidebar({
   route,
@@ -23,10 +30,18 @@ export function Sidebar({
   onOpenConnect: () => void;
   onToggleCollapsed: () => void;
 }) {
-  const { courses, course, connection } = useStore();
+  const { courses, course, connection, progress } = useStore();
 
   const activeDeck = route.name === "viewer" ? route.did : null;
   const inCourse = route.name !== "courses";
+
+  // The course the reader is in, guarded the same way the course screen guards
+  // it: a payload for another course must never paint here either, and the ring
+  // must not report one course's slides while another is open.
+  const current =
+    inCourse && "cid" in route && course && course.id === route.cid ? course : null;
+  // The live poll wins over the stored count, exactly as it does on the screen.
+  const shown = progress ?? current?.progress ?? null;
 
   return (
     <SidebarFrame top={<SidebarToggle collapsed={false} onToggle={onToggleCollapsed} />}>
@@ -74,6 +89,21 @@ export function Sidebar({
       </SidebarScroll>
 
       <SidebarFoot>
+        {/* Below the deck rows and above the connection row, and in the foot
+            rather than in the scroll region above it: the chrome must not move
+            when the reader scrolls a list, and a count is chrome. */}
+        {current && shown ? (
+          <div className="flex items-center gap-3 px-2 pb-2">
+            <ProgressRing
+              done={shown.n_explained}
+              total={shown.n_slides}
+              accent={courseAccent(current.id)}
+            />
+            <p className="text-meta font-medium tracking-[0.06em] text-ink-faint uppercase">
+              Slides explained
+            </p>
+          </div>
+        ) : null}
         <ConnectionRow connection={connection} onClick={onOpenConnect} />
       </SidebarFoot>
     </SidebarFrame>

@@ -1,20 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
-import { Sparkles, Trash2 } from "lucide-react";
+import { Minus, Plus, Sparkles, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { Textarea } from "@/components/ui/textarea";
 import { Diagram } from "@/components/reading/Diagram";
 import { Prose } from "@/components/reading/Prose";
 import { explanationProse } from "@/lib/overview";
+import { usePrefs, usePrefsUpdater } from "@/lib/prefs";
+import { MAX_LEVEL, clampLevel } from "@/lib/typography";
+import { PaneLabel } from "@/screens/viewer/Scratchpad";
 import type { Explanation, Term } from "@/lib/types";
 
 /** Must match MAX_TERM_CHARS in app/terms.py. */
 const MAX_TERM_CHARS = 200;
-
-/** Must match MAX_NOTE_CHARS in app/notes.py. */
-const MAX_NOTE_CHARS = 4000;
 
 /** The measure's own small block for a state that replaces the explanation. */
 export function PaneNotice({
@@ -49,26 +48,18 @@ export function PaneNotice({
   );
 }
 
-/** The small sans label that opens each block of the footer. */
-function FooterLabel({ children }: { children: string }) {
-  return (
-    <p className="mb-2 font-ui text-meta font-medium tracking-[0.06em] text-ink-muted uppercase">
-      {children}
-    </p>
-  );
-}
-
 /**
- * The reader's own apparatus on a slide, at the bottom of the explanation pane
- * and below the explanation it belongs to: the terms they asked to have
- * glossed, their note on the slide, what the explanation drew on, and where the
- * slide sits in the deck.
+ * The reader's apparatus on a slide, at the bottom of the explanation pane and
+ * below the explanation it belongs to: the terms they asked to have glossed,
+ * what the explanation drew on, and where the slide sits in the deck.
  *
  * This was the rail beside the reading column. The reading column is now the
  * pane itself and the pane is the full height of the window, so there is no
  * rail left to sit in: everything it carried reads here instead, in this order.
- * Terms and notes are stored per slide, so re-explaining a slide replaces the
- * explanation and leaves both alone.
+ * The reader's own writing surface used to be one of these blocks and is not
+ * any more: it is a pad in the left column, under the slide, where the reader
+ * is already looking (see `Scratchpad.tsx`). Terms are stored per slide, so
+ * re-explaining a slide replaces the explanation and leaves the terms alone.
  */
 export function SlideFooter({
   index,
@@ -76,12 +67,7 @@ export function SlideFooter({
   explained,
   terms,
   pendingTerm,
-  note,
-  noteDirty,
-  saving,
   sources,
-  onNoteChange,
-  onSaveNote,
   onRemoveTerm,
 }: {
   index: number;
@@ -89,18 +75,15 @@ export function SlideFooter({
   explained: number;
   terms: Term[];
   pendingTerm: string;
-  note: string;
-  noteDirty: boolean;
-  saving: boolean;
   sources: { key: string; href?: string; label: string }[];
-  onNoteChange: (text: string) => void;
-  onSaveNote: () => void;
   onRemoveTerm: (term: string) => void;
 }) {
   return (
     <div className="mt-12 flex flex-col gap-8">
       <section>
-        <FooterLabel>Terms you asked about</FooterLabel>
+        <div className="mb-2">
+          <PaneLabel>Terms you asked about</PaneLabel>
+        </div>
         {terms.length === 0 && !pendingTerm ? (
           <p className="font-ui text-meta text-ink-faint">
             Select a word or phrase in the explanation to keep a gloss of it here.
@@ -138,29 +121,9 @@ export function SlideFooter({
       </section>
 
       <section>
-        <FooterLabel>Your note</FooterLabel>
-        <div className="[&_textarea]:font-reading [&_textarea]:text-body [&_textarea]:leading-[1.62]">
-          <Textarea
-            aria-label="Your note on this slide"
-            rows={6}
-            maxLength={MAX_NOTE_CHARS}
-            value={note}
-            onChange={(event) => onNoteChange(event.target.value)}
-            placeholder="Anything worth keeping about this slide, in your own words."
-          />
+        <div className="mb-2">
+          <PaneLabel>What this explanation drew on</PaneLabel>
         </div>
-        <div className="mt-2 flex items-center gap-3">
-          <Button type="button" variant="secondary" size="md" onClick={onSaveNote} disabled={saving}>
-            Save note
-          </Button>
-          <span aria-live="polite" className="font-ui text-meta text-ink-faint">
-            {saving ? "Saving" : noteDirty ? "Unsaved changes" : note ? "Saved" : ""}
-          </span>
-        </div>
-      </section>
-
-      <section>
-        <FooterLabel>What this explanation drew on</FooterLabel>
         {sources.length === 0 ? (
           <p className="font-ui text-meta text-ink-faint">
             This explanation was written from the slide and its image alone.
@@ -186,7 +149,9 @@ export function SlideFooter({
       </section>
 
       <section>
-        <FooterLabel>On this slide</FooterLabel>
+        <div className="mb-2">
+          <PaneLabel>On this slide</PaneLabel>
+        </div>
         <p className="font-ui text-ui text-ink">
           Slide {index + 1} of {count}
         </p>
@@ -199,7 +164,63 @@ export function SlideFooter({
 }
 
 /**
- * The explanation pane: the right half of the viewer, `clamp(340px, 42%, 640px)`
+ * The explanation's own text size, as two controls at the top of the pane.
+ *
+ * WHY IT IS HERE AND NOT IN THE PANE'S FOOTER. It sizes the explanation below
+ * it, so it sits above it, and it stays at the top of the pane on every slide
+ * including the ones that have no explanation yet, where the size the reader
+ * chooses is the size the explanation will arrive in.
+ *
+ * IT IS NOT INSIDE THE ARTICLE IT SIZES. The override is on the article (see
+ * `.explanation-type` in app.css), and these two controls are outside it, so
+ * pressing one moves the explanation and not themselves. The buttons are the
+ * component library's `Button`, disabled at either end of the five levels
+ * rather than silently doing nothing.
+ *
+ * It writes the same preference `App.tsx` applies to the document element, so
+ * the choice survives a relaunch and composes with the app-wide size: a reader
+ * who has used `Cmd` and `+` and then this gets both multiplies.
+ */
+function ExplanationSizeControls() {
+  const prefs = usePrefs();
+  const updatePrefs = usePrefsUpdater();
+  const level = clampLevel(prefs.readLevel);
+  const step = useCallback(
+    (delta: number) => updatePrefs({ readLevel: clampLevel(level + delta) }),
+    [level, updatePrefs],
+  );
+
+  return (
+    <div className="mb-4 flex items-center justify-between gap-3">
+      <PaneLabel>Explanation text</PaneLabel>
+      <div className="flex items-center gap-1">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label="Smaller explanation text"
+          disabled={level === 0}
+          onClick={() => step(-1)}
+        >
+          <Minus size={16} strokeWidth={1.75} aria-hidden />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label="Larger explanation text"
+          disabled={level === MAX_LEVEL}
+          onClick={() => step(1)}
+        >
+          <Plus size={16} strokeWidth={1.75} aria-hidden />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The explanation pane: the right half of the viewer, `clamp(340px, 38%, 620px)`
  * wide and the full height under the header and the strip. It is its own scroll
  * region, which is why it is the `<aside>` and the pane at once, and the only
  * hairline in the screen runs down its leading edge.
@@ -212,8 +233,9 @@ export function SlideFooter({
  * previous build drew here is gone.
  *
  * `footer` is rendered below the explanation, inside the same scroll region:
- * the terms, the reader's note, the sources and the slide's position all belong
- * to the explanation above them, so they travel with it.
+ * the terms, the sources and the slide's position all belong to the explanation
+ * above them, so they travel with it. Nothing in this pane is editable: the
+ * reader's writing surface is the pad in the left column, under the slide.
  *
  * Selecting a word or phrase in the explanation raises one small lifted control
  * over the selection: a gloss kept on this slide, or a grounded question about
@@ -333,6 +355,8 @@ export function ExplanationPane({
       className="min-h-0 min-w-0 overflow-y-auto rounded-srf border-l border-hair bg-raised"
     >
       <div className="flex flex-col pt-[var(--space-6)] pb-12 pl-[var(--space-6)] pr-[var(--space-6)]">
+        <ExplanationSizeControls />
+
         {/* The selection control is positioned against this node and not
          *  against the pane, so it stays on the text it was raised over while
          *  the pane scrolls. */}
@@ -406,7 +430,7 @@ export function ExplanationPane({
               )}
             </PaneNotice>
           ) : (
-            <article className="flex flex-col">
+            <article className="explanation-type flex flex-col">
               <h2 className="font-reading text-head leading-[1.25] font-semibold text-ink">
                 {heading || `Slide ${slideNumber}`}
               </h2>

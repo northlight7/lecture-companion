@@ -1,27 +1,28 @@
 /**
- * The rail beside the course overview: how far this course has been explained,
- * and what the study folders currently hold.
+ * How far this course has been explained, in two small pieces.
+ *
+ * The count is a ring in the sidebar, beside the decks it counts, because it is
+ * about the course rather than about anything in the reading column. The run
+ * itself, its state word, its pause reason and the one control that starts and
+ * stops it are a single line under the lecture list, where the reader is
+ * already looking when they press it.
  *
  * Ported from `runbarHtml` and `paintRunbarLost` in the previous frontend
  * (`web/app.js`): the same states, the same counts, the same pause reason, the
- * same tolerance for a poll that gives up. Two changes, both required by the
- * rebuild: the run state is no longer a full-width banner above the page, and
- * the paused state is one line of state beside its control instead of the
- * largest object on the screen.
- *
- * Nothing here is a card. The two blocks are separated by space, by the ground,
- * and by nothing else.
+ * same tolerance for a poll that gives up. Two things changed since, and both
+ * are removals. The progress bar is gone from the content column, so the reader
+ * is not told the same number twice in a screen's height. The running summary
+ * lost its fold: a fold control is banned on this screen, and a status message
+ * is not worth a control of its own.
  */
 
 import { useState, type JSX } from "react";
 import { ACCENT_INK, type CourseAccent } from "@/lib/accents";
+import { explanationProse } from "@/lib/overview";
 import type { PipelineState, ProgressRow } from "@/lib/types";
 
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-import type { StudyGroup } from "@/screens/course/Files";
-import { explanationProse } from "@/lib/overview";
 
 /** The state word, toned by meaning. Never a filled panel: the word is the
  *  signal, and the surface table has nothing to say about a run. */
@@ -41,35 +42,83 @@ function stateWord(state: PipelineState, done: number, total: number): string {
   return done ? "Partly explained" : "Not explained yet";
 }
 
-function plural(count: number, one: string, many: string): string {
-  return `${count} ${count === 1 ? one : many}`;
-}
+/** The ring's box, in points. Well inside the 96x96 ceiling the chrome allows,
+ *  so it sits in the sidebar without competing with the rows above it. */
+const RING_BOX = 64;
+/** Radius and stroke of the arc, in the ring's own 64-unit viewBox. */
+const RING_RADIUS = 26;
+const RING_STROKE = 6;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
 /**
- * The bar's fill in the course's hue, instead of the app's single accent.
+ * The course's progress as a percentage inside a ring.
  *
- * `Progress` draws its own fill from `bg-accent`, and the fill is the one part
- * of the bar a caller cannot reach through props, so the accent is applied to
- * it as a descendant variant on the bar's className. The `data-slot` is the
- * component's own hook. Six literal class names: a name built at runtime would
- * compile to no CSS at all.
+ * Drawn with SVG and `stroke-dasharray` rather than a `conic-gradient`, which is
+ * banned outright: a gradient of any kind is a defect in this app, and an arc
+ * laid out as a dash on a circle is one element rather than one per theme.
  *
- * The track is untouched. A sunken well reads as a track in both themes, and
- * only the fill is asked to say which course this is.
+ * The colours are the two the direction allows here and no others. The track is
+ * `--line-hair`, because a well on this ground is the ground again (they measure
+ * 0.3 dL* apart in the dark theme, so the ring would have no visible circle
+ * outside its arc) and a hairline is exactly what a track is. The arc takes the
+ * course's own accent ink, which is the same hue the course wears in the
+ * sidebar rows above it and is gated at 4.5:1 as text on this ground.
+ *
+ * Everything a screen reader needs is on the container, including both bounds,
+ * so the count is announced as "58 of 112" rather than as a bare number.
  */
-const PROGRESS_FILL: Record<CourseAccent, string> = {
-  blue: "[&_[data-slot=progress-indicator]]:bg-course-blue-fill",
-  teal: "[&_[data-slot=progress-indicator]]:bg-course-teal-fill",
-  green: "[&_[data-slot=progress-indicator]]:bg-course-green-fill",
-  orange: "[&_[data-slot=progress-indicator]]:bg-course-orange-fill",
-  olive: "[&_[data-slot=progress-indicator]]:bg-course-olive-fill",
-  violet: "[&_[data-slot=progress-indicator]]:bg-course-violet-fill",
-};
+export function ProgressRing({
+  done,
+  total,
+  accent,
+}: {
+  done: number;
+  total: number;
+  /** The course's accent, from its id: the same value the shell and the course
+   *  list give this course, so the ring cannot disagree with the sidebar. */
+  accent: CourseAccent;
+}): JSX.Element {
+  // A percentage of nothing is nothing: a course with no slides yet reads 0%,
+  // which is true, and is still a percentage rather than a blank.
+  const ratio = total > 0 ? Math.min(1, Math.max(0, done / total)) : 0;
+  const percent = Math.round(ratio * 100);
+
+  return (
+    <div
+      role="progressbar"
+      aria-label="Slides explained"
+      aria-valuemin={0}
+      aria-valuemax={total}
+      aria-valuenow={done}
+      className="relative grid shrink-0 place-items-center"
+      style={{ width: RING_BOX, height: RING_BOX }}
+    >
+      <svg viewBox="0 0 64 64" aria-hidden className="absolute inset-0 size-full">
+        {/* The arc starts at twelve o'clock: an SVG circle starts at three. */}
+        <g transform="rotate(-90 32 32)" fill="none" strokeWidth={RING_STROKE}>
+          <circle cx="32" cy="32" r={RING_RADIUS} stroke="currentColor" className="text-hair" />
+          {/* Nothing is drawn at zero. A zero-length dash with a round cap still
+              paints a dot, and a dot at the top of an empty ring reads as a
+              little progress rather than none. */}
+          {ratio > 0 ? (
+            <circle
+              cx="32"
+              cy="32"
+              r={RING_RADIUS}
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeDasharray={`${ratio * RING_CIRCUMFERENCE} ${RING_CIRCUMFERENCE}`}
+              className={ACCENT_INK[accent]}
+            />
+          ) : null}
+        </g>
+      </svg>
+      <span className="text-ui font-medium tabular-nums text-ink">{percent}%</span>
+    </div>
+  );
+}
 
 export interface ProgressPanelProps {
-  /** The course's accent, from its id. Colours the bar's fill only: no state
-   *  word and no control takes it, because the hue means "this course". */
-  accent: CourseAccent;
   progress: ProgressRow | null;
   /** Set when the poll gave up. The message the last status check failed with. */
   lost: string | null;
@@ -79,8 +128,15 @@ export interface ProgressPanelProps {
   onRetry: () => void;
 }
 
+/**
+ * The run's state, its reason and its one control, as a single row.
+ *
+ * This is the whole of what is left of the old banner. The bar it used to carry
+ * is a ring in the sidebar and the counts it used to print are on that ring.
+ * What stays is what a ring cannot say: whether a run is live, why it stopped
+ * when it did, and the control that starts it again.
+ */
 export function ProgressPanel({
-  accent,
   progress,
   lost,
   busy,
@@ -96,175 +152,106 @@ export function ProgressPanel({
   const summary = (progress?.running_summary ?? "").trim();
   const complete = total > 0 && done >= total;
 
-  return (
-    <section className="flex flex-col gap-2">
-      <h2 className={cn("text-lead font-semibold", ACCENT_INK[accent])}>Progress</h2>
-
-      {lost ? (
-        <>
-          <p className="text-ui font-medium text-bad">
-            Lost contact with the server
-          </p>
-          <p className="text-meta text-ink-muted">{lost || "The last status check failed."}</p>
-          <Button type="button" variant="secondary" className="self-start" onClick={onRetry}>
-            Try again
-          </Button>
-        </>
-      ) : null}
-
-      {!lost && (!progress || total === 0) ? (
-        <p className="text-ui text-ink-muted">
-          {progress ? "No slides to explain yet." : "Reading this course."}
+  if (lost) {
+    return (
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <p role="alert" className="text-ui font-medium text-bad">
+          Lost contact with the server
         </p>
-      ) : null}
+        <p className="text-meta text-ink-muted">{lost || "The last status check failed."}</p>
+        <Button type="button" variant="secondary" onClick={onRetry}>
+          Try again
+        </Button>
+      </div>
+    );
+  }
 
-      {!lost && progress && total > 0 ? (
-        <>
-          <Progress
-            value={done}
-            max={total}
-            aria-label="Slides explained"
-            className={PROGRESS_FILL[accent]}
-          />
-          <p className="text-ui tabular-nums text-ink-muted">
-            {done} of {total} explained
-          </p>
-          {summary ? (
-            <Summary text={summary} />
-          ) : null}
-
-          {/* One line of state, its reason, and at most one control. The old
-              banner was a block four times this tall, and it outranked both the
-              title and the overview. */}
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-2">
-            {/* No `truncate` here. It was there and it clipped the state word
-                to "Not explaine…" on every course with nothing explained yet,
-                at every size, in both themes: `flex-1 min-w-0` means shrinking
-                always beats wrapping, so the state word was the only thing in
-                the row that could lose. A minimum width instead, and the row
-                wraps its control to the next line when it has to. */}
-            <p className="min-w-[10rem] flex-1 text-ui">
-              <span className={cn("font-medium", STATE_TONE[state])}>
-                {stateWord(state, done, total)}
-              </span>
-              {reason && !complete ? (
-                <span className="text-ink-muted" title={reason}>
-                  {" · "}
-                  {reason}
-                </span>
-              ) : null}
-            </p>
-
-            {running ? (
-              <Button type="button" variant="secondary" disabled={busy} onClick={onPause}>
-                Pause
-              </Button>
-            ) : complete ? null : (
-              <Button
-                type="button"
-                variant={done ? "secondary" : "primary"}
-                disabled={busy}
-                onClick={onStart}
-              >
-                {state === "error"
-                  ? "Try again"
-                  : done
-                    ? `Resume from slide ${done + 1}`
-                    : "Explain this course"}
-              </Button>
-            )}
-          </div>
-        </>
-      ) : null}
-    </section>
-  );
-}
-
-/**
- * The run's own rolling summary of what it has covered.
- *
- * It grows without bound as a course is explained, so it is folded to three
- * lines and small type. Rendered whole it became a nine-hundred-pixel wall of
- * text that outranked everything else on the course page, which is exactly the
- * "status message larger than the content it describes" the direction bans.
- */
-function Summary({ text }: { text: string }): JSX.Element {
-  const [open, setOpen] = useState(false);
-  return (
-    <div>
-      {/* The running summary is built by the frozen backend from model-written
-          gists, so it is model prose and it goes through the same filter as the
-          explanation. Round 19's Critic B found this rendering raw. Nothing in
-          the fixtures fires it today, which makes it latent rather than live,
-          and latent is exactly the state a filter is easiest to leave off. */}
-      <p className={cn("text-meta text-ink-muted", !open && "line-clamp-3")}>
-        {explanationProse(text)}
+  if (!progress || total === 0) {
+    return (
+      <p className="text-ui text-ink-muted">
+        {progress ? "No slides to explain yet." : "Reading this course."}
       </p>
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-        className="mt-1 text-meta text-accent-ink transition-colors duration-[120ms] ease-[var(--ease)] hover:underline"
-      >
-        {open ? "Show less" : "Show more"}
-      </button>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        {/* No `truncate` here. It was there and it clipped the state word to
+            "Not explaine…" on every course with nothing explained yet, at every
+            size, in both themes: `flex-1 min-w-0` means shrinking always beats
+            wrapping, so the state word was the only thing in the row that could
+            lose. A minimum width instead, and the row wraps its control to the
+            next line when it has to. */}
+        <p className="min-w-[10rem] flex-1 text-ui">
+          <span className={cn("font-medium", STATE_TONE[state])}>
+            {stateWord(state, done, total)}
+          </span>
+          {reason && !complete ? (
+            <span className="text-ink-muted" title={reason}>
+              {" · "}
+              {reason}
+            </span>
+          ) : null}
+        </p>
+
+        {/* At most one control, and none at all when the work is done: a course
+            with every slide explained has nothing to resume, and a "Resume" on
+            it would be a lie about what pressing it does. */}
+        {running ? (
+          <Button type="button" variant="secondary" disabled={busy} onClick={onPause}>
+            Pause
+          </Button>
+        ) : complete ? null : (
+          <Button
+            type="button"
+            variant={done ? "secondary" : "primary"}
+            disabled={busy}
+            onClick={onStart}
+          >
+            {state === "error"
+              ? "Try again"
+              : done
+                ? `Resume from slide ${done + 1}`
+                : "Explain this course"}
+          </Button>
+        )}
+      </div>
+
+      {/* The run's own rolling summary. CLOSED BY DEFAULT, and that is the
+          change: it was three clamped lines of grey model prose sitting between
+          the lecture list and the files, which is the largest thing in the
+          island and the least useful on arrival. It is a detail about where the
+          run got to, so it opens when the reader asks and shows one line when
+          they have not. It grows without bound as a course is explained, so
+          even open it is capped and scrolls rather than pushing the island's
+          height around. It is model prose built from model-written gists, so it
+          goes through the same filter an explanation does. */}
+      {summary ? <RunSummary text={explanationProse(summary)} /> : null}
     </div>
   );
 }
 
-/**
- * What the study folders hold, in the rail, so the folder structure is legible
- * without scrolling to the file list. Counts only: the editable control lives
- * with the row it belongs to.
- */
-export function StudyFoldersSummary({
-  groups,
-  accent,
-}: {
-  groups: StudyGroup[];
-  /** The rail's headings carry the course colour. The rail is the part of the
-   *  screen that is about this course as a whole rather than about a slide, so
-   *  it is where the course's own colour belongs. */
-  accent: CourseAccent;
-}): JSX.Element {
-  const files = groups.reduce((count, group) => count + group.rows.length, 0);
-  const named = groups.filter((group) => group.folder !== "Unfiled");
-  const unfiled = groups.find((group) => group.folder === "Unfiled")?.rows.length ?? 0;
-
+function RunSummary({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
   return (
-    <section className="flex flex-col gap-2">
-      <h2 className={cn("text-lead font-semibold", ACCENT_INK[accent])}>Study folders</h2>
-
-      {files === 0 ? (
-        <p className="text-ui text-ink-muted">
-          No files in this course yet.
-        </p>
-      ) : (
-        <>
-          <p className="text-ui tabular-nums text-ink-muted">
-            {plural(named.length, "folder", "folders")} · {plural(files, "file", "files")}
-          </p>
-          {unfiled ? (
-            <p className="text-meta tabular-nums text-ink-faint">
-              {plural(unfiled, "file", "files")} not filed yet
-            </p>
-          ) : null}
-          {named.length ? (
-            <ul className="mt-1 flex flex-col gap-1">
-              {named.map((group) => (
-                <li key={group.folder} className="flex items-center gap-2 text-meta">
-                  <span className="min-w-0 flex-1 truncate text-ink-muted" title={group.folder}>
-                    {group.folder}
-                  </span>
-                  <span className="shrink-0 tabular-nums text-ink-faint">
-                    {group.rows.length}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </>
-      )}
-    </section>
+    <div className="flex flex-col gap-1">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        className="self-start font-ui text-meta text-accent-ink transition-colors duration-[120ms] ease-[var(--ease)] hover:underline"
+      >
+        {open ? "Hide what the run covered" : "What the run covered"}
+      </button>
+      <p
+        className={cn(
+          "text-meta text-ink-muted",
+          open ? "max-h-40 overflow-y-auto" : "line-clamp-1",
+        )}
+      >
+        {text}
+      </p>
+    </div>
   );
 }

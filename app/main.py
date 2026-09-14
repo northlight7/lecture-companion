@@ -348,6 +348,13 @@ def get_course(cid: str):
                 "title": deck.title,
                 "n_slides": deck.n_slides,
                 "n_explained": len(done),
+                # The source file the deck was extracted from. The course screen
+                # names each deck's lecture, and a lecture is a study folder on
+                # an artifact: `file_id` is `content_hash[:12]` (`app/importer.py`
+                # sets both, and `app/course.py` relates the two the same way when
+                # it deletes a deck's orphaned files), so the artifact behind a
+                # deck is the one whose `content_hash` starts with this.
+                "source_file_id": deck.source_file_id,
             }
         )
     row["overview"] = course.overview
@@ -415,22 +422,15 @@ async def upload_files(cid: str, files: list[UploadFile] = File(default=[])):
 
     result = import_files(store, cid, await _read_uploads(files))
 
-    overview_refreshed = False
-    try:
-        from app.llm import get_client
-        from app.overview import refresh_overview_if_needed
-
-        overview_refreshed = bool(refresh_overview_if_needed(store, cid, get_client()))
-    except NoApiKey:
-        overview_refreshed = False
-    except Exception as exc:  # noqa: BLE001 - the import itself already succeeded
-        log.warning("overview refresh failed for %s: %s", cid, type(exc).__name__)
-
+    # An import no longer refreshes the course overview. The overview left the
+    # course screen, so the model call it cost bought nothing a reader saw: the
+    # deck list, the counts and the search index are all built from the import
+    # itself. `POST /api/courses/{cid}/overview/regenerate` still distils one on
+    # request, and every stored overview is left on disk untouched.
     course = store.get_course(cid)
     return {
         "filed": _filed_rows(result),
         "errors": list(getattr(result, "errors", []) or []),
-        "overview_refreshed": overview_refreshed,
         "course": _course_row(store, course),
     }
 

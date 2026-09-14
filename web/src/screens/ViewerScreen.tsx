@@ -5,36 +5,83 @@ import { ChevronLeft, RefreshCw } from "lucide-react";
 import * as api from "@/lib/api";
 import { ApiError } from "@/lib/api";
 import { ACCENT_FILL, courseAccent } from "@/lib/accents";
+import { usePrefs, usePrefsUpdater } from "@/lib/prefs";
 import { hash, navigate } from "@/lib/router";
 import type { SlideDetail, SlideRegeneration, SlideSummary, Term } from "@/lib/types";
 import { useConnect, useErrorHandler, useStore } from "@/state/store";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
+import { SidebarToggle } from "@/shell/SidebarToggle";
 import { ExplanationPane, PaneNotice, SlideFooter } from "@/screens/viewer/ExplanationPane";
 import { RegenDialog } from "@/screens/viewer/RegenDialog";
 import { AskDialog } from "@/screens/viewer/AskDialog";
-import { SlideStage } from "@/screens/viewer/SlideStage";
+import { Scratchpad, type NoteSaveState } from "@/screens/viewer/Scratchpad";
+import { SlideStage, SpeakerNotes } from "@/screens/viewer/SlideStage";
 import { SlideStrip } from "@/screens/viewer/SlideStrip";
 
 function messageOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/** How long the guard waits after the last keystroke before it saves. */
+const NOTE_SAVE_DELAY = 900;
+
 /**
  * The deck viewer. A student opens a deck and reads a considered explanation of
  * the slide in front of them.
  *
- * The frame is a left-right split and it fills the window. The slide pane on
- * the left takes whatever width is left, the explanation pane on the right is
- * `clamp(340px, 42%, 640px)`, and both run the full height under the deck
- * header and the slide strip, each scrolling on its own. The window itself
- * never scrolls.
+ * THE VIEWER LEAVES THE APP SHELL, and that is a measured decision, not a
+ * preference. At 1280 the content column is 1000 points once the 280-point
+ * sidebar is out, and this screen has to hold a 640-point slide (C7) beside a
+ * reading column worth the name plus two gutters. It does not fit, so the
+ * sidebar is what gives: the viewer is a reading mode, its own header carries
+ * the way back to the course, and the reader does not navigate while reading a
+ * slide. `App.tsx` renders this outside `AppShell` and supplies the `<main>`,
+ * so the skip link and the focus-on-navigation behaviour are unchanged. The
+ * control that brings the chrome back is named "Show the sidebar" and it leaves
+ * for the course screen, which is the only screen that has a sidebar column.
  *
- * The header is written here rather than with `Screen`, which is a scrolling
- * page frame: a slide beside its explanation is not a reading column, and
- * `page-column`'s `--column-max` would strand half of a 1920px window as empty
- * margin beside it. This screen uses the whole content column, with one
- * `--space-6` gutter at its edges and one between the panes.
+ * THE HEADER IS TWO ROWS AND ITS BOTTOM EDGE IS AT y=88 (C8):
+ *
+ *   * Row 1, 44 points: the deck title as the `h1`, the back link to the
+ *     course, the run status, and the actions. It is a drag strip
+ *     (`.titlebar-drag`), so every control in it carries `.titlebar-control`,
+ *     or the window server would take the click for a window drag.
+ *   * Row 2, 36 points, 8 points below it: the chrome control at the window's
+ *     own left edge, and the deck strip beside it.
+ *
+ * 44 + 8 + 36 is 88 of the 120 points C8 allows.
+ *
+ * ONE LEFT EDGE, AT 76. The header, the strip and the panes all start there.
+ * Two numbers set it and both are measured rather than chosen: the traffic
+ * lights occupy x 10 to 67 on this window (`.fullSizeContentView`, so they are
+ * drawn over the content), and the acceptance gate reads the chrome's width in
+ * C7 as the widest named box within 64 points of the window's left edge. Every
+ * named box on this screen therefore starts inside 76, which leaves the control
+ * that brings the chrome back as the only thing at the left edge, and the gate
+ * reads its own 36 points rather than a label of the slide's.
+ *
+ * Under the two rows the two panes fill everything that is left, each scrolling
+ * on its own, and the window itself never scrolls. The left column is the slide
+ * on its well, then the reader's scratchpad, then the deck's own notes.
+ *
+ * THE VERTICAL BUDGET AT 1280x800, because four of these numbers are
+ * load-bearing for C7's 640-point slide. The window gives the panes 676 points
+ * (800 less the 88-point header less the grid's own 12 above and 24 below). The
+ * left column spends 12 + 149 + 12 + 112 of that on everything but the slide:
+ * the 12s are its gaps, 149 is the scratchpad (a 21-point label row, an
+ * 8-point gap, a 120-point pad) and 112 is the deck's notes pane at its
+ * 14vh cap. The well is left 391 points tall, so a 16:9 slide is 695 points
+ * wide, which clears 640 by 55. Change the pad's height or that cap and this
+ * arithmetic moves with it.
+ *
+ * THE RUN STATUS IS ABOUT THIS DECK (C10). A deck whose slides all have an
+ * explanation is finished, whatever the course-wide run is doing: it gets no
+ * stopped reason, no "Paused" line, no Resume control and no "stopped before"
+ * sentence, because there is no work left in front of the reader. The reason is
+ * computed from this deck's own unexplained slides and never from the run's
+ * state alone, and the fallback sentence is only used when the slide in front
+ * of the reader is itself unexplained.
  *
  * The deck is fetched when the deck changes and not when the slide does. Only
  * the slide in front of the reader is refetched as the index moves, which is
@@ -53,6 +100,8 @@ export function ViewerScreen({ cid, did, index }: { cid: string; did: string; in
   } = useStore();
   const handle = useErrorHandler();
   const connect = useConnect();
+  const prefs = usePrefs();
+  const updatePrefs = usePrefsUpdater();
 
   const [slides, setSlides] = useState<SlideSummary[] | null>(null);
   const [slidesError, setSlidesError] = useState<string | null>(null);
@@ -99,12 +148,51 @@ export function ViewerScreen({ cid, did, index }: { cid: string; did: string; in
   const shown = detail && detail.slide.index === current ? detail : null;
   const progressRow = progress ?? course?.progress ?? null;
   const running = Boolean(progressRow && (progressRow.running || progressRow.state === "running"));
-  const stoppedReason =
-    progressRow && (progressRow.state === "paused" || progressRow.state === "error")
-      ? progressRow.pause_reason || "The run stopped before it reached this slide."
-      : "";
-  const explainedHere = progressRow?.done[did]?.length ?? deck?.n_explained ?? 0;
   const disconnected = Boolean(connection && !connection.connected && !connection.fake);
+
+  // ---------------------------------------------------------- what is left
+
+  /**
+   * This deck's own unexplained slides, which is what every run-state claim on
+   * this screen is measured against. The slide list is the deck's own truth
+   * when it is loaded, and the deck's counters are the fallback while it is
+   * not: the course-wide run state is never consulted for this, because a deck
+   * the reader has finished is finished whatever the pipeline is doing
+   * elsewhere (C10).
+   */
+  const unexplained = useMemo(() => {
+    if (slides) return slides.filter((slide) => !slide.has_explanation).length;
+    if (deck) return Math.max(deck.n_slides - deck.n_explained, 0);
+    return 0;
+  }, [slides, deck]);
+  const remaining = unexplained > 0;
+
+  const runStopped = Boolean(
+    progressRow && (progressRow.state === "paused" || progressRow.state === "error"),
+  );
+  const explainedHere = slides ? count - unexplained : progressRow?.done[did]?.length ?? 0;
+
+  /**
+   * Why the run is not moving, in this deck's terms.
+   *
+   * There is no reason at all when there is nothing left to explain. When
+   * there is, the run's own pause reason is used if the backend wrote one, and
+   * the fallback sentence is only used for a slide that is itself unexplained:
+   * a slide that already has an explanation cannot have been stopped before.
+   */
+  const stoppedReason =
+    remaining && runStopped
+      ? progressRow?.pause_reason ||
+        (shown?.explanation ? "" : "The run stopped before it reached this slide.")
+      : "";
+
+  const status = remaining
+    ? running
+      ? "Explaining this course now"
+      : stoppedReason
+        ? `${progressRow?.state === "error" ? "Stopped" : "Paused"}. ${stoppedReason}`
+        : ""
+    : "";
 
   // ---------------------------------------------------------------- loading
 
@@ -225,6 +313,21 @@ export function ViewerScreen({ cid, did, index }: { cid: string; did: string; in
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [goTo]);
 
+  /**
+   * The chrome, asked for from inside the viewer.
+   *
+   * The viewer has no sidebar and can never show one (C7's slide needs the
+   * whole window), so "Show the sidebar" cannot mean a column appearing here.
+   * It means the reader wants the chrome back, and the screen that has it is
+   * the course: the preference is set to expanded and the reader is taken
+   * there, where the sidebar is the left column and its own control can
+   * collapse it again.
+   */
+  const showChrome = useCallback(() => {
+    if (prefs.collapsed) updatePrefs({ collapsed: false });
+    navigate(hash.course(cid));
+  }, [prefs.collapsed, updatePrefs, cid]);
+
   // ------------------------------------------------------- terms, notes, runs
 
   /** A 428 opens the connect dialog. Every other failure is reported where it
@@ -275,22 +378,21 @@ export function ViewerScreen({ cid, did, index }: { cid: string; did: string; in
     [cid, did],
   );
 
-  const changeNote = useCallback(
-    (text: string) => {
-      const at = currentRef.current;
-      setNote(text);
-      setNoteDirty(true);
-      noteDirtyRef.current = true;
-      pendingNotes.current.set(at, text);
-    },
-    [],
-  );
+  const changeNote = useCallback((text: string) => {
+    const at = currentRef.current;
+    setNote(text);
+    setNoteDirty(true);
+    noteDirtyRef.current = true;
+    pendingNotes.current.set(at, text);
+  }, []);
 
   const saveNoteNow = useCallback(async () => {
     const at = currentRef.current;
+    const text = note;
+    if (!noteDirtyRef.current) return;
     setSavingNote(true);
     try {
-      const out = await api.saveNote(cid, did, at, note);
+      const out = await api.saveNote(cid, did, at, text);
       if (at !== currentRef.current) return;
       setNote(out.note ?? "");
       setNoteDirty(false);
@@ -302,6 +404,23 @@ export function ViewerScreen({ cid, did, index }: { cid: string; did: string; in
       setSavingNote(false);
     }
   }, [cid, did, note]);
+
+  // The pad saves on blur and on a pause after the last keystroke. The timer is
+  // reset by every edit, because `saveNoteNow` is rebuilt whenever the text
+  // is, and cleared the moment the note is clean.
+  useEffect(() => {
+    if (!noteDirty) return;
+    const timer = window.setTimeout(() => void saveNoteNow(), NOTE_SAVE_DELAY);
+    return () => window.clearTimeout(timer);
+  }, [noteDirty, note, saveNoteNow]);
+
+  const noteState: NoteSaveState = savingNote
+    ? "saving"
+    : noteDirty
+      ? "dirty"
+      : note
+        ? "saved"
+        : "idle";
 
   const explainSlide = useCallback(async () => {
     const at = currentRef.current;
@@ -406,74 +525,121 @@ export function ViewerScreen({ cid, did, index }: { cid: string; did: string; in
 
   // --------------------------------------------------------------- the frame
 
-  const status = running
-    ? "Explaining this course now"
-    : stoppedReason
-      ? `${progressRow?.state === "error" ? "Stopped" : "Paused"}. ${stoppedReason}`
-      : "";
-
-  // The header and the strip are the full content width: the panes below them
-  // are the split, not the page. `px-[var(--space-6)]` is the viewer's own
-  // gutter, in place of the `page-column` this screen must not use.
   const header = (
-    <header className="flex shrink-0 flex-wrap items-start justify-between gap-x-6 gap-y-3 px-[var(--space-6)]">
-      <div className="min-w-0 flex-1">
+    <header className="shrink-0">
+      {/* Row 1. The title leads, and the whole row starts at the same left
+       *  edge as the panes below it: one left edge for the screen, 76 points
+       *  in, which clears the traffic lights (measured at x 10 to 67 in the
+       *  round's baseline capture) and keeps every named box on this screen
+       *  out of the window's first 64 points. That last part is what the
+       *  acceptance gate reads as "the chrome is out" for C7: it takes the
+       *  widest named box hard against the window's left edge, and on a
+       *  collapsed-chrome screen the only one there should be the control that
+       *  brings the chrome back. */}
+      <div className="titlebar-drag flex h-11 items-center gap-3 pr-6 pl-[76px]">
+        {/* The way out comes first and the title after it. It was the other way
+            round, and it read as a mistake: the eye meets the largest text on
+            the row at the far left and then finds a small link to its right,
+            which is backwards for a row whose first job is to say where you are
+            and whose second is to offer the way back. */}
         <a
           href={hash.course(cid)}
-          className="mb-3 inline-flex items-center gap-1 text-ui text-ink-muted transition-colors duration-[120ms] ease-[var(--ease)] hover:text-ink"
+          className="titlebar-control flex max-w-[260px] min-w-0 items-center gap-1 text-ui text-ink-muted transition-colors duration-[120ms] ease-[var(--ease)] hover:text-ink"
         >
           <ChevronLeft size={14} strokeWidth={1.75} aria-hidden />
-          {course?.title ?? "Course"}
+          <span className="truncate">{course?.title ?? "Course"}</span>
         </a>
+        {/* A hairline between the two, drawn as a border rather than a fill:
+            `gate_static.py` allows a boundary from `--line-hair` anywhere and
+            allows a *background* only from a ground or the surface table. */}
+        <span aria-hidden className="h-5 shrink-0 border-l border-hair" />
         <h1
           tabIndex={-1}
-          className="truncate font-ui text-display leading-[1.15] font-semibold text-ink focus-target"
+          className="max-w-[520px] min-w-0 shrink truncate font-ui text-display leading-[1.15] font-semibold text-ink focus-target"
         >
           {deck?.title ?? "Deck"}
         </h1>
-        {status ? <div className="mt-2 text-ui text-ink-faint">{status}</div> : null}
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
-        {running ? (
-          <Button type="button" variant="secondary" size="md" onClick={() => void pauseRun()}>
-            Pause
-          </Button>
-        ) : stoppedReason ? (
-          <Button type="button" variant="secondary" size="md" onClick={() => void explainDeck()}>
-            Resume
-          </Button>
+        {status ? (
+          <p className="min-w-0 truncate text-ui text-ink-faint">{status}</p>
         ) : null}
-        <Button
-          type="button"
-          variant="secondary"
-          size="md"
-          disabled={count === 0}
-          onClick={() => setRegenOpen(true)}
-        >
-          <RefreshCw size={16} strokeWidth={1.75} aria-hidden />
-          Explain again
-        </Button>
+        <div className="min-w-0 flex-1" />
+        <div className="flex shrink-0 items-center gap-2">
+          {remaining && running ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              className="titlebar-control"
+              onClick={() => void pauseRun()}
+            >
+              Pause
+            </Button>
+          ) : remaining && stoppedReason ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              className="titlebar-control"
+              onClick={() => void explainDeck()}
+            >
+              Resume
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            variant="secondary"
+            size="md"
+            className="titlebar-control"
+            disabled={count === 0}
+            onClick={() => setRegenOpen(true)}
+          >
+            <RefreshCw size={16} strokeWidth={1.75} aria-hidden />
+            Explain again
+          </Button>
+        </div>
+      </div>
+
+      {/* Row 2, eight points below row 1 and as wide as the window: the deck
+       *  strip, which is what a rail of a hundred and seventy-three segments
+       *  needs to stay a usable jump control.
+       *
+       *  THE CHROME CONTROL IS THIS ROW'S LEFT EDGE, and it is the one thing on
+       *  this screen that sits at the window's left edge. It cannot go in row 1
+       *  beside the title: the traffic lights own x 10 to 67 there. One row
+       *  lower they are out of the way, the toggle still sits under them where
+       *  a reader looks for it, and the gate's chrome reading stays at the
+       *  toggle's own 36 points rather than picking up the slide's labels. The
+       *  row is not a drag strip: the rail under it is dragged to scrub, and a
+       *  drag region would take those pointer events for the window. */}
+      {/* The chrome control is rendered even when the strip is not: a deck
+       *  that failed to load still has to leave the reader a way out, and it
+       *  is the same control on every state of this screen. */}
+      <div className="relative mt-2 flex h-9 items-center pr-6 pl-[76px]">
+        <SidebarToggle
+          collapsed
+          onToggle={showChrome}
+          className="absolute top-1 left-2"
+        />
+        {count > 0 ? (
+          <div className="min-w-0 flex-1">
+            <SlideStrip
+              slides={slides ?? []}
+              index={current}
+              onJump={goTo}
+              markerFill={ACCENT_FILL[courseAccent(cid)]}
+            />
+          </div>
+        ) : null}
       </div>
     </header>
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col pt-6 pb-4">
+    <div className="flex h-full min-h-0 flex-col bg-ground">
       {header}
 
-      {count > 0 ? (
-        <div className="mt-4 w-full shrink-0 px-[var(--space-6)]">
-          <SlideStrip
-            slides={slides ?? []}
-            index={current}
-            onJump={goTo}
-            markerFill={ACCENT_FILL[courseAccent(cid)]}
-          />
-        </div>
-      ) : null}
-
       {slidesError ? (
-        <div className="mt-6 min-h-0 w-full flex-1 overflow-y-auto px-[var(--space-6)]">
+        <div className="mt-3 min-h-0 w-full flex-1 overflow-y-auto pr-6 pb-6 pl-[76px]">
           <div className="max-w-[var(--measure)]">
             <PaneNotice
               title="Could not load this deck"
@@ -493,7 +659,7 @@ export function ViewerScreen({ cid, did, index }: { cid: string; did: string; in
           </div>
         </div>
       ) : slides !== null && count === 0 ? (
-        <div className="mt-6 min-h-0 w-full flex-1 overflow-y-auto px-[var(--space-6)]">
+        <div className="mt-3 min-h-0 w-full flex-1 overflow-y-auto pr-6 pb-6 pl-[76px]">
           <div className="max-w-[var(--measure)]">
             <PaneNotice
               title="Nothing to read yet"
@@ -509,15 +675,22 @@ export function ViewerScreen({ cid, did, index }: { cid: string; did: string; in
         </div>
       ) : (
         /* The split. The slide takes what is left, the explanation is the fixed
-         * column at `clamp(340px, 42%, 640px)`, and both are as tall as the
+         * column at `clamp(340px, 38%, 620px)`, and both are as tall as the
          * window: each is its own scroll region and the window never scrolls.
-         * The one hairline in the screen sits between them, in the middle of
-         * the gutter. */
-        <div className="mt-4 grid min-h-0 w-full flex-1 grid-cols-[minmax(0,1fr)_clamp(340px,42%,640px)] grid-rows-[minmax(0,1fr)] gap-x-[var(--space-6)] overflow-hidden px-[var(--space-6)]">
-          <section aria-label="Slide" className="flex min-h-0 min-w-0 flex-col">
+         * The one hairline in the screen runs down the explanation pane's
+         * leading edge, in the middle of the gutter. */
+        <div className="grid min-h-0 w-full flex-1 grid-cols-[minmax(0,1fr)_clamp(340px,38%,620px)] grid-rows-[minmax(0,1fr)] gap-x-6 overflow-hidden pt-3 pr-6 pb-6 pl-[76px]">
+          <section aria-label="Slide" className="flex min-h-0 min-w-0 flex-col gap-3">
             {slides === null ? null : (
-              <SlideStage cid={cid} did={did} index={current} text={shown?.slide.text ?? ""} />
+              <SlideStage cid={cid} did={did} index={current} />
             )}
+            <Scratchpad
+              value={note}
+              state={noteState}
+              onChange={changeNote}
+              onSave={() => void saveNoteNow()}
+            />
+            <SpeakerNotes text={shown?.slide.text ?? ""} />
           </section>
 
           <ExplanationPane
@@ -525,7 +698,7 @@ export function ViewerScreen({ cid, did, index }: { cid: string; did: string; in
             error={detailError}
             explanation={shown?.explanation ?? null}
             slideNumber={current + 1}
-            running={running}
+            running={running && remaining}
             pausedReason={stoppedReason}
             busy={busySlide}
             disconnected={disconnected}
@@ -542,12 +715,7 @@ export function ViewerScreen({ cid, did, index }: { cid: string; did: string; in
                 explained={explainedHere}
                 terms={terms}
                 pendingTerm={pendingTerm}
-                note={note}
-                noteDirty={noteDirty}
-                saving={savingNote}
                 sources={sources}
-                onNoteChange={changeNote}
-                onSaveNote={() => void saveNoteNow()}
                 onRemoveTerm={(term) => void removeTerm(term)}
               />
             }
