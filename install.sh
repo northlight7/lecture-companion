@@ -9,10 +9,9 @@
 # directory, which this script only ever writes to when it is migrating an
 # older checkout for the first time. Nothing it does can lose a course.
 #
-# The installed app runs the backend out of this project, which is what makes
-# development fast: a backend change needs only a restart, and this script is
-# for changes to the interface or the launcher. When the app is ready for other
-# people, the backend moves inside the bundle and that dependency goes away.
+# The installed app runs a COPY of the backend, made here from this checkout.
+# A backend change therefore needs this script, not only a restart, and the
+# copy is what keeps the app out of ~/Documents. See the note at the copy.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -78,6 +77,31 @@ say "building"
 
 # --------------------------------------------------------------- the install
 
+# THE BACKEND MOVES OUT OF THE CHECKOUT, and this is not tidiness.
+#
+# macOS protects ~/Documents. This project lives there, the launcher runs
+# `run.sh` from it, and an app in /Applications reading that path needs the
+# reader's consent. The bundle is ad hoc signed, so its identity changes on
+# EVERY rebuild, so the consent it was given stops matching and the system asks
+# again. Measured: the first launch after an install sat with its title bar
+# saying it could not start, and a `run.sh` blocked in `open()` for minutes,
+# because a permission dialog was waiting to be answered.
+#
+# A copy under the application data directory needs no consent at all, and it
+# makes the app self contained in the way the product plan already asks for: an
+# update replaces the bundle, and nothing the app runs from lives in a checkout
+# that can be moved, cleaned or fought over by sync.
+say "installing the backend"
+BACKEND="$DATA_ROOT/backend"
+rm -rf "$BACKEND"
+mkdir -p "$BACKEND"
+# `-p` PRESERVES TIMESTAMPS, and run.sh depends on them: it reinstalls
+# dependencies when `pyproject.toml` is newer than `.venv/.deps-stamp`. Copied
+# without it, the stamp is always newer than nothing and older than pyproject,
+# so every launch would try to reinstall from the network, which a launch from
+# Finder cannot do.
+cp -Rp "$ROOT/run.sh" "$ROOT/pyproject.toml" "$ROOT/app" "$ROOT/.venv" "$BACKEND/"
+
 say "installing to /Applications"
 # Built, then swapped. The old copy stays as `.old` until the new one answers a
 # health check, so a failed update leaves something to go back to.
@@ -98,10 +122,11 @@ mv "$STAGING" "$INSTALLED"
 # The app is installed away from the project, so it has to be told where the
 # backend lives. A preference rather than a hardcoded path, because the same
 # build can be installed against any checkout.
-defaults write "$BUNDLE_ID" ProjectRoot "$ROOT"
+# The COPY, not the checkout. See the note above the copy.
+defaults write "$BUNDLE_ID" ProjectRoot "$BACKEND"
 
 VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INSTALLED/Contents/Info.plist")
-echo "installed version $VERSION, pointed at $ROOT"
+echo "installed version $VERSION, backend at $BACKEND"
 
 if [ "$LAUNCH" = "0" ]; then
   say "not launching, as asked"

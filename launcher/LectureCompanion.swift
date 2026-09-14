@@ -189,6 +189,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
         configuration.preferences.tabFocusesLinks = true
         configuration.setURLSchemeHandler(schemeHandler, forURLScheme: AppServer.scheme)
         configuration.userContentController.add(self, name: "folderPicker")
+        configuration.userContentController.add(self, name: "windowDrag")
         let webView = WKWebView(frame: frame, configuration: configuration)
         webView.uiDelegate = self
         window.contentView = webView
@@ -222,10 +223,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKScript
         }
     }
 
+    /// Where the pointer and the window were when a drag began.
+    private var dragAnchor: (origin: NSPoint, mouse: NSPoint)?
+
+    /// Move the window by the pointer's own delta.
+    ///
+    /// The anchor is taken once, at the start, and every move is measured from
+    /// it rather than from the previous move. Accumulating per-event deltas
+    /// drifts: a dropped or coalesced move leaves the window permanently offset
+    /// from the pointer by however much was missed.
+    ///
+    /// `NSEvent.mouseLocation` is used rather than coordinates sent from the
+    /// page, because the page measures in CSS pixels inside the web view and
+    /// the window moves in screen points.
+    private func dragWindow(phase: String) {
+        guard let window else { return }
+        switch phase {
+        case "start":
+            dragAnchor = (window.frame.origin, NSEvent.mouseLocation)
+        case "move":
+            guard let anchor = dragAnchor else { return }
+            let now = NSEvent.mouseLocation
+            window.setFrameOrigin(NSPoint(
+                x: anchor.origin.x + (now.x - anchor.mouse.x),
+                y: anchor.origin.y + (now.y - anchor.mouse.y)
+            ))
+        default:
+            dragAnchor = nil
+        }
+    }
+
     func userContentController(
         _ userContentController: WKUserContentController,
         didReceive message: WKScriptMessage
     ) {
+        // The page moves the window. `-webkit-app-region: drag` is an Electron
+        // property and does NOTHING in a WKWebView, and this window covers its
+        // own titlebar (`.fullSizeContentView`) with
+        // `isMovableByWindowBackground` off, so there was no way to move it at
+        // all and the reader could not drag it anywhere.
+        if message.name == "windowDrag",
+           let payload = message.body as? [String: Any],
+           let phase = payload["phase"] as? String {
+            dragWindow(phase: phase)
+            return
+        }
         guard message.name == "folderPicker",
               let payload = message.body as? [String: Any],
               let mode = payload["mode"] as? String,

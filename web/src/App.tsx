@@ -19,6 +19,78 @@ import { CourseScreen } from "@/screens/CourseScreen";
 import { ViewerScreen } from "@/screens/ViewerScreen";
 import { ArtifactScreen } from "@/screens/ArtifactScreen";
 
+/**
+ * The window is moved by the page, because nothing else can move it.
+ *
+ * `-webkit-app-region: drag`, which every `.titlebar-drag` in this app carries,
+ * is an Electron property. In a WKWebView it does NOTHING, and the launcher
+ * sets `isMovableByWindowBackground = false` and lets the web view cover the
+ * window's own title bar, so the app had no way to be moved at all: the reader
+ * could not drag the window anywhere, by its top edge or by anything else.
+ *
+ * So the page drives it. A press on a drag region that is not on a control
+ * starts a drag, every move is forwarded, and the launcher moves the window by
+ * the pointer's own delta. The listener is on the document in the capture
+ * phase, so it covers the sidebar's strip, the collapsed strip and the viewer's
+ * header without any of them knowing about it.
+ */
+/** The draggable band at the top of the window, in CSS pixels. The same 52
+ *  points as the strip `AppShell` and `Chrome` draw there. */
+const TOP_BAND = 52;
+
+function useWindowDrag() {
+  useEffect(() => {
+    const post = (phase: "start" | "move" | "end") => {
+      const host = window as unknown as {
+        webkit?: { messageHandlers?: { windowDrag?: { postMessage(body: unknown): void } } };
+      };
+      host.webkit?.messageHandlers?.windowDrag?.postMessage({ phase });
+    };
+    let dragging = false;
+    const onDown = (event: PointerEvent) => {
+      if (event.button !== 0) return;
+      const target = event.target as HTMLElement | null;
+      // THE TOP BAND OF THE WINDOW, not a named element inside it.
+      //
+      // The element test alone was not enough and the owner found it: the
+      // window could be dragged from the sidebar's fifth of the top bar and
+      // from nowhere else, which is not what "drag it from any point on the top
+      // bar" means. A band is also the honest description of the thing: every
+      // Mac app's top edge drags, whatever happens to be drawn there.
+      //
+      // TOP_BAND is the strip's own height, so the two cannot drift apart.
+      const inBand = event.clientY <= TOP_BAND;
+      if (!inBand && !target?.closest(".titlebar-drag")) return;
+      // A control inside a drag region keeps its own click. Without this the
+      // window would move under the reader every time they pressed a button in
+      // the header.
+      if (target?.closest(".titlebar-control")) return;
+      dragging = true;
+      // No text selection, and no drag image, from a drag region.
+      event.preventDefault();
+      post("start");
+    };
+    const onMove = () => {
+      if (dragging) post("move");
+    };
+    const onUp = () => {
+      if (!dragging) return;
+      dragging = false;
+      post("end");
+    };
+    document.addEventListener("pointerdown", onDown, true);
+    document.addEventListener("pointermove", onMove, true);
+    document.addEventListener("pointerup", onUp, true);
+    document.addEventListener("pointercancel", onUp, true);
+    return () => {
+      document.removeEventListener("pointerdown", onDown, true);
+      document.removeEventListener("pointermove", onMove, true);
+      document.removeEventListener("pointerup", onUp, true);
+      document.removeEventListener("pointercancel", onUp, true);
+    };
+  }, []);
+}
+
 export function App() {
   const route = useRoute();
   const [connectOpen, setConnectOpen] = useState(false);
@@ -91,6 +163,7 @@ export function App() {
   }, [fsLevel, updatePrefs]);
 
   useFocusOnScreenChange(route);
+  useWindowDrag();
 
   /**
    * The viewer is its own frame, and it is the one screen that is not inside

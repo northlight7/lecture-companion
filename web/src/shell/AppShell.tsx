@@ -76,20 +76,28 @@ export function AppShell({
       </aside>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        {/* Always rendered, its height animated. Rendering it only when
-            collapsed would drop 52px of content into place in a single frame,
-            so the page under it would jump while the column beside it slid. */}
+        {/* THE TOP BAR IS DRAGGABLE AT EVERY WIDTH, and it is 52 points tall
+            whether the sidebar is out or not.
+            
+            It used to collapse to nothing while the sidebar was expanded, on
+            the reasoning that the sidebar's own strip already covers the top.
+            It covers only the sidebar: the other 1000 points of the window's
+            top edge belonged to the content column and had no drag region at
+            all, so the window could be dragged from the left fifth of its top
+            bar and nowhere else. Reported by the owner, and it is the kind of
+            thing only using the app finds.
+            
+            It is a sibling ABOVE `<main>`, not an overlay, so nothing it covers
+            is unreachable: the content simply starts below it. */}
         <div
-          // Inert while expanded. The strip is always in the DOM so its height
-          // can animate, and `opacity-0` hides it from the eye but not from the
+          // Inert while expanded. The toggle it holds is `opacity-0` while the
+          // sidebar is out, which hides it from the eye but not from the
           // accessibility tree or the tab order, so without this the expanded
           // app reported a "Show the sidebar" button as well as its real
           // "Hide the sidebar" one.
           inert={collapsed ? undefined : true}
           className={cn(
-            "titlebar-drag flex shrink-0 items-center overflow-hidden pl-[86px]",
-            "transition-[height] duration-[var(--dur-panel)] ease-[var(--ease)]",
-            collapsed ? "h-[52px]" : "h-0",
+            "titlebar-drag flex h-[52px] shrink-0 items-center overflow-hidden pl-[86px]",
           )}
         >
           <SidebarToggle

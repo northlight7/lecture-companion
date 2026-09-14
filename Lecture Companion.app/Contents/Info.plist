@@ -17,9 +17,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.1.124-dirty</string>
+	<string>0.1.125-dirty</string>
 	<key>CFBundleVersion</key>
-	<string>124</string>
+	<string>125</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
 	<key>NSHighResolutionCapable</key>
