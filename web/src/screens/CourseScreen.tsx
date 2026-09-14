@@ -188,7 +188,12 @@ function DeckRow({
         // this row to say beyond the deck's own name.
         aria-label={
           `${label} ${deck.n_explained} / ${plural(deck.n_slides, "slide", "slides")}`
-          + (lecture ? `, ${lecture}` : "")
+          // ALWAYS SAYS WHICH LECTURE, including when the answer is none. A
+          // deck whose file is filed nowhere used to drop this clause entirely,
+          // so the row read `... 6 / 6 slides` and said nothing about where the
+          // deck belonged, while the text beside it said "Not filed yet". The
+          // bar asks every row to name its lecture, and "none" is a name.
+          + `, ${lecture || "Not filed yet"}`
         }
         className="flex min-w-0 flex-1 items-center gap-3"
       >

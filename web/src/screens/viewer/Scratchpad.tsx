@@ -316,6 +316,15 @@ export function Scratchpad({
     if (!frag.firstChild) frag.appendChild(paragraph(""));
     node.replaceChildren(frag);
     written.current = value;
+    // A CHANGE FROM OUTSIDE ENDS THE HISTORY. This effect only runs when the
+    // value did not come from this pad, which means a different slide or a
+    // re-explained one, and the notes on one slide are not the notes on the
+    // next. Left alone, the history crossed slides: a critic typed on slide 1,
+    // moved to slide 2, typed there, and pressed Cmd+Z enough times that slide
+    // 2's note became `- slid`, text nobody ever typed for slide 2, while slide
+    // 1 kept its own. Undo must never write one slide's words into another.
+    past.current.length = 0;
+    future.current.length = 0;
   }, [value]);
 
   const commit = useCallback(() => {

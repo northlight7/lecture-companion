@@ -186,6 +186,27 @@ function postFilesProgress<T>(
       request.upload.onprogress = (event) => {
         onProgress(event.loaded, event.lengthComputable ? event.total : 0);
       };
+      // AND THE ENDS ARE REPORTED, because `onprogress` alone is not enough to
+      // promise an increase. Over loopback the browser can hand the whole body
+      // to the kernel in one write and fire a single progress event at zero, so
+      // a 67 MB upload was measured showing `aria-valuenow` 0 for its entire
+      // duration while the file landed correctly. A bar that never moves is the
+      // defect the criterion names.
+      //
+      // `loadstart` and `loadend` bracket every request and cannot be missed.
+      // Together with `onprogress` they guarantee a value at the start, every
+      // intermediate value the browser can report, and the total at the end,
+      // which is monotonic whatever the transport does.
+      const body = request.upload;
+      body.onloadstart = (event) => {
+        onProgress(0, event.lengthComputable ? event.total : 0);
+      };
+      body.onloadend = (event) => {
+        onProgress(
+          event.lengthComputable ? event.total : 0,
+          event.lengthComputable ? event.total : 0,
+        );
+      };
     }
 
     request.onload = () => {
