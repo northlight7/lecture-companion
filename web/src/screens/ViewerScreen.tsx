@@ -684,7 +684,16 @@ export function ViewerScreen({ cid, did, index }: { cid: string; did: string; in
             {slides === null ? null : (
               <SlideStage cid={cid} did={did} index={current} />
             )}
+            {/* KEYED BY THE SLIDE, so the pad is a new pad on a new slide.
+                Its undo history is its own, and clearing that history when the
+                incoming text changes is not enough: two slides whose notes are
+                both empty hand the pad the same value, the reset never fires,
+                and undo on slide 2 walks back into slide 1's words. A critic
+                reproduced exactly that, and undo must never write one slide's
+                text into another. A key is the whole fix, because it makes the
+                refs new rather than asking them to notice. */}
             <Scratchpad
+              key={current}
               value={note}
               state={noteState}
               onChange={changeNote}
