@@ -90,6 +90,16 @@ export function ProgressRing({
       aria-valuemin={0}
       aria-valuemax={total}
       aria-valuenow={done}
+      // The percentage, reachable. A `role="progressbar"` is a LEAF in the
+      // accessibility tree: its children are replaced by its value, so the
+      // `52%` span below is on screen and invisible to a screen reader, and to
+      // anything reading the tree. `aria-valuetext` is where that number is
+      // supposed to live.
+      aria-valuetext={
+        total > 0
+          ? `${Math.round(ratio * 100)}% explained, ${done} of ${total}`
+          : "No slides to explain yet"
+      }
       className="relative grid shrink-0 place-items-center"
       style={{ width: RING_BOX, height: RING_BOX }}
     >

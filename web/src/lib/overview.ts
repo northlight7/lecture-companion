@@ -215,11 +215,33 @@ function renderedSentence(sentence: string): string | null {
  *
  * Text carrying none of the phrases is returned unchanged, byte for byte.
  */
+/**
+ * The slide-by-slide agenda form, removed.
+ *
+ * The run's own rolling summary is built from model-written gists and arrives
+ * as `- Slide 44: Three Weekly Stock Predictors: ...`. That is the
+ * `Slide 1: ...` agenda the bar forbids a reader from being shown, and the run
+ * summary is the one place in the app that generates it: fifteen lines of it in
+ * the fixture. The number is worth nothing to a reader anyway. The summary is
+ * about what the run covered, not about which ordinal each slide was.
+ *
+ * Kept separate from `BANNED_PHRASES` on purpose. Those are sentences a
+ * reviewer reads and rules on. This is a shape, and a shape is a substitution
+ * rather than a deletion: the sentence after the number is the part with the
+ * subject in it, so the prefix goes and the rest stays.
+ */
+const SLIDE_AGENDA = /^(\s*[-*•]?\s*)Slide\s+\d+\s*:\s*/gim;
+
+export function stripSlideAgenda(text: string): string {
+  return text.replace(SLIDE_AGENDA, "$1");
+}
+
 export function explanationProse(text: string | null | undefined): string {
   const source = text ?? "";
   // The common case, and the one that must not be damaged: nothing to do, and
-  // nothing rebuilt.
-  if (!isBanned(source)) return source;
+  // nothing rebuilt. The agenda strip still runs, because it is a substitution
+  // and the fast path is keyed on the phrase list, which this is not in.
+  if (!isBanned(source)) return stripSlideAgenda(source);
 
   const spans = sentenceSpans(source);
   if (spans.length === 0) return source;
@@ -257,5 +279,5 @@ export function explanationProse(text: string | null | undefined): string {
   }
 
   if (previousKept) out += source.slice(cursor);
-  return out;
+  return stripSlideAgenda(out);
 }

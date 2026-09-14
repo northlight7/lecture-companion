@@ -180,6 +180,16 @@ function DeckRow({
     <div className="flex h-[var(--row-h)] items-center rounded-srf px-2 text-ui text-ink transition-colors duration-[120ms] ease-[var(--ease)] hover:bg-hover">
       <a
         href={hash.deck(cid, deck.id, 0)}
+        // THE LECTURE IS IN THE NAME, and the visible text is in the name
+        // unchanged so WCAG 2.5.3 holds: the label a reader sees is a prefix of
+        // the label a screen reader hears. It was a sibling of this link, which
+        // kept it beside the deck's name on screen and left it out of the row
+        // for anyone reading the row itself. That is the one thing the bar asks
+        // this row to say beyond the deck's own name.
+        aria-label={
+          `${label} ${deck.n_explained} / ${plural(deck.n_slides, "slide", "slides")}`
+          + (lecture ? `, ${lecture}` : "")
+        }
         className="flex min-w-0 flex-1 items-center gap-3"
       >
         {/* One mark per row, in the course's hue: the deck list belongs to the
