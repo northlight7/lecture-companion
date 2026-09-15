@@ -95,7 +95,7 @@ export function CoursesScreen(): JSX.Element {
   return (
     <Screen
       title="Your courses"
-      lede="Each course is a sealed container. Slides, reference documents and everything the model remembers stay inside it."
+      masthead
       actions={
         <Button type="button" variant="primary" onClick={() => setAdding(true)}>
           Add course

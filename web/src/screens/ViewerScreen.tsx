@@ -5,13 +5,15 @@ import { ChevronLeft, RefreshCw } from "lucide-react";
 import * as api from "@/lib/api";
 import { ApiError } from "@/lib/api";
 import { ACCENT_FILL, courseAccent } from "@/lib/accents";
-import { usePrefs, usePrefsUpdater } from "@/lib/prefs";
-import { hash, navigate } from "@/lib/router";
-import type { SlideDetail, SlideRegeneration, SlideSummary, Term } from "@/lib/types";
+import { rememberSlide } from "@/lib/prefs";
+import { hash, navigate, type Route } from "@/lib/router";
+import type { DeckRow, SlideDetail, SlideRegeneration, SlideSummary, Term } from "@/lib/types";
 import { useConnect, useErrorHandler, useStore } from "@/state/store";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
+import { Sidebar } from "@/shell/Sidebar";
 import { SidebarToggle } from "@/shell/SidebarToggle";
+import { AskSlide } from "@/screens/viewer/AskSlide";
 import { ExplanationPane, PaneNotice, SlideFooter } from "@/screens/viewer/ExplanationPane";
 import { RegenDialog } from "@/screens/viewer/RegenDialog";
 import { AskDialog } from "@/screens/viewer/AskDialog";
@@ -37,29 +39,38 @@ const NOTE_SAVE_DELAY = 900;
  * sidebar is what gives: the viewer is a reading mode, its own header carries
  * the way back to the course, and the reader does not navigate while reading a
  * slide. `App.tsx` renders this outside `AppShell` and supplies the `<main>`,
- * so the skip link and the focus-on-navigation behaviour are unchanged. The
- * control that brings the chrome back is named "Show the sidebar" and it leaves
- * for the course screen, which is the only screen that has a sidebar column.
+ * so the skip link and the focus-on-navigation behaviour are unchanged.
  *
- * THE HEADER IS TWO ROWS AND ITS BOTTOM EDGE IS AT y=88 (C8):
+ * THE CHROME IS AN OVERLAY HERE, NOT A COLUMN. The control named "Show the
+ * sidebar" opens the navigation over the lecture instead of leaving for the
+ * course screen, which is what it used to do and what the owner rejected: "it
+ * backs me out of the lecture and back to the page for that course. It should
+ * be able to open and close on any page without breaking or moving me to
+ * another page." It floats, so it never takes the slide under C7's 640 points,
+ * and it starts closed on every visit rather than reading the shell's saved
+ * preference, so the arrangement C7 is measured in cannot depend on a flag a
+ * previous session left behind.
  *
- *   * Row 1, 44 points: the deck title as the `h1`, the back link to the
- *     course, the run status, and the actions. It is a drag strip
+ * THE HEADER IS TWO ROWS AND ITS BOTTOM EDGE IS AT y=108 (C8):
+ *
+ *   * Row 1, 48 points, 16 points below the window's top: the chrome control at
+ *     the header's own left edge, then the back link to the course, the deck
+ *     title as the `h1`, the run status and the actions. It is a drag strip
  *     (`.titlebar-drag`), so every control in it carries `.titlebar-control`,
  *     or the window server would take the click for a window drag.
- *   * Row 2, 36 points, 8 points below it: the chrome control at the window's
- *     own left edge, and the deck strip beside it.
+ *   * Row 2, 36 points, 8 points below it: the deck strip.
  *
- * 44 + 8 + 36 is 88 of the 120 points C8 allows.
+ * 16 + 48 + 8 + 36 is 108 of the 120 points C8 allows. The top margin and the
+ * taller first row are the owner's, from 2026-09-15: the title and the actions
+ * sat 3 and 4 points off the window's top edge and it "really feels squished
+ * and too close to the border".
  *
- * ONE LEFT EDGE, AT 76. The header, the strip and the panes all start there.
- * Two numbers set it and both are measured rather than chosen: the traffic
- * lights occupy x 10 to 67 on this window (`.fullSizeContentView`, so they are
- * drawn over the content), and the acceptance gate reads the chrome's width in
- * C7 as the widest named box within 64 points of the window's left edge. Every
- * named box on this screen therefore starts inside 76, which leaves the control
- * that brings the chrome back as the only thing at the left edge, and the gate
- * reads its own 36 points rather than a label of the slide's.
+ * ONE LEFT EDGE, AT 76. The header, the strip and the panes all start there,
+ * which clears the traffic lights (measured at x 10 to 67 on this window:
+ * `.fullSizeContentView`, so they are drawn over the content). The chrome
+ * control is the first thing in that edge rather than an outlier in the gutter
+ * below it: it was moved there on the same day, at the owner's request, so the
+ * header reads as one column instead of two ragged ones.
  *
  * Under the two rows the two panes fill everything that is left, each scrolling
  * on its own, and the window itself never scrolls. The left column is the slide
@@ -88,7 +99,19 @@ const NOTE_SAVE_DELAY = 900;
  * what the previous frontend did and what keeps a 173-slide deck to one request
  * per arrow key.
  */
-export function ViewerScreen({ cid, did, index }: { cid: string; did: string; index: number }): JSX.Element {
+export function ViewerScreen({
+  route,
+  cid,
+  did,
+  index,
+}: {
+  /** The live route, so the overlay's sidebar highlights the deck being read
+   *  exactly as the shell's sidebar does. */
+  route: Route;
+  cid: string;
+  did: string;
+  index: number;
+}): JSX.Element {
   const {
     course,
     courseError,
@@ -100,8 +123,6 @@ export function ViewerScreen({ cid, did, index }: { cid: string; did: string; in
   } = useStore();
   const handle = useErrorHandler();
   const connect = useConnect();
-  const prefs = usePrefs();
-  const updatePrefs = usePrefsUpdater();
 
   const [slides, setSlides] = useState<SlideSummary[] | null>(null);
   const [slidesError, setSlidesError] = useState<string | null>(null);
@@ -271,6 +292,14 @@ export function ViewerScreen({ cid, did, index }: { cid: string; did: string; in
     return () => window.clearInterval(timer);
   }, [running, cid, setProgress]);
 
+  // Where the reader is in this deck, remembered for the next launch. It is
+  // written on every slide and deliberately does not notify the store: see
+  // `rememberSlide`. Nothing navigates from it here, which is what keeps the
+  // arrow keys and the strip exactly as they were.
+  useEffect(() => {
+    if (count > 0) rememberSlide(cid, did, current);
+  }, [cid, did, current, count]);
+
   const wasRunning = useRef(false);
   useEffect(() => {
     if (wasRunning.current && !running) setDetailReload((value) => value + 1);
@@ -307,6 +336,12 @@ export function ViewerScreen({ cid, did, index }: { cid: string; did: string; in
       } else if (event.key === "ArrowRight") {
         event.preventDefault();
         goTo(currentRef.current + 1);
+      } else if (event.key === "Escape" && chromeOpenRef.current) {
+        // The overlay covers the header's own toggle, and a reader who opened
+        // it by accident should not have to find the close control inside it.
+        // The arrow keys are not affected: the guard above returns before this
+        // branch whenever a dialog is open, and the overlay is not a dialog.
+        setChromeOpen(false);
       }
     };
     document.addEventListener("keydown", onKeyDown);
@@ -316,17 +351,37 @@ export function ViewerScreen({ cid, did, index }: { cid: string; did: string; in
   /**
    * The chrome, asked for from inside the viewer.
    *
-   * The viewer has no sidebar and can never show one (C7's slide needs the
-   * whole window), so "Show the sidebar" cannot mean a column appearing here.
-   * It means the reader wants the chrome back, and the screen that has it is
-   * the course: the preference is set to expanded and the reader is taken
-   * there, where the sidebar is the left column and its own control can
-   * collapse it again.
+   * IT OPENS HERE, AND NOTHING IS NAVIGATED. It used to set the collapsed
+   * preference to expanded and then navigate to the course screen, on the
+   * reasoning that the viewer has no sidebar and can never show one. The
+   * owner's report: "when I try to unhide it, it backs me out of the lecture
+   * and back to the page for that course. It should be able to open and close
+   * on any page without breaking or moving me to another page."
+   *
+   * THE VIEWER'S SIDEBAR IS AN OVERLAY, NOT A COLUMN, and that is what makes
+   * it possible at all. C7 needs a 640-point slide at 1280x800, which the
+   * content column cannot hold beside a 280-point column: a sidebar that
+   * reflowed this screen would take the slide under its floor. Floating over
+   * the content leaves the slide exactly the width it had, and the reader
+   * chooses when to cover it.
+   *
+   * IT IS NOT THE COLLAPSED PREFERENCE. The overlay starts closed every time a
+   * deck is opened, whatever the shell's preference says, and toggling it
+   * writes nothing. Two reasons, and the first is the load-bearing one: the
+   * viewer is a reading mode whose slide is measured against C7, so its
+   * arrangement must not depend on a saved flag that a previous session can
+   * hand it. The second is that the shell's preference is about a column that
+   * is always there, and this is a temporary look at the navigation.
    */
-  const showChrome = useCallback(() => {
-    if (prefs.collapsed) updatePrefs({ collapsed: false });
-    navigate(hash.course(cid));
-  }, [prefs.collapsed, updatePrefs, cid]);
+  const [chromeOpen, setChromeOpen] = useState(false);
+  const toggleChrome = useCallback(() => setChromeOpen((open) => !open), []);
+  // The key handler below is bound once and reads live values through refs, the
+  // same way it reads `currentRef`, so it does not have to be rebound on every
+  // slide and every toggle.
+  const chromeOpenRef = useRef(false);
+  useEffect(() => {
+    chromeOpenRef.current = chromeOpen;
+  }, [chromeOpen]);
 
   // ------------------------------------------------------- terms, notes, runs
 
@@ -489,6 +544,23 @@ export function ViewerScreen({ cid, did, index }: { cid: string; did: string; in
 
   // -------------------------------------------------------------- the sources
 
+  /**
+   * The deck's own source artifact, which is what the "ask about this slide"
+   * box reads the slide's learning object out of.
+   *
+   * A deck's `source_file_id` is `content_hash[:12]` and an artifact's id is
+   * the same digest, so the match is by prefix rather than by filename: a
+   * filename is a thing a reader or a model may have rewritten. This is the
+   * same link `CourseScreen.lectureOf` walks, for the same reason. `DeckRow`
+   * does not declare the field because no other screen needed it, so it is
+   * read here rather than widening a shared type.
+   */
+  const deckArtifactId = useMemo(() => {
+    const fileId = (deck as (DeckRow & { source_file_id?: string }) | null)?.source_file_id ?? "";
+    if (!fileId) return "";
+    return course?.artifacts.find((row) => row.content_hash.startsWith(fileId))?.id ?? "";
+  }, [deck, course]);
+
   const sources = useMemo(
     () =>
       (shown?.explanation?.context_used ?? []).flatMap((chunk) => {
@@ -526,101 +598,120 @@ export function ViewerScreen({ cid, did, index }: { cid: string; did: string; in
   // --------------------------------------------------------------- the frame
 
   const header = (
-    <header className="shrink-0">
-      {/* Row 1. The title leads, and the whole row starts at the same left
-       *  edge as the panes below it: one left edge for the screen, 76 points
-       *  in, which clears the traffic lights (measured at x 10 to 67 in the
-       *  round's baseline capture) and keeps every named box on this screen
-       *  out of the window's first 64 points. That last part is what the
-       *  acceptance gate reads as "the chrome is out" for C7: it takes the
-       *  widest named box hard against the window's left edge, and on a
-       *  collapsed-chrome screen the only one there should be the control that
-       *  brings the chrome back. */}
-      <div className="titlebar-drag flex h-11 items-center gap-3 pr-6 pl-[76px]">
-        {/* The way out comes first and the title after it. It was the other way
-            round, and it read as a mistake: the eye meets the largest text on
-            the row at the far left and then finds a small link to its right,
-            which is backwards for a row whose first job is to say where you are
-            and whose second is to offer the way back. */}
-        <a
-          href={hash.course(cid)}
-          className="titlebar-control flex max-w-[260px] min-w-0 items-center gap-1 text-ui text-ink-muted transition-colors duration-[120ms] ease-[var(--ease)] hover:text-ink"
+    <header className="shrink-0 pt-4">
+      {/* Row 1. The chrome control leads, then the way out, then the title, and
+       *  the whole row starts at the same left edge as the panes below it: one
+       *  left edge for the screen, 76 points in, which clears the traffic
+       *  lights (measured at x 10 to 67). Every named box on this screen starts
+       *  there.
+       *
+       *  THE TOGGLE MOVED HERE from row 2, at the owner's request: it "should be
+       *  on the top left", and it was sitting on its own at the window's edge
+       *  one row down, which made the header two ragged columns rather than
+       *  one. It is placed before the back link rather than after the title,
+       *  because a chrome control that moves depending on the length of a deck
+       *  title is not in a consistent place.
+       *
+       *  ROW 1 IS 48 POINTS AND THE HEADER HAS 12 ABOVE IT. It was 44 points
+       *  with nothing above it, so a 36-point title filled its row to within a
+       *  point and the actions sat 4 points off the window's top edge. The
+       *  owner's words were that it "really feels squished and too close to the
+       *  border". C8 allows the header 120 points and this leaves it at 104. */}
+      <div className="titlebar-drag flex h-12 items-center gap-3 pr-6 pl-[76px]">
+        {/* The chrome control is rendered even when the strip is not: a deck
+         *  that failed to load still has to leave the reader a way out, and it
+         *  is the same control on every state of this screen.
+         *
+         *  `titlebar-control`, because this row is a drag region: without it
+         *  the window's own drag handler takes the press and the control never
+         *  sees a click.
+         *
+         *  IT IS THE ONE CONTROL THE OVERLAY DOES NOT COVER. Everything to its
+         *  right and every row below it goes `inert` while the chrome is open,
+         *  which takes it out of the accessibility tree and the tab order for
+         *  as long as it is behind the panel. This one stays live, at `z-50`
+         *  over the `z-40` panel, so the control that opened the panel is still
+         *  the control that closes it and it has not moved by a pixel. A
+         *  layout gate found the version without `inert`: it reported five
+         *  pairs of interactive controls whose boxes overlapped, which is what
+         *  a covered control looks like from the accessibility tree. */}
+        <SidebarToggle
+          collapsed={!chromeOpen}
+          onToggle={toggleChrome}
+          className="titlebar-control relative z-50"
+        />
+        <div
+          inert={chromeOpen || undefined}
+          className="flex min-w-0 flex-1 items-center gap-3"
         >
-          <ChevronLeft size={14} strokeWidth={1.75} aria-hidden />
-          <span className="truncate">{course?.title ?? "Course"}</span>
-        </a>
-        {/* A hairline between the two, drawn as a border rather than a fill:
-            `gate_static.py` allows a boundary from `--line-hair` anywhere and
-            allows a *background* only from a ground or the surface table. */}
-        <span aria-hidden className="h-5 shrink-0 border-l border-hair" />
-        <h1
-          tabIndex={-1}
-          className="max-w-[520px] min-w-0 shrink truncate font-ui text-display leading-[1.15] font-semibold text-ink focus-target"
-        >
-          {deck?.title ?? "Deck"}
-        </h1>
-        {status ? (
-          <p className="min-w-0 truncate text-ui text-ink-faint">{status}</p>
-        ) : null}
-        <div className="min-w-0 flex-1" />
-        <div className="flex shrink-0 items-center gap-2">
-          {remaining && running ? (
-            <Button
-              type="button"
-              variant="secondary"
-              size="md"
-              className="titlebar-control"
-              onClick={() => void pauseRun()}
-            >
-              Pause
-            </Button>
-          ) : remaining && stoppedReason ? (
-            <Button
-              type="button"
-              variant="secondary"
-              size="md"
-              className="titlebar-control"
-              onClick={() => void explainDeck()}
-            >
-              Resume
-            </Button>
-          ) : null}
-          <Button
-            type="button"
-            variant="secondary"
-            size="md"
-            className="titlebar-control"
-            disabled={count === 0}
-            onClick={() => setRegenOpen(true)}
+          <a
+            href={hash.course(cid)}
+            className="titlebar-control flex max-w-[260px] min-w-0 items-center gap-1 text-ui text-ink-muted transition-colors duration-[120ms] ease-[var(--ease)] hover:text-ink"
           >
-            <RefreshCw size={16} strokeWidth={1.75} aria-hidden />
-            Explain again
-          </Button>
+            <ChevronLeft size={14} strokeWidth={1.75} aria-hidden />
+            <span className="truncate">{course?.title ?? "Course"}</span>
+          </a>
+          {/* A hairline between the two, drawn as a border rather than a fill:
+              `gate_static.py` allows a boundary from `--line-hair` anywhere and
+              allows a *background* only from a ground or the surface table. */}
+          <span aria-hidden className="h-5 shrink-0 border-l border-hair" />
+          <h1
+            tabIndex={-1}
+            className="max-w-[520px] min-w-0 shrink truncate font-ui text-display leading-[1.15] font-semibold text-ink focus-target"
+          >
+            {deck?.title ?? "Deck"}
+          </h1>
+          {status ? (
+            <p className="min-w-0 truncate text-ui text-ink-faint">{status}</p>
+          ) : null}
+          <div className="min-w-0 flex-1" />
+          <div className="flex shrink-0 items-center gap-2">
+            {remaining && running ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                className="titlebar-control"
+                onClick={() => void pauseRun()}
+              >
+                Pause
+              </Button>
+            ) : remaining && stoppedReason ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                className="titlebar-control"
+                onClick={() => void explainDeck()}
+              >
+                Resume
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              className="titlebar-control"
+              disabled={count === 0}
+              onClick={() => setRegenOpen(true)}
+            >
+              <RefreshCw size={16} strokeWidth={1.75} aria-hidden />
+              Explain again
+            </Button>
+          </div>
         </div>
       </div>
 
       {/* Row 2, eight points below row 1 and as wide as the window: the deck
        *  strip, which is what a rail of a hundred and seventy-three segments
-       *  needs to stay a usable jump control.
-       *
-       *  THE CHROME CONTROL IS THIS ROW'S LEFT EDGE, and it is the one thing on
-       *  this screen that sits at the window's left edge. It cannot go in row 1
-       *  beside the title: the traffic lights own x 10 to 67 there. One row
-       *  lower they are out of the way, the toggle still sits under them where
-       *  a reader looks for it, and the gate's chrome reading stays at the
-       *  toggle's own 36 points rather than picking up the slide's labels. The
-       *  row is not a drag strip: the rail under it is dragged to scrub, and a
-       *  drag region would take those pointer events for the window. */}
-      {/* The chrome control is rendered even when the strip is not: a deck
-       *  that failed to load still has to leave the reader a way out, and it
-       *  is the same control on every state of this screen. */}
-      <div className="relative mt-2 flex h-9 items-center pr-6 pl-[76px]">
-        <SidebarToggle
-          collapsed
-          onToggle={showChrome}
-          className="absolute top-1 left-2"
-        />
-        {count > 0 ? (
+       *  needs to stay a usable jump control. The row is not a drag strip: the
+       *  rail under it is dragged to scrub, and a drag region would take those
+       *  pointer events for the window. */}
+      {count > 0 ? (
+        <div
+          inert={chromeOpen || undefined}
+          className="mt-2 flex h-9 items-center pr-6 pl-[76px]"
+        >
           <div className="min-w-0 flex-1">
             <SlideStrip
               slides={slides ?? []}
@@ -629,8 +720,8 @@ export function ViewerScreen({ cid, did, index }: { cid: string; did: string; in
               markerFill={ACCENT_FILL[courseAccent(cid)]}
             />
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </header>
   );
 
@@ -639,7 +730,10 @@ export function ViewerScreen({ cid, did, index }: { cid: string; did: string; in
       {header}
 
       {slidesError ? (
-        <div className="mt-3 min-h-0 w-full flex-1 overflow-y-auto pr-6 pb-6 pl-[76px]">
+        <div
+          inert={chromeOpen || undefined}
+          className="mt-3 min-h-0 w-full flex-1 overflow-y-auto pr-6 pb-6 pl-[76px]"
+        >
           <div className="max-w-[var(--measure)]">
             <PaneNotice
               title="Could not load this deck"
@@ -659,7 +753,10 @@ export function ViewerScreen({ cid, did, index }: { cid: string; did: string; in
           </div>
         </div>
       ) : slides !== null && count === 0 ? (
-        <div className="mt-3 min-h-0 w-full flex-1 overflow-y-auto pr-6 pb-6 pl-[76px]">
+        <div
+          inert={chromeOpen || undefined}
+          className="mt-3 min-h-0 w-full flex-1 overflow-y-auto pr-6 pb-6 pl-[76px]"
+        >
           <div className="max-w-[var(--measure)]">
             <PaneNotice
               title="Nothing to read yet"
@@ -679,7 +776,10 @@ export function ViewerScreen({ cid, did, index }: { cid: string; did: string; in
          * window: each is its own scroll region and the window never scrolls.
          * The one hairline in the screen runs down the explanation pane's
          * leading edge, in the middle of the gutter. */
-        <div className="grid min-h-0 w-full flex-1 grid-cols-[minmax(0,1fr)_clamp(340px,38%,620px)] grid-rows-[minmax(0,1fr)] gap-x-6 overflow-hidden pt-3 pr-6 pb-6 pl-[76px]">
+        <div
+          inert={chromeOpen || undefined}
+          className="grid min-h-0 w-full flex-1 grid-cols-[minmax(0,1fr)_clamp(340px,38%,620px)] grid-rows-[minmax(0,1fr)] gap-x-6 overflow-hidden pt-3 pr-6 pb-6 pl-[76px]"
+        >
           <section aria-label="Slide" className="flex min-h-0 min-w-0 flex-col gap-3">
             {slides === null ? null : (
               <SlideStage cid={cid} did={did} index={current} />
@@ -718,15 +818,29 @@ export function ViewerScreen({ cid, did, index }: { cid: string; did: string; in
             onExplainTerm={(text) => void explainTerm(text)}
             onAsk={setAskFor}
             footer={
-              <SlideFooter
-                index={current}
-                count={count}
-                explained={explainedHere}
-                terms={terms}
-                pendingTerm={pendingTerm}
-                sources={sources}
-                onRemoveTerm={(term) => void removeTerm(term)}
-              />
+              <>
+                <SlideFooter
+                  index={current}
+                  count={count}
+                  explained={explainedHere}
+                  terms={terms}
+                  pendingTerm={pendingTerm}
+                  sources={sources}
+                  onRemoveTerm={(term) => void removeTerm(term)}
+                />
+                {/* Keyed by the slide, so a question and the answer to it
+                    belong to the slide they were asked on. Nothing here is
+                    saved: it lives in this component and dies with the window. */}
+                <AskSlide
+                  key={current}
+                  cid={cid}
+                  index={current}
+                  artifactId={deckArtifactId}
+                  disconnected={disconnected}
+                  onConnect={connect.open}
+                  onFailure={reportIfAuth}
+                />
+              </>
             }
           />
         </div>
@@ -752,6 +866,25 @@ export function ViewerScreen({ cid, did, index }: { cid: string; did: string; in
         onConnect={connect.open}
         onFailure={reportIfAuth}
       />
+
+      {/* The chrome, over the content rather than beside it. It is the one
+        * surface in the app that is neither a ground nor a panel resting on
+        * one: it is a panel genuinely above the page, and it takes the float
+        * level's shadow for exactly that reason, which is the one place
+        * `DESIGN.md` allows a shadow. Its fill stays `--ground-chrome`: a
+        * sidebar is the sidebar wherever it is drawn, and a `--surface-float`
+        * one would be a second navigation idiom. No border, because the
+        * boundary here would be a border between the two grounds. */}
+      {chromeOpen ? (
+        <div className="chrome-overlay fixed inset-y-0 left-0 z-40 flex w-[var(--chrome-w)] flex-col overflow-hidden bg-chrome shadow-float">
+          <Sidebar
+            route={route}
+            onOpenConnect={connect.open}
+            onToggleCollapsed={toggleChrome}
+            withToggle={false}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

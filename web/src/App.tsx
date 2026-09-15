@@ -195,6 +195,7 @@ export function App() {
             >
               <ViewerScreen
                 key={route.did}
+                route={route}
                 cid={route.cid}
                 did={route.did}
                 index={route.index}

@@ -35,6 +35,7 @@ import { Trash2 } from "lucide-react";
 import * as api from "@/lib/api";
 import { ACCENT_FILL, ACCENT_INK, courseAccent, type CourseAccent } from "@/lib/accents";
 import { deckLabel } from "@/lib/deckLabel";
+import { resumeIndex } from "@/lib/prefs";
 import { hash, navigate } from "@/lib/router";
 import type { ArtifactRow, DeckRow, ProgressRow } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -106,7 +107,75 @@ function plural(count: number, one: string, many: string): string {
  *  own artifact could not be found: see `lectureOf`. */
 interface LectureRow {
   deck: DeckRow;
+  /** The lecture's own name, or `""`. */
   lecture: string;
+  /** What the row prints for it: the lecture, with the deck's position in it
+   *  when the lecture holds more than one deck. See `lectureCell`. */
+  cell: string;
+}
+
+/**
+ * What the row's lecture cell says.
+ *
+ * A LECTURE CAN HOLD MORE THAN ONE DECK. The owner raised it on 2026-09-15:
+ * "some lectures like for example lecture 1 may have 3 slide decks that need to
+ * be explained instead of just 1 so the system needs to be able to handle
+ * certain cases like that properly". Three decks filed into one lecture drew
+ * three identical rows all saying "Lecture 1", which reads as a mistake rather
+ * than as one lecture in three parts.
+ *
+ * The list stays FLAT and in the course's own deck order, which is what C2
+ * requires and what the owner chose when the alternatives were grouping and
+ * marking. What is added is the position, and only when there is a position to
+ * give: a lecture with one deck says its name and nothing else, so the common
+ * case is untouched. A deck filed nowhere keeps saying so, and takes no
+ * position, because "not filed yet" is not a lecture two decks can share.
+ *
+ * The whole string rides in the row's accessible name, which is what makes a
+ * row read on its own say both where the deck belongs and which part of it it
+ * is.
+ */
+function lectureCell(lecture: string, position: number, count: number): string {
+  if (!lecture) return "Not filed yet";
+  if (count < 2) return lecture;
+  return `${lecture} · deck ${position} of ${count}`;
+}
+
+/**
+ * The lecture list's rows, in the course's own deck order, each one knowing
+ * which part of its lecture it is.
+ *
+ * The grouping is built from `decks`, in the order the course holds them,
+ * rather than from the folders: the numbering a row prints has to agree with
+ * the order the rows are printed in, and a study folder is a set with no
+ * order of its own.
+ */
+function buildLectureRows(
+  decks: DeckRow[],
+  artifacts: ArtifactRow[],
+  folderOf: Map<string, string>,
+): LectureRow[] {
+  const rows: LectureRow[] = decks.map((deck) => ({
+    deck,
+    lecture: lectureOf(deck, artifacts, folderOf),
+    cell: "",
+  }));
+
+  const order = new Map<string, string[]>();
+  for (const row of rows) {
+    if (!row.lecture) continue;
+    const siblings = order.get(row.lecture);
+    if (siblings) siblings.push(row.deck.id);
+    else order.set(row.lecture, [row.deck.id]);
+  }
+
+  return rows.map((row) => {
+    const siblings = order.get(row.lecture) ?? [];
+    return {
+      ...row,
+      cell: lectureCell(row.lecture, siblings.indexOf(row.deck.id) + 1, siblings.length),
+    };
+  });
 }
 
 /**
@@ -171,6 +240,8 @@ function DeckRow({
   cid: string;
   deck: DeckRow;
   label: string;
+  /** The lecture, already carrying the deck's position in it when the lecture
+   *  holds more than one deck. See `lectureCell`. */
   lecture: string;
   accent: CourseAccent;
 }): JSX.Element {
@@ -179,7 +250,11 @@ function DeckRow({
     // the control, and nothing here is a div standing in for one.
     <div className="flex h-[var(--row-h)] items-center rounded-srf px-2 text-ui text-ink transition-colors duration-[120ms] ease-[var(--ease)] hover:bg-hover">
       <a
-        href={hash.deck(cid, deck.id, 0)}
+        // Not slide 0, and not for the same reason as the sidebar: a deck opens
+        // where the reader left it. `resumeIndex` clamps a remembered position
+        // against the deck's own length, so a re-imported shorter deck cannot
+        // resolve to a slide that is not there.
+        href={hash.deck(cid, deck.id, resumeIndex(cid, deck.id, deck.n_slides))}
         // THE LECTURE IS IN THE NAME, and the visible text is in the name
         // unchanged so WCAG 2.5.3 holds: the label a reader sees is a prefix of
         // the label a screen reader hears. It was a sibling of this link, which
@@ -209,7 +284,12 @@ function DeckRow({
           {deck.n_explained} / {plural(deck.n_slides, "slide", "slides")}
         </span>
       </a>
-      <span className="ml-3 shrink-0 text-meta text-ink-muted">
+      {/* `tabular-nums`, because the cell now ends in a figure. Without it a
+          row whose ordinal is a `1` is a few points narrower than one whose
+          ordinal is a `2`, and since the metadata block is right-aligned as a
+          unit the whole of it shifts: a critic measured a 3 pixel wobble down
+          the column where the rows had lined up exactly. */}
+      <span className="ml-3 shrink-0 text-meta tabular-nums text-ink-muted">
         {lecture || "Not filed yet"}
       </span>
     </div>
@@ -249,7 +329,7 @@ function LectureList({
             cid={cid}
             deck={row.deck}
             label={deckLabel(row.deck.title)}
-            lecture={row.lecture}
+            lecture={row.cell}
             accent={accent}
           />
         </li>
@@ -384,10 +464,7 @@ export function CourseScreen({ cid }: { cid: string }): JSX.Element {
     for (const row of group.rows) folderOf.set(row.id, group.folder);
   }
   const lectureRows: LectureRow[] = detail
-    ? detail.decks.map((deck) => ({
-        deck,
-        lecture: lectureOf(deck, detail.artifacts, folderOf),
-      }))
+    ? buildLectureRows(detail.decks, detail.artifacts, folderOf)
     : [];
 
   const shown: ProgressRow | null = progress ?? detail?.progress ?? null;

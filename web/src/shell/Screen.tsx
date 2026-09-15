@@ -21,6 +21,7 @@ export function Screen({
   meta,
   titleClassName,
   rule,
+  masthead = false,
   children,
   className,
 }: {
@@ -37,39 +38,101 @@ export function Screen({
    *  is the one mark that says which course this page belongs to, without
    *  tinting a surface the reader has to read through. */
   rule?: string;
+  /** Draw the title row as an ISLAND rather than as text on the ground.
+   *
+   *  A screen whose title sits directly on the ground has nothing under it and
+   *  reads as bare: it was reported as "just sitting there naked with no island
+   *  or border or underline or anything". A screen that passes this gets the
+   *  same masthead every `Section` draws, in the first section hue, so the
+   *  frame's own heading is a member of the same family as the headings below
+   *  it rather than a special case. The screen's `rule` is not used with it:
+   *  the island draws its own accent rule under the title, because the island
+   *  has an accent and the fill under the rule is the island's, not a ground. */
+  masthead?: boolean;
   children: ReactNode;
   className?: string;
 }) {
+  const heading = (
+    <div className="min-w-0 flex-1">
+      <h1
+        tabIndex={-1}
+        className={cn(
+          "font-ui text-display leading-[1.15] font-semibold text-ink focus-target",
+          titleClassName,
+        )}
+      >
+        {title}
+      </h1>
+      {meta ? <div className="mt-2 text-meta text-ink-faint">{meta}</div> : null}
+      {masthead ? (
+        // Concatenated, not merged: tailwind-merge does not know `text-head` is
+        // a size, and `Section` learned the same lesson. This is a `bg-*` and a
+        // size, so `cn` would be safe here, and it is written the same way as
+        // the island below so the two cannot drift.
+        <div aria-hidden className={"mt-4 h-[3px] w-14 rounded-ctl " + SECTION_RULE.blue} />
+      ) : rule ? (
+        <div aria-hidden className={cn("mt-4 h-[3px] w-14 rounded-ctl", rule)} />
+      ) : null}
+    </div>
+  );
+
   return (
     <div className={cn("page-column pt-6 pb-16", className)}>
+      {/* THE WAY BACK IS A CONTROL, NOT A LINE OF TEXT.
+        *
+        * It was a bare link: a chevron and a label in `--ink-muted`, sitting on
+        * the content ground with nothing under them. The owner's words for it
+        * were that it "has no tile/island of its own and looks barely
+        * noticeable". Nothing about it said it could be pressed.
+        *
+        * It is now a level-1 panel: `--surface-raised` for the fill, so it is
+        * visibly a surface resting on the ground, 1px `--line-control` for the
+        * boundary, which is the token this project's control-boundary rule
+        * assigns to an outlined control and which `check_contrast.py` measures
+        * at or above 3:1 on that fill, and `--radius-control`, because it is a
+        * control and not a row. The label is `--ink` rather than
+        * `--ink-muted`: it is the control's own name, and the muted step is for
+        * metadata beside a thing rather than for the thing itself. Hover moves
+        * the fill one step up the surface table, the same step every other
+        * control in the app takes. Focus is the global rule and is not
+        * overridden here. */}
       {back ? (
         <a
           href={back.href}
-          className="mb-3 inline-flex items-center gap-1 text-ui text-ink-muted transition-colors duration-[120ms] ease-[var(--ease)] hover:text-ink"
+          className={cn(
+            "mb-4 inline-flex h-[var(--control-h)] items-center gap-1.5 rounded-ctl border border-line bg-raised px-3",
+            "font-ui text-ui text-ink transition-colors duration-[120ms] ease-[var(--ease)] hover:bg-hover",
+          )}
         >
-          <ChevronLeft size={14} strokeWidth={2} aria-hidden />
+          {/* The chevron takes the control's own ink rather than the muted
+            * step. Every other icon in a button in this app is drawn in its
+            * button's label colour (`Delete course`'s bin is the same
+            * `--meaning-bad` as its word), and a critic measured this one at
+            * `--ink-muted` inside an `--ink` label: it read as dimmed, and it
+            * is the control's only directional cue. */}
+          <ChevronLeft size={16} strokeWidth={2} aria-hidden />
           {back.label}
         </a>
       ) : null}
 
-      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-        <div className="min-w-0 flex-1">
-          <h1
-            tabIndex={-1}
-            className={cn(
-              "font-ui text-display leading-[1.15] font-semibold text-ink focus-target",
-              titleClassName,
-            )}
-          >
-            {title}
-          </h1>
-          {meta ? <div className="mt-2 text-meta text-ink-faint">{meta}</div> : null}
-          {rule ? (
-            <div aria-hidden className={cn("mt-4 h-[3px] w-14 rounded-ctl", rule)} />
-          ) : null}
+      {masthead ? (
+        <section
+          data-section="blue"
+          aria-label={title}
+          className={cn(
+            "flex flex-wrap items-start justify-between gap-x-6 gap-y-4 rounded-pnl border bg-raised px-6 py-5",
+            SECTION_LINE.blue,
+          )}
+        >
+          {heading}
+          {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+        </section>
+      ) : (
+        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+          {heading}
+          {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
         </div>
-        {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
-      </div>
+      )}
 
       {lede ? (
         <p className="mt-3 max-w-[60ch] text-lead text-ink-muted">{lede}</p>

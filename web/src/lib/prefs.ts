@@ -36,6 +36,21 @@ export interface Prefs {
   fsLevel: number;
   /** The explanation pane's own text size, on the same five levels. */
   readLevel: number;
+  /**
+   * Where the reader stopped in each deck, keyed `"<course>/<deck>"`.
+   *
+   * The owner asked for this on 2026-09-15: "if I am going through an 80 page
+   * lecture and I reach slide 45 and quit ... the next time I open the app and
+   * that lecture, it should continue from the last slide I left off on". Sixty
+   * entries of one small integer each is nothing, so there is no eviction and
+   * no cap, and an entry for a deck the reader has deleted is a key nothing
+   * ever reads.
+   *
+   * It is an index and not a route. Nothing navigates on its own: the deck's
+   * links resolve through it, so "open this deck" means "carry on where you
+   * were", and every way of moving inside a deck is unchanged.
+   */
+  lastSlide: Record<string, number>;
 }
 
 const EMPTY: Prefs = {
@@ -43,7 +58,13 @@ const EMPTY: Prefs = {
   collapsed: false,
   fsLevel: DEFAULT_LEVEL,
   readLevel: DEFAULT_LEVEL,
+  lastSlide: {},
 };
+
+/** The key a deck's remembered position lives under. */
+export function lastSlideKey(cid: string, did: string): string {
+  return `${cid}/${did}`;
+}
 
 function read(): Prefs {
   try {
@@ -62,6 +83,10 @@ function read(): Prefs {
       // nothing on screen was built for.
       fsLevel: clampLevel(record.fsLevel),
       readLevel: clampLevel(record.readLevel),
+      // Only whole, non-negative numbers. A stored value that is a string, a
+      // fraction or a negative is dropped rather than clamped: it did not come
+      // from this app, and a slide index of -1 would be a link to nowhere.
+      lastSlide: readLastSlide(record.lastSlide),
     };
   } catch {
     // A browser that refuses storage, or a value another build wrote. Either
@@ -95,12 +120,62 @@ function write(next: Prefs): void {
   for (const listener of listeners) listener();
 }
 
+/** The stored positions, with every entry that is not a usable index dropped. */
+function readLastSlide(value: unknown): Record<string, number> {
+  if (typeof value !== "object" || value === null) return {};
+  const out: Record<string, number> = {};
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof entry === "number" && Number.isInteger(entry) && entry >= 0) {
+      out[key] = entry;
+    }
+  }
+  return out;
+}
+
 /**
  * Patch one field. Always read against the live store, never against a value
  * captured at render, which is the bug this shape exists to make impossible.
  */
 export function updatePrefs(patch: Partial<Prefs>): void {
   write({ ...current, ...patch });
+}
+
+/**
+ * Where the reader is in a deck, remembered WITHOUT waking the app up.
+ *
+ * This is written on every slide, so it must not go through `write()`. The
+ * shell subscribes to this store for the collapsed flag and the two text sizes,
+ * so a notification here would re-render `App` and every screen under it once
+ * per arrow key, to tell them a number they do not read changed. The value is
+ * still written to storage and it is still the live `current` object, so the
+ * next real `updatePrefs` carries it and the next launch finds it.
+ */
+export function rememberSlide(cid: string, did: string, index: number): void {
+  const key = lastSlideKey(cid, did);
+  if (current.lastSlide[key] === index) return;
+  current = { ...current, lastSlide: { ...current.lastSlide, [key]: index } };
+  try {
+    window.localStorage.setItem(KEY, JSON.stringify(current));
+  } catch {
+    // Storage full or refused, exactly as in `write`. The position is lost and
+    // the session continues, which is not worth interrupting the reader for.
+  }
+}
+
+/**
+ * The slide a deck's links should open on: where the reader stopped, or its
+ * first slide.
+ *
+ * Clamped against the deck's own length, because a deck can be re-imported
+ * shorter than it was and a remembered index past its end would land on a blank
+ * screen. A deck with no slides resolves to 0 rather than to -1, which
+ * `parseHash` turns into `NaN` and then into 0 anyway, but a caller should not
+ * have to know that.
+ */
+export function resumeIndex(cid: string, did: string, nSlides: number): number {
+  const last = Math.max(nSlides - 1, 0);
+  const saved = current.lastSlide[lastSlideKey(cid, did)] ?? 0;
+  return Math.min(Math.max(saved, 0), last);
 }
 
 export function usePrefs(): Prefs {

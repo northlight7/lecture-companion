@@ -1,6 +1,7 @@
 import { Library } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { resumeIndex } from "@/lib/prefs";
 import { hash, type Route } from "@/lib/router";
 import { ACCENT_FILL, courseAccent } from "@/lib/accents";
 import { useStore } from "@/state/store";
@@ -25,10 +26,24 @@ export function Sidebar({
   route,
   onOpenConnect,
   onToggleCollapsed,
+  withToggle = true,
 }: {
   route: Route;
   onOpenConnect: () => void;
   onToggleCollapsed: () => void;
+  /** Draw the control that hides this sidebar in its own top strip.
+   *
+   *  The shell's sidebar always does. The viewer's overlay does not: the
+   *  control that opened it is in the header, directly under the reader's
+   *  pointer, and a second one inside the panel would sit 10 points right and
+   *  14 points above it. `DESIGN.md` records the intent for the shell's
+   *  collapse in those words: the toggle "sits at the same point on the window
+   *  in both states and does not travel under the pointer". A control that
+   *  opens a panel and then moves is the same defect with an extra step.
+   *
+   *  The strip itself stays, because it is what the window is dragged by and
+   *  what the traffic lights are drawn over, and it stays a drag region. */
+  withToggle?: boolean;
 }) {
   const { courses, course, connection, progress } = useStore();
 
@@ -44,7 +59,19 @@ export function Sidebar({
   const shown = progress ?? current?.progress ?? null;
 
   return (
-    <SidebarFrame top={<SidebarToggle collapsed={false} onToggle={onToggleCollapsed} />}>
+    <SidebarFrame
+      top={
+        withToggle ? (
+          // `titlebar-control`, because the strip it sits in is a drag region.
+          // Without it the window's own drag handler takes the press.
+          <SidebarToggle
+            collapsed={false}
+            onToggle={onToggleCollapsed}
+            className="titlebar-control"
+          />
+        ) : null
+      }
+    >
       <SidebarScroll>
         <NavRow href={hash.courses()} current={!inCourse}>
           <span className="flex items-center gap-2">
@@ -76,7 +103,10 @@ export function Sidebar({
               {course.decks.map((deck) => (
                 <NavRow
                   key={deck.id}
-                  href={hash.deck(course.id, deck.id, 0)}
+                  // NOT slide 0: the deck opens where the reader left it, so a
+                  // 173-slide deck does not have to be scrubbed back to by
+                  // hand. `resumeIndex` clamps against the deck's own length.
+                  href={hash.deck(course.id, deck.id, resumeIndex(course.id, deck.id, deck.n_slides))}
                   current={activeDeck === deck.id}
                   className="pl-7"
                 >

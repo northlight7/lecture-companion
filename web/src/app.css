@@ -286,6 +286,28 @@
   }
 }
 
+/* The viewer's sidebar slides in from the window's edge.
+ *
+ * `--dur-panel` and `--ease` are the app's disclosure pair, so the overlay
+ * arrives on the same beat as the shell's sidebar collapse, and both the
+ * `prefers-reduced-motion` override of `--dur-panel` and the blanket
+ * `animation-duration: 1ms` rule above collapse it to a single frame for a
+ * reader who asked for no motion. `transform` only: nothing here triggers
+ * layout, because the panel is out of the flow and floats over the slide.
+ */
+@keyframes chrome-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@utility chrome-overlay {
+  animation: chrome-in var(--dur-panel) var(--ease);
+}
+
 @utility reading-column {
   width: 100%;
   max-width: var(--measure);

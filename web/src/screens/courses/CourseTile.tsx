@@ -2,11 +2,10 @@
  * One course, as a tile on the shelf.
  *
  * After Canvas: a coloured cover across the top in the course's own accent,
- * carrying the course's monogram with an overflow menu in its corner, then the
- * title in that accent and the course's two counts on a footer rail. No state
- * word and no progress bar: progress is what the course screen is for, and this
- * grid is a shelf (`.internal/DESIGN.md`, "The courses screen: a Canvas tile
- * grid").
+ * with an overflow menu in its corner, then the title in that accent and the
+ * course's two counts on a footer rail. No state word and no progress bar:
+ * progress is what the course screen is for, and this grid is a shelf
+ * (`.internal/DESIGN.md`, "The courses screen: a Canvas tile grid").
  *
  * WHAT CHANGED, AND WHY IT READ AS CRUDE. The first version was a 192px tile
  * with a single run-on metadata line, and the whole of its lower half was one
@@ -28,10 +27,15 @@
  *     "no shadow outside the float level" and this does not break it: the tile
  *     IS at the float level while it is hovered.
  *
- * The cover is not decoration and it is not a bare colour. The accent palette
- * holds lightness constant by design, which spends the one non-colour channel
- * WCAG 1.4.1 would otherwise accept, so the chip has to carry the course's own
- * text: banned list entry 20, stated at entry 4. See `courseMonogram`.
+ * The cover carries no text. It was the course's initials, and the owner
+ * removed them on 2026-09-15: the abbreviation of a title that is printed in
+ * full on the same tile is noise, and Canvas, which this screen follows, prints
+ * the title alone. Banned-list entry 20 asked for a mark here because the
+ * accent palette holds lightness constant and so spends the non-colour channel
+ * WCAG 1.4.1 would otherwise accept. The entry is amended in `DESIGN.md`: the
+ * course is identified by its name in the tile body and by its position in the
+ * grid, in both themes, so colour is not the only means of telling two courses
+ * apart, and 1.4.1 is satisfied by the text that is already there.
  *
  * The tile is a link, but not one `<a>` around everything: a menu button cannot
  * live inside a link. The title carries a real anchor and a stretched `::after`
@@ -59,81 +63,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-/**
- * Words a monogram is allowed to skip: articles, conjunctions and the short
- * prepositions. A title's shape is carried by its nouns, so `Ethics and
- * Regulations` is `ER` and not `EA`, and `Introduction to Programming` is `IP`.
- * Nothing longer is dropped: `with`, `for` and `into` are here because they
- * carry no meaning on their own, while `data`, `using` and `systems` are the
- * course and stay.
- */
-const MONOGRAM_STOP_WORDS = new Set([
-  "a",
-  "an",
-  "and",
-  "the",
-  "of",
-  "in",
-  "on",
-  "at",
-  "by",
-  "to",
-  "for",
-  "from",
-  "with",
-  "or",
-  "as",
-  "into",
-  "over",
-  "under",
-  "is",
-  "are",
-  "&",
-  "+",
-]);
-
-/**
- * What a course with no usable title wears. Not an emoji, not an image, not an
- * empty box: the course mark, `C`, which is the one thing that is true of a
- * course whose title is blank. `app/main.py` refuses to create a course without
- * a title and `app/course.py` substitutes the id for a blank one, so this is a
- * last line of defence against data written by something other than the API
- * rather than a state the app reaches on its own.
- */
-const MONOGRAM_FALLBACK = "C";
-
-/**
- * The course's monogram: the initials it wears on its accent cover.
- *
- * Deterministic, and derived from the title alone, so the same course wears the
- * same mark on every render. At most three characters, because this is a mark
- * and not an abbreviated title, and a title of one significant word gives one
- * character.
- *
- * The split is on anything that is not a letter or a digit, which is what keeps
- * the mark out of the banned list's way: a title that is one emoji yields no
- * words at all and takes the fallback, so no picture can ever reach the cover
- * (entry 4), and punctuation cannot either.
- *
- * Exported because it is a pure function of the title, which is what lets the
- * round's checks assert the mark rather than read it off a screenshot.
- */
-export function courseMonogram(title: string): string {
-  const words = title.split(/[^\p{L}\p{N}]+/u).filter((word) => word.length > 0);
-  const significant = words.filter((word) => !MONOGRAM_STOP_WORDS.has(word.toLowerCase()));
-  // `The` is all stop words and no course. It keeps its own initial rather than
-  // falling through to the fallback, because it is the title the reader chose.
-  const source = significant.length > 0 ? significant : words;
-  const initials = source
-    .slice(0, 3)
-    .map((word) => Array.from(word)[0] ?? "")
-    .join("");
-  // Uppercased before the cap, not after: a lowercase character can grow when it
-  // uppercases (`ß` is `SS`), and the cap is on the characters that render.
-  const monogram = initials.toUpperCase().slice(0, 3);
-  return monogram || MONOGRAM_FALLBACK;
-}
 
 /** One labelled figure on the footer rail. */
 function Stat({ label, value }: { label: string; value: number }): JSX.Element {
@@ -210,31 +139,20 @@ export function CourseTile({
           fixed, so the percentage has a definite box to resolve against, and
           everything on the tile is bounded anyway, a two-line title and the
           footer rail. An absolutely positioned menu button would otherwise
-          collapse an unresolved percentage to nothing. */}
+          collapse an unresolved percentage to nothing.
+
+          IT CARRIES NO TEXT. The course's initials used to sit here, and the
+          owner removed them: `1 Ethics and Regulations` wore `1ER` and
+          `2 Business Data Analytics` wore `2BD`, which is an abbreviation of a
+          title that is printed in full directly below it. The rule that put
+          them there is amended in `.internal/DESIGN.md` and the reason is
+          recorded there: the title is the identity, and the block is a cover. */}
       <div
         className={cn(
-          "relative flex h-[40%] shrink-0 items-end p-4 pr-14",
+          "relative h-[40%] shrink-0",
           ACCENT_FILL[accent],
         )}
       >
-        {/* The monogram. Banned list entry 20: no accent chip without the
-            course's monogram or short label in it, because the palette holds
-            lightness constant and so spends the one non-colour channel WCAG
-            1.4.1 accepts. `--on-accent` is the text every fill is measured
-            against at 4.5:1, so this is the second channel that entry asks for.
-            `aria-hidden`, because it is the title's own initials and the title
-            is the next thing down the tile: a reader on a screen reader should
-            not hear `AEB` and then the words it stands for.
-            `pr-14` on the cover reserves the menu's column, so the mark is
-            clear of the button however long it gets, and `items-end` puts it on
-            the cover's bottom edge, as far from that button as the block
-            allows. */}
-        <span
-          aria-hidden
-          className="font-ui text-head leading-none font-semibold tracking-[0.02em] text-on-accent"
-        >
-          {courseMonogram(course.title)}
-        </span>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
