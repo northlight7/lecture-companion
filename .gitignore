@@ -42,5 +42,7 @@ Lecture Companion.app/Contents/Resources/web/
 .coverage
 htmlcov/
 
-# Internal working files (agent scaffolding, not product)
+# Internal working files, not part of the product
 .internal/
+CLAUDE.md
+PROJECT.md
